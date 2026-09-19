@@ -1,0 +1,129 @@
+version: "0.5.1"
+description: "Payer rule catalogue built strictly on the NormalizedClaim schema. Every rule is runnable with the fields that exist today."
+
+# Notes
+# - `condition` is human-readable pseudocode describing when the claim PASSES the rule.
+#   It is NOT executed: each rule is implemented by a Python class bound to it through `id`.
+# - Evidence, confidence and the final severity are produced at runtime, not stored here.
+# - Fields used: claim_id, provider_name, specialty, patient_id, date_of_service,
+#   billed_amount, procedure_code, diagnosis_code, insurance_type,
+#   requires_authorization, authorization_obtained, attachments.
+# - A blank or whitespace-only string counts as missing for required str fields.
+# - Missing-data convention: a rule that depends on a field that is missing SKIPS itself
+#   (the dedicated "missing" rule reports it), so one problem never produces several findings.
+# - Reference data needed (small files in data/reference/):
+#     benefit_schedule (R04), insurance_types (R14), charge_ranges (R12).
+#   Duplicate history (R06) is passed in by the pipeline.
+
+rules:
+  - id: "R01"
+    title: "Procedure Code Present and Valid"
+    description: "The procedure code is missing or is not a valid CPT/HCPCS code format."
+    execution_type: "Deterministic"
+    condition: "!isEmpty(claim.procedure_code) && matches(claim.procedure_code, '^([0-9]{5}|[A-Z][0-9]{4})$')"
+    category: "Documentation"
+    next_action: "Enter a valid CPT or HCPCS procedure code."
+
+  - id: "R02"
+    title: "Patient Identification"
+    description: "The patient identifier is missing or improperly formatted."
+    execution_type: "Deterministic"
+    condition: "!isEmpty(trim(claim.patient_id)) && matches(claim.patient_id, '^[a-zA-Z0-9\\-]{5,64}$')"
+    category: "Identity"
+    next_action: "Enter a valid Member ID or Patient Identifier."
+
+  - id: "R03"
+    title: "Provider Identification"
+    description: "The billing provider name is missing or is a placeholder value such as unknown or n/a."
+    execution_type: "Deterministic"
+    condition: "!isEmpty(trim(claim.provider_name)) && !(lower(trim(claim.provider_name)) in ['unknown', 'n/a', 'na', 'tbd', 'none'])"
+    category: "Identity"
+    next_action: "Provide the name of the billing provider or clinic."
+
+  - id: "R04"
+    title: "Procedure Coverage"
+    description: "The procedure code is not in the benefit schedule for the claim's insurance type."
+    execution_type: "Deterministic"
+    condition: "claim.procedure_code == null || !(claim.insurance_type in reference_data.benefit_schedule) || reference_data.benefit_schedule[claim.insurance_type].contains(claim.procedure_code)"
+    category: "Coverage"
+    next_action: "Confirm this service is covered under the patient's plan, or correct the procedure code."
+
+  - id: "R05"
+    title: "Prior Authorization Status"
+    description: "The service requires prior authorization but no authorization was obtained."
+    execution_type: "Deterministic"
+    condition: "!claim.requires_authorization || claim.authorization_obtained"
+    category: "Authorization"
+    next_action: "Attach the pre-approval number from the insurer."
+
+  - id: "R06"
+    title: "Duplicate Submission"
+    description: "A claim with the same patient, date of service and procedure code was already submitted."
+    execution_type: "Deterministic"
+    condition: "claim.date_of_service == null || claim.procedure_code == null || !history.contains(key(claim.patient_id, claim.date_of_service, claim.procedure_code))"
+    category: "Integrity"
+    next_action: "Remove the duplicate submission, or document why the service was performed twice."
+
+  - id: "R07"
+    title: "Diagnosis Present and Valid"
+    description: "The diagnosis code is missing or is not a valid ICD-10 code."
+    execution_type: "Deterministic"
+    condition: "!isEmpty(claim.diagnosis_code) && matches(claim.diagnosis_code, '^[A-Z][0-9][0-9A-Z](\\.[0-9A-Z]{1,4})?$')"
+    category: "Documentation"
+    next_action: "Add a valid ICD-10 diagnosis code to the claim."
+
+  - id: "R08"
+    title: "Service Date Validity"
+    description: "The date of service is missing or lies in the future."
+    execution_type: "Deterministic"
+    condition: "claim.date_of_service != null && claim.date_of_service <= today()"
+    category: "Integrity"
+    next_action: "Review and fix the date of service."
+
+  - id: "R09"
+    title: "Charge Amount Validity"
+    description: "The billed amount is missing, zero or negative."
+    execution_type: "Deterministic"
+    condition: "claim.billed_amount != null && claim.billed_amount > 0"
+    category: "Integrity"
+    next_action: "Ensure the billed amount is present and greater than zero."
+
+  - id: "R10"
+    title: "Supporting Attachment"
+    description: "A service requiring authorization has no supporting document attached (assumption: authorized services need at least one attachment)."
+    execution_type: "Deterministic"
+    condition: "!claim.requires_authorization || claim.attachments.size() > 0"
+    category: "Documentation"
+    next_action: "Upload the required medical records or reports."
+
+  - id: "R11"
+    title: "Specialty-Procedure Consistency"
+    description: "The billed procedure does not appear to belong to the provider's specialty (semantic check, skipped when the specialty is not provided)."
+    execution_type: "AI"
+    condition: "claim.specialty == null || claim.procedure_code == null || ai_check_specialty_consistency(claim.specialty, claim.procedure_code)"
+    category: "Integrity"
+    next_action: "Ask a reviewer to confirm that the procedure matches the provider's specialty."
+
+  - id: "R12"
+    title: "Charge Amount Plausibility"
+    description: "The billed amount is outside the expected range for this procedure code."
+    execution_type: "Deterministic"
+    condition: "claim.billed_amount == null || !(claim.procedure_code in reference_data.charge_ranges) || (claim.billed_amount >= reference_data.charge_ranges[claim.procedure_code].min && claim.billed_amount <= reference_data.charge_ranges[claim.procedure_code].max)"
+    category: "Integrity"
+    next_action: "Verify the billed amount for this procedure."
+
+  - id: "R13"
+    title: "Diagnosis-Procedure Consistency"
+    description: "The billed procedure does not appear to be supported by the submitted diagnosis (semantic check; specialty is used as extra context when present)."
+    execution_type: "AI"
+    condition: "claim.diagnosis_code == null || claim.procedure_code == null || ai_check_consistency(claim.diagnosis_code, claim.procedure_code, claim.specialty)"
+    category: "Integrity"
+    next_action: "Ask a reviewer to confirm that the diagnosis and procedure codes match."
+
+  - id: "R14"
+    title: "Insurance Type Recognized"
+    description: "The insurance type is blank or not one of the recognized plan types."
+    execution_type: "Deterministic"
+    condition: "!isEmpty(trim(claim.insurance_type)) && claim.insurance_type in reference_data.insurance_types"
+    category: "Identity"
+    next_action: "Select the correct insurance type for the patient."
