@@ -181,9 +181,9 @@ def base_check(c,r,cfg):
         return make_result(c,r,status,paths or ['/lines'],message,sorted(set(ids)))
 
     if rid=='R008':
-        
-
-
+        # Starter baseline intentionally leaves this rule unimplemented.
+        # Returning None allows the wrapper in baseline() to emit a NOT_IMPLEMENTED result.
+        return None
 
     return None
 
