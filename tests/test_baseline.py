@@ -11,7 +11,7 @@ class StarterTests(unittest.TestCase):
     def setUpClass(cls):
         cls.cfg=config(ROOT);cls.example=json.loads((ROOT/'examples/worked_cases.json').read_text())[0]['claim']
     def setUp(self):self.c=copy.deepcopy(self.example)
-    def result(self,rid):return base_check(self.c,next(r for r in self.cfg['rules'] if r['rule_id']==rid))
+    def result(self,rid):return base_check(self.c,next(r for r in self.cfg['rules'] if r['rule_id']==rid),self.cfg)
     def test_required_null(self):
         self.c['invoice_number']=None;self.assertEqual(self.result('R001')['status'],'FAIL')
     def test_coverage_boundary(self):
@@ -36,7 +36,35 @@ class StarterTests(unittest.TestCase):
         self.c['lines'][0]['unit_price']=None
         self.c['lines'][1]['net_amount']=0
         self.assertEqual(self.result('R007')['status'],'FAIL')
-    def test_unimplemented_is_visible(self):self.assertEqual(sum(r['status']=='NOT_IMPLEMENTED' for r in baseline(self.c,self.cfg)),12)
+    def test_all_rules_are_implemented(self):self.assertEqual(sum(r['status']=='NOT_IMPLEMENTED' for r in baseline(self.c,self.cfg)),0)
+
+    def test_authorization_and_document_rules(self):
+        line=self.c['lines'][0]
+        line.update(service_code='SVC-IMAGE',authorization_id='AUTH-1')
+        self.c['authorizations']=[{
+            'authorization_id':'AUTH-1','patient_id':self.c['patient_id'],'service_code':'SVC-IMAGE',
+            'status':'approved','valid_from':'2026-01-01','valid_to':'2026-12-31','max_quantity':1}]
+        self.c['attachments']=[{
+            'attachment_id':'DOC-1','type':'imaging-report','patient_id':self.c['patient_id'],
+            'service_code':'SVC-IMAGE','service_date':line['service_date'],'document_status':'final','text':'untrusted'}]
+        self.assertEqual(self.result('R008')['status'],'PASS')
+        self.assertEqual(self.result('R009')['status'],'PASS')
+        self.assertEqual(self.result('R010')['status'],'PASS')
+        self.c['authorizations'][0]['status']='denied'
+        self.assertEqual(self.result('R009')['status'],'FAIL')
+
+    def test_catalogue_total_limits_window_and_currency_rules(self):
+        self.c['lines'][0]['service_code']='SVC-UNKNOWN'
+        self.assertEqual(self.result('R011')['status'],'FAIL')
+        self.c['lines'][0]['service_code']='SVC-LAB'
+        self.c['total_amount']=0
+        self.assertEqual(self.result('R012')['status'],'FAIL')
+        self.c['lines'][0]['quantity']=0
+        self.assertEqual(self.result('R013')['status'],'FAIL')
+        self.c['submission_date']='2026-08-06'
+        self.assertEqual(self.result('R014')['status'],'FAIL')
+        self.c['currency']='USD'
+        self.assertEqual(self.result('R015')['status'],'FAIL')
     def test_scorer_rejects_missing_pair(self):
         gold=load_jsonl(ROOT/'examples/first_10_expected_results.jsonl');claims={c['claim_id']:c for c in load_jsonl(ROOT/'examples/first_10_claims.jsonl')}
         with self.assertRaises(ValueError):score(gold,gold[:-1],claims)

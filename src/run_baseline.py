@@ -1,4 +1,4 @@
-"""Run the three implemented checks. Extend engine_core.baseline for your MVP."""
+"""Run the implemented baseline checks. Extend engine_core.baseline for your MVP."""
 import argparse, json
 from pathlib import Path
 from engine_core import config, load_jsonl, baseline, validate_transport
@@ -13,5 +13,5 @@ def main():
         for c in claims:
             validate_transport(c)
             for result in baseline(c,cfg):f.write(json.dumps(result,ensure_ascii=False)+'\n')
-    print(f'Processed {len(claims)} claims. Implemented: R001, R003, R006. Other rules: NOT_IMPLEMENTED. Output: {out}')
+    print(f'Processed {len(claims)} claims. Implemented: R001-R008. Other rules: NOT_IMPLEMENTED. Output: {out}')
 if __name__=='__main__':main()
