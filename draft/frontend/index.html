@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ClaimGuard AI — Enterprise Healthcare Claim Pre-Validation Platform</title>
+  <meta name="description" content="AI-Powered Pre-Validation Copilot for Healthcare Claims Officers. Deterministic 15-Rule Engine, Grounded Explanations, and Tamper-Evident Audit Logging.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-theme="dark">
+
+  <!-- Background Ambient Glow -->
+  <div class="bg-mesh-glow"></div>
+
+  <!-- Left Sidebar Navigation -->
+  <aside class="app-sidebar">
+    <div class="sidebar-header">
+      <div class="brand-logo-mark">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+      </div>
+      <div class="brand-title-wrap">
+        <div class="brand-title">ClaimGuard AI</div>
+        <div class="brand-badge">Enterprise Copilot</div>
+      </div>
+    </div>
+
+    <!-- Live System Heartbeat Pill -->
+    <div class="system-status-pill">
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <span class="status-dot"></span>
+        <span style="font-weight:600; color:var(--text-primary);">ENGINE READY</span>
+      </div>
+      <span style="font-family:var(--font-mono); color:var(--text-muted); font-size:0.7rem;">v1.0.0</span>
+    </div>
+
+    <!-- Sidebar Menu -->
+    <nav class="sidebar-menu">
+      <div class="menu-section-label">Workspace</div>
+      
+      <button class="nav-item active" data-view="dashboard">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/>
+          <rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>
+        </svg>
+        <span>Overview</span>
+      </button>
+
+      <button class="nav-item" data-view="queue">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>
+        </svg>
+        <span>Review Queue</span>
+        <span class="nav-count-badge" id="sidebar-queue-count">10</span>
+      </button>
+
+      <button class="nav-item" data-view="inspector">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+        <span>Claim Inspector</span>
+      </button>
+
+      <div class="menu-section-label" style="margin-top:0.75rem;">Trust & Compliance</div>
+
+      <button class="nav-item" data-view="audit">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+        </svg>
+        <span>Audit Trail</span>
+      </button>
+
+      <button class="nav-item" data-view="rulebook">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/>
+        </svg>
+        <span>15-Rule Reference</span>
+      </button>
+
+      <button class="nav-item" data-view="upload">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>
+        </svg>
+        <span>Ingest Data</span>
+      </button>
+    </nav>
+
+    <!-- Sidebar Footer -->
+    <div class="sidebar-footer">
+      <div style="display:flex; flex-direction:column;">
+        <span style="font-size:0.75rem; font-weight:600; color:var(--text-primary);">CSTAM-VELODOC</span>
+        <span style="font-size:0.65rem; color:var(--text-muted);">Mentor: Dr. Wael Hilali</span>
+      </div>
+      <button id="theme-toggle-btn" class="icon-button" title="Toggle Dark/Light Mode">🌙</button>
+    </div>
+  </aside>
+
+  <!-- Right Stage Layout -->
+  <div class="app-stage">
+    
+    <!-- Topbar -->
+    <header class="app-topbar">
+      <div class="topbar-left">
+        <div class="dataset-badge-picker">
+          <span style="color:var(--text-muted);">Active Dataset:</span>
+          <select id="dataset-selector" class="dataset-select-native">
+            <option value="worked_cases">Benchmark: Worked Examples (10 Cases)</option>
+            <option value="stress_suite">Suite: Stress Test Edge Cases (2 Cases)</option>
+            <option value="custom_upload">➕ Upload Local Claims (JSONL/CSV/FHIR)...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <button class="cmd-search-btn" id="topbar-search-trigger">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span>Search claims & rules...</span>
+          <span class="kbd-chip">⌘K</span>
+        </button>
+
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+          <span class="chip chip-pass" id="topbar-audit-status">🛡️ SHA-256 Valid</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Scrollable Stage Content -->
+    <main class="app-content-viewport">
+
+      <!-- VIEW 1: EXECUTIVE DASHBOARD -->
+      <section id="view-dashboard" class="view-panel active">
+        <!-- KPI Cards Grid -->
+        <div class="grid-kpi-row">
+          <div class="kpi-stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Total Claims</span>
+              <div class="stat-icon-wrap" style="background:rgba(99, 102, 241, 0.12); color:var(--brand-primary);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+            </div>
+            <div class="stat-value" id="kpi-total-claims">0</div>
+            <div class="stat-subtext">
+              <span>Ingested & evaluated deterministically</span>
+            </div>
+          </div>
+
+          <div class="kpi-stat-card">
+            <div class="stat-header">
+              <span class="stat-label">First-Pass Clean Rate</span>
+              <div class="stat-icon-wrap" style="background:var(--status-pass-bg); color:var(--status-pass);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            </div>
+            <div class="stat-value" style="color:var(--status-pass);" id="kpi-pass-rate">0.0%</div>
+            <div class="stat-subtext">
+              <span>All 15 payer rules satisfied</span>
+            </div>
+          </div>
+
+          <div class="kpi-stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Value at Risk</span>
+              <div class="stat-icon-wrap" style="background:var(--status-fail-bg); color:var(--status-fail);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+              </div>
+            </div>
+            <div class="stat-value" style="color:var(--status-fail);" id="kpi-flagged-sar">0 SAR</div>
+            <div class="stat-subtext">
+              <span>In flagged claims requiring correction</span>
+            </div>
+          </div>
+
+          <div class="kpi-stat-card">
+            <div class="stat-header">
+              <span class="stat-label">Open Uncertainties</span>
+              <div class="stat-icon-wrap" style="background:var(--status-warn-bg); color:var(--status-warn);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+              </div>
+            </div>
+            <div class="stat-value" style="color:var(--status-warn);" id="kpi-uncertain-claims">0</div>
+            <div class="stat-subtext">
+              <span>Missing data / Unresolvable checks</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Split Matrix -->
+        <div class="analytics-split-grid">
+          <div class="card-container">
+            <div class="card-header-flex">
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                <span>15-Rule Validation Defect Matrix</span>
+              </div>
+              <span class="chip chip-na">Standard 15-Rule Policy</span>
+            </div>
+            <div class="rule-bars-matrix" id="rule-frequency-bars">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <div class="card-container" style="display:flex; flex-direction:column; justify-content:space-between;">
+            <div>
+              <div class="card-title" style="margin-bottom:1rem;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span>Trust Boundaries</span>
+              </div>
+              <div style="font-size:0.8rem; color:var(--text-secondary); line-height:1.6;">
+                <p>ClaimGuard AI operates strictly on synthetic, non-probabilistic clinical data:</p>
+                <div style="background:var(--bg-input); border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:0.75rem; margin-top:0.75rem;">
+                  <strong style="color:var(--text-primary); font-size:0.75rem; text-transform:uppercase;">1. Zero Hallucination</strong>
+                  <p style="margin-top:0.25rem;">Rule decisions are deterministic (PASS/FAIL/UNABLE_TO_ASSESS). LLMs cannot flip rule statuses.</p>
+                </div>
+                <div style="background:var(--bg-input); border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:0.75rem; margin-top:0.5rem;">
+                  <strong style="color:var(--text-primary); font-size:0.75rem; text-transform:uppercase;">2. Prompt Injection Immunity</strong>
+                  <p style="margin-top:0.25rem;">Unstructured clinical attachments are sanitized and sandboxed as untrusted data.</p>
+                </div>
+                <div style="background:var(--bg-input); border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:0.75rem; margin-top:0.5rem;">
+                  <strong style="color:var(--text-primary); font-size:0.75rem; text-transform:uppercase;">3. Cryptographic Proof</strong>
+                  <p style="margin-top:0.25rem;">Every officer action creates an immutable SHA-256 block in the audit chain.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div style="margin-top:1.25rem;">
+              <button class="btn-solid btn-solid-brand" style="width:100%;" onclick="window.app.switchView('queue')">
+                Open Review Queue &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: CLAIMS REVIEW QUEUE -->
+      <section id="view-queue" class="view-panel">
+        <div class="queue-filter-bar">
+          <div class="search-field-modern">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input type="text" id="queue-search-input" placeholder="Search by Claim ID, Patient, Invoice, or Policy...">
+          </div>
+
+          <div class="segmented-filters">
+            <button class="seg-btn active" data-filter="all">All Claims</button>
+            <button class="seg-btn" data-filter="ready">Ready (Pass)</button>
+            <button class="seg-btn" data-filter="review">Requires Review (Fail)</button>
+            <button class="seg-btn" data-filter="uncertain">Uncertain</button>
+          </div>
+        </div>
+
+        <div class="data-table-card">
+          <table class="data-table-modern">
+            <thead>
+              <tr>
+                <th>Claim ID</th>
+                <th>Patient ID</th>
+                <th>Policy Profile</th>
+                <th>Lines</th>
+                <th>Total Billed</th>
+                <th>Pre-Validation Status</th>
+                <th>Inspection</th>
+              </tr>
+            </thead>
+            <tbody id="claims-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VIEW 3: DEEP CLAIM INSPECTOR WORKSPACE -->
+      <section id="view-inspector" class="view-panel">
+        <div class="inspector-layout-grid">
+          
+          <!-- Left Column: Claim Evidence Dossier -->
+          <div class="dossier-panel">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-light); padding-bottom:1rem;">
+              <div>
+                <span style="font-size:0.7rem; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Claim Dossier</span>
+                <h2 id="insp-claim-id" style="font-family:var(--font-mono); color:var(--text-primary); font-size:1.4rem;">CG-0000</h2>
+              </div>
+              <span class="rule-tag-pill" id="insp-policy-id">EDU-BASIC</span>
+            </div>
+
+            <!-- Metadata Grid -->
+            <div class="dossier-meta-card">
+              <div class="meta-item-cell">
+                <span class="meta-label-tiny">Invoice Number</span>
+                <span class="meta-val-bold" id="insp-invoice">—</span>
+              </div>
+              <div class="meta-item-cell">
+                <span class="meta-label-tiny">Submission Date</span>
+                <span class="meta-val-bold" id="insp-sub-date">—</span>
+              </div>
+              <div class="meta-item-cell">
+                <span class="meta-label-tiny">Diagnosis Code</span>
+                <span class="meta-val-bold" id="insp-diagnosis">—</span>
+              </div>
+              <div class="meta-item-cell">
+                <span class="meta-label-tiny">Patient ID</span>
+                <span class="meta-val-bold" id="insp-patient-id">—</span>
+              </div>
+              <div class="meta-item-cell">
+                <span class="meta-label-tiny">Member ID</span>
+                <span class="meta-val-bold" id="insp-member-id">—</span>
+              </div>
+              <div class="meta-item-cell">
+                <span class="meta-label-tiny">Provider ID</span>
+                <span class="meta-val-bold" id="insp-provider-id">—</span>
+              </div>
+            </div>
+
+            <!-- Coverage Card -->
+            <div style="background:var(--bg-input); border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:0.85rem;">
+              <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.4rem;">
+                🛡️ Verified Policy Coverage
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; font-size:0.8rem;">
+                <div>Status: <span id="insp-cov-status" style="font-weight:700; color:var(--status-pass);">active</span></div>
+                <div>Beneficiary: <span id="insp-cov-beneficiary" style="font-family:var(--font-mono);">PAT-01</span></div>
+                <div style="grid-column:span 2;">Active Period: <span id="insp-cov-period" style="font-family:var(--font-mono); color:var(--text-primary);">2026-01-01 to 2026-12-31</span></div>
+              </div>
+            </div>
+
+            <!-- Service Lines Table -->
+            <div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                <span style="font-size:0.8rem; font-weight:700; color:var(--text-primary);">Billed Procedure Lines</span>
+                <span id="insp-total" style="font-family:var(--font-mono); font-weight:700; color:var(--brand-primary);">0.00 SAR</span>
+              </div>
+              <div class="data-table-card">
+                <table class="data-table-modern" style="font-size:0.78rem;">
+                  <thead>
+                    <tr>
+                      <th>Line</th>
+                      <th>Service Code</th>
+                      <th>Date</th>
+                      <th>Qty</th>
+                      <th>Unit Price</th>
+                      <th>Net Total</th>
+                      <th>Auth ID</th>
+                    </tr>
+                  </thead>
+                  <tbody id="insp-lines-table-body">
+                    <!-- Dynamic lines -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Supporting Documents & Prompt Injection Shield -->
+            <div>
+              <div style="font-size:0.8rem; font-weight:700; color:var(--text-primary); margin-bottom:0.4rem;">
+                Clinical Documents & Notes
+              </div>
+              <div id="insp-attachments-container">
+                <!-- Dynamic attachments -->
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Right Column: 15-Rule Validation Checklist & Copilot -->
+          <div class="dossier-panel">
+            
+            <!-- Grounded AI Copilot Card -->
+            <div class="ai-grounded-box" id="ai-copilot-summary-box">
+              <!-- Dynamically populated AI summary -->
+            </div>
+
+            <!-- 15-Rule Matrix Header -->
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.85rem; font-weight:700; color:var(--text-primary);">15-Rule Pre-Validation Checklist</span>
+              <span style="font-size:0.72rem; color:var(--text-muted); font-family:var(--font-mono);">Exact JSON Pointers</span>
+            </div>
+
+            <!-- 15-Rule Accordion Tiles -->
+            <div class="rules-accordion-matrix" id="insp-rules-checklist">
+              <!-- Dynamic Accordion Cards -->
+            </div>
+
+            <!-- Officer Decision Studio -->
+            <div style="border-top:1px solid var(--border-light); padding-top:1rem; margin-top:0.5rem;">
+              <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:0.5rem;">
+                Claims Officer Decision Studio
+              </div>
+              <div class="action-dock">
+                <button id="btn-action-confirm" class="btn-solid btn-solid-danger">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span>Confirm Defect</span>
+                </button>
+
+                <button id="btn-action-dismiss" class="btn-solid btn-solid-success">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+                  <span>Dismiss Flag</span>
+                </button>
+
+                <button id="btn-action-request" class="btn-solid btn-solid-outline">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                  <span>Request Info</span>
+                </button>
+
+                <button id="btn-action-edit" class="btn-solid btn-solid-brand">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  <span>Edit & Recheck</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </section>
+
+      <!-- VIEW 4: CRYPTOGRAPHIC AUDIT BLOCKCHAIN -->
+      <section id="view-audit" class="view-panel">
+        <div class="card-container" style="margin-bottom:1.25rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <h2 style="font-size:1.15rem; font-weight:700;">Cryptographic Audit Blockchain</h2>
+              <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.25rem;">
+                Tamper-evident SHA-256 hash chaining of ingestions, evaluations, and human review decisions.
+              </p>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+              <span id="audit-integrity-badge" class="chip chip-pass">✓ Chain Cryptographically Verified</span>
+              <button id="verify-audit-btn" class="btn-solid btn-solid-outline">Verify Chain Integrity</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:0.75rem;" id="audit-timeline-container">
+          <!-- Dynamically populated blocks -->
+        </div>
+      </section>
+
+      <!-- VIEW 5: 15-RULEBOOK REFERENCE -->
+      <section id="view-rulebook" class="view-panel">
+        <div class="card-container" style="margin-bottom:1.25rem;">
+          <h2 style="font-size:1.15rem; font-weight:700;">Fictional Payer Rulebook Reference</h2>
+          <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.25rem;">
+            CSTAM-VELODOC Teaching Benchmark specifications for R001 to R015.
+          </p>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1rem;" id="rulebook-reference-list">
+          <!-- Dynamic rule reference cards -->
+        </div>
+      </section>
+
+      <!-- VIEW 6: UPLOAD DATASET -->
+      <section id="view-upload" class="view-panel">
+        <div class="card-container" style="max-width:680px; margin:2rem auto; text-align:center;">
+          <h2 style="font-size:1.25rem; font-weight:700; margin-bottom:0.4rem;">Ingest Synthetic Claims Dataset</h2>
+          <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:1.5rem;">
+            Supports batch ingestion of `.jsonl`, `.csv`, or **FHIR R4 `Claim`** resource envelopes.
+          </p>
+
+          <div id="upload-drop-zone" style="border: 2px dashed var(--brand-primary); border-radius:var(--radius-md); padding:3rem 1.5rem; cursor:pointer; background:var(--bg-input); transition:all 0.2s;">
+            <div style="font-size:2.5rem; margin-bottom:0.5rem;">📥</div>
+            <div style="font-weight:700; font-size:1rem; color:var(--text-primary);">Click or drag file here to ingest</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.25rem;">claims.jsonl, claims.csv, or FHIR Claim.json</div>
+            <input type="file" id="file-upload-input" accept=".jsonl,.csv,.json" style="display:none;">
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: REQUEST INFORMATION FROM PROVIDER -->
+  <div id="request-info-modal" class="modal-backdrop">
+    <div class="modal-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h3 style="font-size:1.05rem; font-weight:700;">Provider Clarification Dispatcher</h3>
+        <button id="close-request-modal" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.2rem;">&times;</button>
+      </div>
+      <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.75rem;">
+        Auto-generated clinical inquiry grounded in the detected rule discrepancies:
+      </p>
+      <textarea id="request-email-draft" style="width:100%; height:160px; background:var(--bg-input); border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:0.75rem; color:var(--text-primary); font-family:var(--font-sans); font-size:0.825rem; outline:none; resize:none;"></textarea>
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+        <button class="btn-solid btn-solid-outline" onclick="document.getElementById('request-info-modal').classList.remove('open')">Cancel</button>
+        <button id="send-request-btn" class="btn-solid btn-solid-brand">Dispatch & Record to Blockchain</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT CLAIM & INSTANT RECHECK -->
+  <div id="edit-claim-modal" class="modal-backdrop">
+    <div class="modal-card" style="max-width:780px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h3 style="font-size:1.05rem; font-weight:700;">Live Claim Payload Editor & Real-Time Re-evaluation</h3>
+        <button id="close-edit-modal" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.2rem;">&times;</button>
+      </div>
+      <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.5rem;">
+        Modify claim fields below. Saving creates a new immutable audit version and executes the 15-rule engine in real time.
+      </p>
+      <textarea id="claim-json-editor" style="width:100%; height:320px; background:var(--bg-input); border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:0.75rem; color:#67e8f9; font-family:var(--font-mono); font-size:0.78rem; outline:none;"></textarea>
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:1rem;">
+        <button class="btn-solid btn-solid-outline" onclick="document.getElementById('edit-claim-modal').classList.remove('open')">Cancel</button>
+        <button id="save-recheck-btn" class="btn-solid btn-solid-brand">Re-evaluate 15 Rules</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

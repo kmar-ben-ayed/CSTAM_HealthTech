@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+ENV/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+outputs/
+.venv/
+__pycache__/
+.env
+*.pyc
+.env
+
+
+# Test and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Generated outputs
+outputs/*.jsonl
+outputs/*.json
+outputs/*.html
+!outputs/.gitkeep
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Distribution/build
+build/
+dist/
+*.egg-info/
