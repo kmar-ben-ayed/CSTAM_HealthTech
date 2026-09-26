@@ -39,8 +39,13 @@ def build_agent():
     if not api_key:
         return GroundedExplanationAgent(MockExplanationProvider())
 
-    client = OpenAI(api_key=api_key)
-    provider = OpenAIExplanationProvider(client, model_name="gpt-4o-mini")
+    client = OpenAI(
+        api_key=api_key,
+        base_url="https://openrouter.ai/api/v1",
+        timeout=20.0,
+        max_retries=0,
+    )
+    provider = OpenAIExplanationProvider(client, model_name="openai/gpt-4o-mini", timeout_seconds=20.0)
     return GroundedExplanationAgent(provider)
 
 

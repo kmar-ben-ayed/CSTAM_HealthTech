@@ -2,9 +2,18 @@
 from typing import Protocol
 import json
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+
+def load_project_env():
+    repo_root = Path(__file__).resolve().parents[1]
+    for candidate in (repo_root / ".env.local", repo_root / ".env"):
+        if candidate.exists():
+            load_dotenv(dotenv_path=candidate, override=False)
+
+
+load_project_env()
 
 
 class ExplanationProvider(Protocol):
@@ -130,9 +139,10 @@ class OpenAIExplanationProvider:
     Sends a strict prompt and expects a JSON response.
     We keep the model bounded to the validated finding and evidence only.
     """
-    def __init__(self, client: OpenAI, model_name: str = "gpt-4o-mini"):
+    def __init__(self, client: OpenAI, model_name: str = "gpt-4o-mini", timeout_seconds: float = 20.0):
         self.client = client
         self.model_name = model_name
+        self.timeout_seconds = timeout_seconds
 
     def explain(self, finding: dict, rule: dict) -> dict:
         prompt = """
@@ -177,6 +187,7 @@ Return only a valid JSON object with exactly this structure:
         response = self.client.chat.completions.create(
             model=self.model_name,
             temperature=0,
+            timeout=self.timeout_seconds,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": prompt},

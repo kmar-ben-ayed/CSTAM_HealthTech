@@ -184,7 +184,6 @@ def base_check(c,r,cfg):
         return make_result(c,r,status,paths or ['/lines'],message,sorted(set(ids)))
 
     if rid=='R008':
-<<<<<<< HEAD
         policy_id=c['policy_id']
         policy=cfg['policies'][policy_id] if policy_id in cfg['policies'] else None
         if not policy or not isinstance(policy.get('auth_required_services'),list):
@@ -487,11 +486,6 @@ def base_check(c,r,cfg):
     
 
     
-=======
-        # Starter baseline intentionally leaves this rule unimplemented.
-        # Returning None allows the wrapper in baseline() to emit a NOT_IMPLEMENTED result.
-        return None
->>>>>>> a88b104c348d094a736f4bf67217f2966635157a
 
     return None
 
