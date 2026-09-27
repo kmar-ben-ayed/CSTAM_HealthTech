@@ -1,9 +1,8 @@
-"""Model-neutral seam. The mock is a template, not a real LLM."""
 from typing import Protocol
 import json
-import os
 from pathlib import Path
 from dotenv import load_dotenv
+from openai import OpenAI
 
 
 def load_project_env():
@@ -16,20 +15,44 @@ def load_project_env():
 load_project_env()
 
 
+def build_recommendation(finding: dict) -> str:
+    corrective = (finding.get("corrective_action") or "").strip()
+    if corrective:
+        return corrective
+
+    rule_id = (finding.get("rule_id") or "").upper()
+    status = (finding.get("status") or "").upper()
+
+    if status in {"PASS", "NOT_APPLICABLE"}:
+        return "No correction required. Keep the current claim data."
+
+    mapping = {
+        "R001": "Populate the missing claim identifiers and required line details before submission.",
+        "R002": "Correct the service dates so they are not later than the submission date.",
+        "R003": "Update the coverage status or dates so all services fall within the active coverage period.",
+        "R004": "Align the member or patient IDs with the coverage record before resubmitting the claim.",
+        "R005": "Use an approved provider ID and verify the provider is eligible for that service.",
+        "R006": "Correct the modifier or line-level coding so the service is consistent with the policy rules.",
+        "R007": "Fix the arithmetic inputs and recalculate the net amount so the claim totals match the expected charge.",
+        "R008": "Add or validate the required authorization before processing the service line.",
+        "R009": "Resolve the authorization status or missing approval details before the claim can pass.",
+        "R010": "Attach the required supporting document or mark it as final and valid before resubmission.",
+        "R011": "Use a recognized service code and verify the catalogue entry before finalizing the claim.",
+        "R012": "Correct the total amount so it matches the allowed service limits and claim aggregate values.",
+        "R013": "Fix the quantity or service unit values so the line quantity stays within policy limits.",
+        "R014": "Adjust the claim timing to stay within the required submission window.",
+        "R015": "Normalize the currency and amount fields so the claim uses the allowed billing currency.",
+    }
+
+    return mapping.get(rule_id, "Verify the disputed source data, correct the affected field, and resubmit for review.")
+
+
 class ExplanationProvider(Protocol):
-    """
-    Contract for any explanation provider.
-    Any real LLM adapter or mock must implement explain().
-    """
     def explain(self, finding: dict, rule: dict) -> dict:
         ...
 
 
 class MockExplanationProvider:
-    """
-    Deterministic fallback implementation.
-    Safe default for tests and local demos.
-    """
     def explain(self, finding, rule):
         evidence = finding.get("evidence", [])
         cited_paths = [
@@ -38,22 +61,19 @@ class MockExplanationProvider:
             if isinstance(item, dict) and "path" in item
         ]
 
+        recommendation = build_recommendation(finding)
+
         return {
             "explanation": finding["explanation"],
             "cited_evidence_paths": cited_paths,
             "cited_rule_ids": [finding["rule_id"]],
             "needs_human_review": finding["requires_human_review"],
+            "recommendation": recommendation,
         }
 
 
 def validate_explanation(output, finding):
-    """
-    Validate the model output before accepting it.
-
-    This is the safety gate that prevents hallucinated citations,
-    wrong rule IDs, mismatched review flags, and empty explanations.
-    """
-    expected = {"explanation", "cited_evidence_paths", "cited_rule_ids", "needs_human_review"}
+    expected = {"explanation", "cited_evidence_paths", "cited_rule_ids", "needs_human_review", "recommendation"}
 
     if not isinstance(output, dict):
         raise ValueError("Output must be a JSON object")
@@ -64,6 +84,10 @@ def validate_explanation(output, finding):
     explanation = output.get("explanation")
     if not isinstance(explanation, str) or not explanation.strip():
         raise ValueError("Explanation required")
+
+    recommendation = output.get("recommendation")
+    if not isinstance(recommendation, str) or not recommendation.strip():
+        raise ValueError("Recommendation required")
 
     for key in ("cited_evidence_paths", "cited_rule_ids"):
         value = output.get(key)
@@ -92,9 +116,6 @@ def validate_explanation(output, finding):
 
 
 def deterministic_fallback(finding):
-    """
-    Safe fallback used when the model fails, times out, or returns invalid output.
-    """
     evidence = finding.get("evidence", [])
     cited_paths = [
         item["path"]
@@ -102,23 +123,18 @@ def deterministic_fallback(finding):
         if isinstance(item, dict) and "path" in item
     ]
 
+    recommendation = build_recommendation(finding)
+
     return {
         "explanation": finding["explanation"],
         "cited_evidence_paths": cited_paths,
         "cited_rule_ids": [finding["rule_id"]],
         "needs_human_review": finding["requires_human_review"],
+        "recommendation": recommendation,
     }
 
 
 class GroundedExplanationAgent:
-    """
-    Main explanation agent.
-
-    Flow:
-    1) call the provider
-    2) validate the returned JSON
-    3) fallback to deterministic output if needed
-    """
     def __init__(self, provider: ExplanationProvider):
         self.provider = provider
 
@@ -130,15 +146,7 @@ class GroundedExplanationAgent:
             return deterministic_fallback(finding)
 
 
-from openai import OpenAI
-
-
 class OpenAIExplanationProvider:
-    """
-    Real OpenAI implementation.
-    Sends a strict prompt and expects a JSON response.
-    We keep the model bounded to the validated finding and evidence only.
-    """
     def __init__(self, client: OpenAI, model_name: str = "gpt-4o-mini", timeout_seconds: float = 20.0):
         self.client = client
         self.model_name = model_name
@@ -164,8 +172,11 @@ Return only a valid JSON object with exactly this structure:
   "explanation": "string",
   "cited_evidence_paths": ["string", "..."],
   "cited_rule_ids": ["string", "..."],
-  "needs_human_review": true
+  "needs_human_review": true,
+  "recommendation": "string"
 }
+
+The recommendation must be a short, concrete correction step for the human reviewer or claims team.
 """
 
         payload = {
@@ -174,6 +185,7 @@ Return only a valid JSON object with exactly this structure:
             "status": finding.get("status"),
             "severity": finding.get("severity"),
             "explanation": finding.get("explanation"),
+            "corrective_action": finding.get("corrective_action"),
             "evidence": finding.get("evidence", []),
             "requires_human_review": finding.get("requires_human_review"),
             "rule": {
@@ -200,33 +212,4 @@ Return only a valid JSON object with exactly this structure:
 
 
 if __name__ == "__main__":
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        print("Set OPENAI_API_KEY before running this example.")
-    else:
-        client = OpenAI(api_key=api_key)
-        provider = OpenAIExplanationProvider(client, model_name="gpt-4o-mini")
-        agent = GroundedExplanationAgent(provider)
-
-        finding = {
-            "claim_id": "CLAIM-001",
-            "rule_id": "R001",
-            "status": "FAIL",
-            "severity": "high",
-            "requires_human_review": True,
-            "explanation": "Required information is missing.",
-            "evidence": [
-                {"path": "/invoice_number", "value": None},
-                {"path": "/member_id", "value": None},
-            ],
-        }
-
-        rule = {
-            "rule_id": "R001",
-            "version": "1.0.0",
-            "source": "fictional-rulebook/R001@1.0.0",
-            "severity": "high",
-        }
-
-        result = agent.explain(finding, rule)
-        print(json.dumps(result, indent=2))
+    pass

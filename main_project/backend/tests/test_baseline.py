@@ -94,7 +94,18 @@ class StarterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_transport(claim)
     def test_mock_explanation_validates(self):
-        r=self.result('R001');out=MockExplanationProvider().explain(r,{});self.assertEqual(validate_explanation(out,r),out)
+        self.c['invoice_number']=None
+        r=self.result('R001');out=MockExplanationProvider().explain(r,{});self.assertIn('recommendation', out)
+        self.assertIn('missing', out['recommendation'].lower())
+        self.assertEqual(validate_explanation(out,r),out)
+
+        self.c['lines'][0]['service_date']='2026-07-10'
+        self.c['submission_date']='2026-07-01'
+        r2=self.result('R002');out2=MockExplanationProvider().explain(r2,{});self.assertNotEqual(out['recommendation'], out2['recommendation'])
+        self.assertNotIn('verify the missing or incorrect evidence', out2['recommendation'].lower())
+
         out['cited_rule_ids']=['R999']
+        with self.assertRaises(ValueError):validate_explanation(out,r)
+        del out['recommendation']
         with self.assertRaises(ValueError):validate_explanation(out,r)
 if __name__=='__main__':unittest.main()

@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from openai import OpenAI
-from llm_adapter import GroundedExplanationAgent, MockExplanationProvider, OpenAIExplanationProvider
+from llm_adapter import GroundedExplanationAgent, MockExplanationProvider, OpenAIExplanationProvider, load_project_env
 
 
 def load_jsonl(path: str):
@@ -19,6 +19,7 @@ def make_finding(result: dict) -> dict:
         "status": result.get("status"),
         "severity": result.get("severity"),
         "explanation": result.get("explanation", ""),
+        "corrective_action": result.get("corrective_action", ""),
         "requires_human_review": bool(result.get("requires_human_review", False)),
         "evidence": result.get("evidence", []),
     }
@@ -34,6 +35,7 @@ def make_rule(result: dict) -> dict:
 
 
 def build_agent():
+    load_project_env()
     api_key = os.environ.get("OPENAI_API_KEY")
 
     if not api_key:
@@ -41,11 +43,11 @@ def build_agent():
 
     client = OpenAI(
         api_key=api_key,
-        base_url="https://openrouter.ai/api/v1",
+        base_url="https://integrate.api.nvidia.com/v1",
         timeout=20.0,
         max_retries=0,
     )
-    provider = OpenAIExplanationProvider(client, model_name="openai/gpt-4o-mini", timeout_seconds=20.0)
+    provider = OpenAIExplanationProvider(client, model_name="meta/llama-3.1-8b-instruct", timeout_seconds=20.0)
     return GroundedExplanationAgent(provider)
 
 
@@ -81,4 +83,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    pass
