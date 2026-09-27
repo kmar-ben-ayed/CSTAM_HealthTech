@@ -190,31 +190,89 @@ class ClaimGuardApp {
     if (btnEditRecheck) btnEditRecheck.addEventListener('click', () => this.openEditClaimModal());
   }
 
+  bindInspectorControls() {
+    const payloadButton = document.getElementById('insp-payload-button');
+    if (payloadButton) payloadButton.onclick = () => this.toggleSelectedClaimPayload(payloadButton);
+  }
+
+  toFHIRClaim(claim) {
+    const item = (claim.lines || []).map((line, index) => ({
+      sequence: index + 1,
+      productOrService: {
+        coding: [{ system: 'https://claimguard.ai/fhir/CodeSystem/service', code: line.service_code || 'unknown' }]
+      },
+      servicedDate: line.service_date || claim.submission_date,
+      quantity: { value: Number(line.quantity || 0), unit: 'service' },
+      unitPrice: { value: Number(line.unit_price || 0), currency: claim.currency || 'SAR' },
+      net: { value: Number(line.net_amount || 0), currency: claim.currency || 'SAR' },
+      ...(line.authorization_id ? { authorization: [{ reference: `https://claimguard.ai/fhir/Authorization/${line.authorization_id}` }] } : {})
+    }));
+
+    return {
+      resourceType: 'Claim',
+      id: claim.claim_id,
+      meta: { profile: ['https://claimguard.ai/fhir/StructureDefinition/synthetic-claim'] },
+      status: 'active',
+      type: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/claim-type', code: 'professional' }] },
+      use: 'claim',
+      patient: { reference: `Patient/${claim.patient_id || 'unknown'}` },
+      created: claim.submission_date,
+      provider: { reference: `Organization/${claim.provider_id || 'unknown'}` },
+      priority: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/processpriority', code: 'normal' }] },
+      diagnosis: claim.diagnosis_code ? [{ sequence: 1, diagnosisCodeableConcept: { coding: [{ code: claim.diagnosis_code }] } }] : [],
+      insurance: [{ focal: true, coverage: { reference: `Coverage/${claim.member_id || 'unknown'}` } }],
+      item,
+      total: { value: Number(claim.total_amount || 0), currency: claim.currency || 'SAR' },
+      supportingInfo: (claim.attachments || []).map((attachment, index) => ({
+        sequence: index + 1,
+        category: { coding: [{ code: attachment.type || attachment.document_type || 'document' }] },
+        valueString: attachment.text || ''
+      })),
+      extension: [{
+        url: 'https://claimguard.ai/fhir/StructureDefinition/synthetic-coverage',
+        extension: [
+          { url: 'status', valueString: claim.coverage?.status || 'unknown' },
+          { url: 'startDate', valueDate: claim.coverage?.start_date },
+          { url: 'endDate', valueDate: claim.coverage?.end_date }
+        ].filter(entry => entry.valueString || entry.valueDate)
+      }]
+    };
+  }
+
+  toggleSelectedClaimPayload(button) {
+    const claim = dataManager.getClaim(this.selectedClaimId);
+    if (!claim) return;
+    const preview = document.getElementById('insp-payload-preview');
+    if (!preview) return;
+    const isOpen = preview.classList.toggle('open');
+    preview.textContent = isOpen ? JSON.stringify(this.toFHIRClaim(claim), null, 2) : '';
+    button.classList.toggle('open', isOpen);
+  }
+
   switchView(viewName) {
     this.currentView = viewName;
+    document.body.classList.toggle('inspector-mode', viewName === 'inspector');
 
     // Update nav buttons
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.view === viewName);
     });
 
-    // GLITCH FIX: remove active from all views first, then add to target
-    // This ensures the animation always re-triggers cleanly
-    document.querySelectorAll('.view').forEach(sec => {
-      sec.classList.remove('active');
-    });
-    const targetView = document.getElementById(`view-${viewName}`);
-    if (targetView) {
-      // Force a reflow so the animation re-triggers
-      void targetView.offsetHeight;
-      targetView.classList.add('active');
-    }
-
+    // Render the target before revealing it so dynamic findings do not paint into
+    // an already animated panel one element at a time.
     if (viewName === 'dashboard') this.renderDashboard();
     if (viewName === 'queue') this.renderQueue();
     if (viewName === 'inspector') this.renderInspector();
     if (viewName === 'audit') this.renderAuditTimeline();
     if (viewName === 'rulebook') this.renderRulebook();
+
+    document.querySelectorAll('.view').forEach(sec => {
+      sec.classList.remove('active');
+    });
+    const targetView = document.getElementById(`view-${viewName}`);
+    if (targetView) {
+      targetView.classList.add('active');
+    }
   }
 
   updateAllViews() {
@@ -358,16 +416,45 @@ class ClaimGuardApp {
     if (!claim) return;
 
     const evalResults = dataManager.getEvaluation(this.selectedClaimId);
+    const reviewResults = evalResults.filter(r => r.status === 'FAIL' || r.status === 'UNABLE_TO_ASSESS');
+
+    const inspectorGrid = document.querySelector('#view-inspector .inspector-grid');
+    if (inspectorGrid && !inspectorGrid.dataset.traceShell) {
+      inspectorGrid.dataset.traceShell = 'true';
+      inspectorGrid.innerHTML = `
+        <div class="claim-lab-flow" aria-label="Claim inspection progress">
+          <div class="claim-lab-step is-complete"><span>01</span><strong>Ingest</strong><small>Claim received</small></div>
+          <div class="claim-lab-step is-complete"><span>02</span><strong>Normalize</strong><small>FHIR R4 mapping</small></div>
+          <div class="claim-lab-step is-complete"><span>03</span><strong>Validate</strong><small>Schema &amp; integrity</small></div>
+          <div class="claim-lab-step is-active" id="claim-lab-review-step"><span>04</span><strong>Review</strong><small>Human handoff</small></div>
+        </div>
+        <div class="panel inspector-dossier">
+          <div class="inspector-kicker-row"><div class="panel-section-label">Selected synthetic fixture</div><span class="inspector-review-state"><span></span> review required</span></div>
+          <div class="inspector-title-row"><div><div class="claim-id-display" id="insp-claim-id">CG-0000</div><div class="inspector-claim-subtitle" id="insp-claim-subtitle">Synthetic claim / review pending</div></div><div class="inspector-signal-mark" aria-hidden="true"><i></i><b></b><em></em></div></div>
+          <p class="inspector-description">A synthetic claim fixture with deterministic administrative signals ready for human review.</p>
+          <div class="dossier-facts">
+            <div><span>Provider</span><strong id="insp-provider-id">-</strong></div><div><span>Service date</span><strong id="insp-sub-date">-</strong></div><div><span>Payer</span><strong id="insp-policy-id">-</strong></div><div><span>Coverage</span><strong id="insp-cov-status">-</strong></div><div><span>Authorization</span><strong id="insp-invoice">-</strong></div><div><span>Lines</span><strong id="insp-diagnosis">-</strong></div>
+          </div>
+          <button class="payload-button" id="insp-payload-button" type="button"><span>♧</span> View synthetic payload <b>›</b></button><pre class="payload-preview" id="insp-payload-preview" aria-label="FHIR JSON payload"></pre>
+          <div class="inspector-hidden-data" aria-hidden="true"><span id="insp-patient-id">-</span><span id="insp-member-id">-</span><span id="insp-cov-period">-</span><span id="insp-cov-beneficiary">-</span><span id="insp-total">-</span></div><div class="inspector-legacy-lines"><table><tbody id="insp-lines-table-body"></tbody></table></div><div class="inspector-hidden-data" id="insp-attachments-container"></div>
+        </div>
+        <div class="panel inspector-signals-panel">
+          <div class="signals-heading"><div><div class="panel-section-label">Inspection trace</div><h1>Signals with receipts.</h1><p>Each surfaced signal opens its source field, rule, confidence, and suggested administrative next step.</p></div><div class="signals-count"><strong id="insp-finding-count">0 / 0</strong><span>revealed</span></div></div>
+          <div class="ai-box" id="ai-copilot-summary-box"></div><div class="rules-list" id="insp-rules-checklist"></div>
+          <div class="decision-studio inspector-handoff"><div class="studio-label">Human review handoff</div><strong>Keep a person in the loop.</strong><p>ClaimGuard has made the evidence legible. A reviewer remains accountable for the next decision.</p><div class="action-grid"><button id="btn-action-confirm" class="btn btn-brand" onclick="window.app.handleReviewAction('CONFIRM_DEFECT')">♙ Mark for administrative review</button><button id="btn-action-dismiss" class="btn btn-ghost" onclick="window.app.toggleSelectedClaimPayload(this)">▣ View FHIR payload</button><button id="btn-action-request" class="btn btn-hidden-action" onclick="window.app.openRequestInfoModal()">Request Info</button><button id="btn-action-edit" class="btn btn-hidden-action" onclick="window.app.openEditClaimModal()">Edit &amp; Recheck</button></div></div>
+        </div>`;
+    }
 
     // Left Panel: Claim Header & Metadata
     document.getElementById('insp-claim-id').textContent = claim.claim_id;
-    document.getElementById('insp-invoice').textContent = claim.invoice_number || '—';
+    document.getElementById('insp-claim-subtitle').textContent = `${claim.patient_id || 'Synthetic patient'} / ${reviewResults.length} ${reviewResults.length === 1 ? 'problem' : 'problems'}`;
+    document.getElementById('insp-invoice').textContent = claim.lines?.[0]?.authorization_id || 'Missing';
     document.getElementById('insp-patient-id').textContent = claim.patient_id || '—';
     document.getElementById('insp-member-id').textContent = claim.member_id || '—';
     document.getElementById('insp-provider-id').textContent = claim.provider_id || '—';
     document.getElementById('insp-policy-id').textContent = claim.policy_id || '—';
-    document.getElementById('insp-sub-date').textContent = claim.submission_date || '—';
-    document.getElementById('insp-diagnosis').textContent = claim.diagnosis_code || '—';
+    document.getElementById('insp-sub-date').textContent = claim.lines?.[0]?.service_date || claim.submission_date || '—';
+    document.getElementById('insp-diagnosis').textContent = claim.lines?.length ? `${claim.lines[0].service_code || 'Service'} × ${claim.lines.length}` : '—';
     document.getElementById('insp-total').textContent = `${Number(claim.total_amount || 0).toFixed(2)} SAR`;
 
     // Coverage card
@@ -422,11 +509,27 @@ class ClaimGuardApp {
       attContainer.innerHTML = `<span style="font-size:0.78rem; color:var(--text-muted);">No documents attached to this claim.</span>`;
     }
 
-    // Right Panel: 15-Rule Validation Checklist
+    // Right Panel: actionable validation findings
     const rulesList = document.getElementById('insp-rules-checklist');
     rulesList.innerHTML = '';
 
-    evalResults.forEach(r => {
+    const findingCount = document.getElementById('insp-finding-count');
+    if (findingCount) findingCount.textContent = `${reviewResults.length} / ${reviewResults.length}`;
+
+    const reviewStep = document.getElementById('claim-lab-review-step');
+    if (reviewStep) {
+      reviewStep.classList.toggle('is-clean', reviewResults.length === 0);
+      reviewStep.querySelector('small').textContent = reviewResults.length === 0 ? 'Ready to submit' : 'Human handoff';
+    }
+
+    if (reviewResults.length === 0) {
+      const emptyState = document.createElement('div');
+      emptyState.className = 'review-empty-state';
+      emptyState.textContent = 'No failed or unresolved rules. This claim passed the review checks.';
+      rulesList.appendChild(emptyState);
+    }
+
+    reviewResults.forEach(r => {
       const card = document.createElement('div');
       let tileClass = 'rule-tile';
       if (r.status === 'FAIL') tileClass += ' tile-fail';
@@ -439,17 +542,18 @@ class ClaimGuardApp {
       else if (r.status === 'UNABLE_TO_ASSESS') chipClass = 'chip-warn';
       else if (r.status === 'NOT_APPLICABLE') chipClass = 'chip-na';
 
-      const isOpen = r.status === 'FAIL' || r.status === 'UNABLE_TO_ASSESS';
+      const isOpen = false;
+      const sourcePath = r.evidence?.[0]?.path || 'deterministic.rule';
 
       card.innerHTML = `
         <div class="rule-tile-head">
           <div class="rule-tile-head-left">
-            <span class="rule-pill">${r.rule_id}</span>
-            <span class="rule-title">${r.title}</span>
+            <span class="signal-icon ${r.status === 'FAIL' ? 'signal-icon-fail' : 'signal-icon-warn'}">✓</span>
+            <div><span class="rule-title">${r.title}</span><small class="signal-source">${sourcePath}</small></div>
           </div>
           <div style="display:flex; align-items:center; gap:0.5rem; flex-shrink:0;">
-            <span class="chip ${chipClass}">${r.status}</span>
-            <span style="color:var(--text-muted); font-size:0.65rem; transform:${isOpen?'rotate(180deg)':'rotate(0)'}; transition:transform 0.2s; display:inline-block;">▼</span>
+            <span class="chip ${chipClass}">flagged</span>
+            <span class="signal-chevron">›</span>
           </div>
         </div>
         <div class="rule-tile-body${isOpen ? ' open' : ''}">
@@ -466,9 +570,9 @@ class ClaimGuardApp {
 
       card.querySelector('.rule-tile-head').addEventListener('click', () => {
         const body = card.querySelector('.rule-tile-body');
-        const arrow = card.querySelector('.rule-tile-head span:last-child');
+        const arrow = card.querySelector('.signal-chevron');
         body.classList.toggle('open');
-        if (arrow) arrow.style.transform = body.classList.contains('open') ? 'rotate(180deg)' : 'rotate(0)';
+        if (arrow) arrow.classList.toggle('open', body.classList.contains('open'));
       });
 
       rulesList.appendChild(card);
@@ -504,6 +608,8 @@ class ClaimGuardApp {
         this.highlightEvidenceCell(path);
       });
     });
+
+    this.bindInspectorControls();
   }
 
   highlightEvidenceCell(path) {

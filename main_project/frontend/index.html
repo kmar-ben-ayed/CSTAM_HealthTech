@@ -7,7 +7,7 @@
   <meta name="description" content="AI-Powered Pre-Validation Copilot for Healthcare Claims Officers. Deterministic 15-Rule Engine, Grounded Explanations, and Tamper-Evident Audit Logging.">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body data-theme="dark">
+<body data-theme="light">
 
   <!-- Ambient atmosphere -->
   <div class="bg-atmosphere"></div>
@@ -108,8 +108,6 @@
        MAIN STAGE
   ════════════════════════════════════════════════ -->
   <div class="stage">
-
-    <!-- Topbar -->
     <header class="topbar">
       <div class="topbar-left">
         <div class="dataset-pill">
@@ -119,121 +117,28 @@
             <option value="dev_dataset">Development Suite (400 Claims)</option>
             <option value="val_dataset">Validation Suite (150 Claims)</option>
             <option value="stress_dataset">Stress Test Suite (50 Edge Cases)</option>
-            <option value="custom_upload">➕ Ingest Local File (JSONL / CSV / FHIR)…</option>
+            <option value="custom_upload">Ingest Local File (JSONL / CSV / FHIR)...</option>
           </select>
         </div>
       </div>
-
       <div class="topbar-right">
-        <button class="search-trigger" id="topbar-search-trigger">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <span>Quick search…</span>
-          <span class="kbd">⌘K</span>
-        </button>
-        <span class="chip chip-pass" id="topbar-audit-status">🛡️ SHA-256 Valid</span>
+        <button class="search-trigger" id="topbar-search-trigger"><span>Quick search...</span><span class="kbd">Ctrl K</span></button>
+        <span class="chip chip-pass" id="topbar-audit-status">SHA-256 Valid</span>
       </div>
     </header>
 
-    <!-- Content Viewport -->
     <main class="content" id="main-content">
-
-      <!-- ══════════════════════════════════════════
-           VIEW 1: EXECUTIVE DASHBOARD
-      ══════════════════════════════════════════ -->
       <section id="view-dashboard" class="view active">
-
-        <!-- KPI Grid -->
         <div class="kpi-grid">
-          <div class="kpi-card">
-            <div class="kpi-top">
-              <span class="kpi-label">Total Claims Evaluated</span>
-              <div class="kpi-icon" style="background:rgba(99,102,241,0.12); color:#818cf8;">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              </div>
-            </div>
-            <div class="kpi-value" id="kpi-total-claims">0</div>
-            <div class="kpi-sub">Ingested &amp; evaluated deterministically</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-top">
-              <span class="kpi-label">Clean Pass Rate</span>
-              <div class="kpi-icon" style="background:var(--pass-dim); color:var(--pass);">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              </div>
-            </div>
-            <div class="kpi-value" style="color:var(--pass);" id="kpi-pass-rate">0.0%</div>
-            <div class="kpi-sub">All 15 payer rules satisfied</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-top">
-              <span class="kpi-label">Value at Risk</span>
-              <div class="kpi-icon" style="background:var(--fail-dim); color:var(--fail);">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
-              </div>
-            </div>
-            <div class="kpi-value" style="color:var(--fail);" id="kpi-flagged-sar">0 SAR</div>
-            <div class="kpi-sub">In flagged claims requiring correction</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="kpi-top">
-              <span class="kpi-label">Open Uncertainties</span>
-              <div class="kpi-icon" style="background:var(--warn-dim); color:var(--warn);">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
-              </div>
-            </div>
-            <div class="kpi-value" style="color:var(--warn);" id="kpi-uncertain-claims">0</div>
-            <div class="kpi-sub">Missing data / unresolvable checks</div>
-          </div>
+          <div class="kpi-card"><div class="kpi-label">Total Claims Evaluated</div><div class="kpi-value" id="kpi-total-claims">0</div><div class="kpi-sub">Ingested &amp; evaluated deterministically</div></div>
+          <div class="kpi-card"><div class="kpi-label">Clean Pass Rate</div><div class="kpi-value" id="kpi-pass-rate">0.0%</div><div class="kpi-sub">All 15 payer rules satisfied</div></div>
+          <div class="kpi-card"><div class="kpi-label">Value at Risk</div><div class="kpi-value" id="kpi-flagged-sar">0 SAR</div><div class="kpi-sub">In flagged claims requiring correction</div></div>
+          <div class="kpi-card"><div class="kpi-label">Open Uncertainties</div><div class="kpi-value" id="kpi-uncertain-claims">0</div><div class="kpi-sub">Missing data / unresolvable checks</div></div>
         </div>
-
-        <!-- Analytics Split -->
         <div class="split-2">
-          <!-- 15-Rule Defect Matrix -->
-          <div class="card">
-            <div class="card-head">
-              <div class="card-title">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-                15-Rule Validation Defect Matrix
-              </div>
-              <span class="chip chip-na">Standard Policy</span>
-            </div>
-            <div class="rule-bars" id="rule-frequency-bars">
-              <!-- Dynamically populated -->
-            </div>
-          </div>
-
-          <!-- Trust Boundaries -->
-          <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;">
-            <div>
-              <div class="card-title" style="margin-bottom:0.25rem;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                Trust Boundaries
-              </div>
-              <p style="font-size:0.78rem; color:var(--text-muted); margin-bottom:0.5rem;">ClaimGuard AI operates on synthetic, non-probabilistic data:</p>
-              <div class="trust-items">
-                <div class="trust-item">
-                  <div class="trust-title">1. Zero Hallucination</div>
-                  <div class="trust-body">Rule decisions are deterministic (PASS / FAIL / UNABLE_TO_ASSESS). No LLM can flip rule statuses.</div>
-                </div>
-                <div class="trust-item">
-                  <div class="trust-title">2. Prompt Injection Immunity</div>
-                  <div class="trust-body">Unstructured clinical attachments are sanitized and sandboxed as untrusted data.</div>
-                </div>
-                <div class="trust-item">
-                  <div class="trust-title">3. Cryptographic Proof</div>
-                  <div class="trust-body">Every officer action creates an immutable SHA-256 block in the audit chain.</div>
-                </div>
-              </div>
-            </div>
-            <button class="btn btn-brand btn-full" style="margin-top:1.25rem;" onclick="window.app.switchView('queue')">
-              Open Review Queue &rarr;
-            </button>
-          </div>
+          <div class="card"><div class="card-title">15-Rule Validation Defect Matrix</div><div class="rule-bars" id="rule-frequency-bars"></div></div>
+          <div class="card"><div class="card-title">Trust Boundaries</div><p class="trust-body">ClaimGuard AI operates on synthetic, non-probabilistic data. Deterministic rule results remain authoritative and every officer action is auditable.</p><button class="btn btn-brand btn-full" style="margin-top:1.25rem;" onclick="window.app.switchView('queue')">Open Review Queue &rarr;</button></div>
         </div>
-
       </section>
 
       <!-- ══════════════════════════════════════════
@@ -367,7 +272,7 @@
             </div>
           </div>
 
-          <!-- RIGHT: 15-Rule Checklist & AI -->
+          <!-- RIGHT: Review Findings & AI -->
           <div class="panel">
 
             <!-- AI Copilot Box -->
@@ -375,10 +280,10 @@
               <!-- Dynamically populated -->
             </div>
 
-            <!-- 15-Rule Checklist Header -->
+            <!-- Actionable Findings Header -->
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="font-size:0.875rem; font-weight:700; color:var(--text-primary);">15-Rule Pre-Validation Checklist</span>
-              <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">JSON Pointer Evidence</span>
+              <span style="font-size:0.875rem; font-weight:700; color:var(--text-primary);">Review Findings</span>
+              <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">Failures &amp; unresolved checks</span>
             </div>
 
             <!-- Accordion Tiles -->
@@ -543,6 +448,6 @@
     </div>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=inspector-trace"></script>
 </body>
 </html>

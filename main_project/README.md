@@ -84,3 +84,9 @@ Then open http://localhost:3000 in a browser.
 
 This project is for educational and challenge work. It is not a production payer system, and it should not be used as a real claims adjudication engine outside a controlled demo environment.
 
+
+
+python backend/src/run_baseline.py --input backend/data/development/claims.jsonl --output backend/outputs/dev_predictions.jsonl
+python backend/src/explain_rule_results.py --input backend/outputs/dev_predictions.jsonl --output backend/outputs/dev_explanations.jsonl
+python backend/src/evaluate.py --gold backend/data/development/expected_results.jsonl --pred backend/outputs/dev_predictions.jsonl --claims backend/data/development/claims.jsonl --output outputs/dev_metrics.json
+python backend/src/make_review.py --input backend/outputs/dev_predictions.jsonl --output backend/outputs/review.html
