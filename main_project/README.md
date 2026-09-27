@@ -70,7 +70,15 @@ cd frontend
 python -m http.server 3000
 ```
 
-Then open http://localhost:3000 in a browser.
+In a second terminal, start the backend API from the project root:
+
+```bash
+python backend/src/api.py --port 8000
+```
+
+The frontend now loads the development, validation, and stress datasets from
+`backend/data` through the API. Open http://localhost:3000 in a browser. If the
+API is stopped, the frontend falls back to its small bundled demo fixtures.
 
 ## Good repo practices used here
 

@@ -12,14 +12,15 @@ export class ClaimDataManager {
     this.currentDatasetName = "Worked Examples (10 Cases)";
   }
 
-  loadClaims(claimsArray, datasetName = "Custom Dataset") {
+  loadClaims(claimsArray, datasetName = "Custom Dataset", evaluationsByClaim = null) {
     this.claims = claimsArray;
     this.currentDatasetName = datasetName;
     this.evaluations.clear();
     
-    // Evaluate all claims
+    // Prefer authoritative backend results when supplied; use the browser
+    // evaluator only for local uploads and offline fallback datasets.
     this.claims.forEach(c => {
-      const results = evaluateClaim(c);
+      const results = evaluationsByClaim?.[c.claim_id] || evaluateClaim(c);
       this.evaluations.set(c.claim_id, results);
     });
 

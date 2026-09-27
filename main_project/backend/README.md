@@ -55,6 +55,19 @@ python -m unittest discover -s tests -v
 python src/run_baseline.py --input data/development/claims.jsonl --output outputs/dev_predictions.jsonl
 ```
 
+## Frontend data API
+
+Run this from `main_project` to serve claims from `backend/data` and results
+from the deterministic `engine_core` implementation:
+
+```bash
+python backend/src/api.py --port 8000
+```
+
+The browser frontend connects to `http://127.0.0.1:8000/api`. Available
+dataset routes are `/api/datasets/development`, `/api/datasets/validation`,
+and `/api/datasets/stress`.
+
 ## Notes
 
 This backend is intentionally deterministic and safe for educational use. It does not require a live production API or external patient data.

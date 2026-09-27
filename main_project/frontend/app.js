@@ -28,7 +28,7 @@ class ClaimGuardApp {
     await globalAudit.init();
 
     // 2. Load Default Benchmark Dataset (Worked Cases)
-    this.loadDataset('worked_cases');
+    await this.loadDataset('worked_cases');
 
     // 3. Bind Event Listeners
     this.bindEvents();
@@ -40,21 +40,37 @@ class ClaimGuardApp {
     this.renderAuditTimeline();
   }
 
-  loadDataset(key) {
-    const dataset = PRESET_DATASETS[key];
-    if (dataset) {
-      dataManager.loadClaims(dataset.claims, dataset.name);
-      globalAudit.logEvent('INGEST_DATASET', { dataset: dataset.name, count: dataset.claims.length });
-      
+  async loadDataset(key) {
+    const backendDataset = {
+      worked_cases: { split: 'development', limit: 10 },
+      dev_dataset: { split: 'development' },
+      val_dataset: { split: 'validation' },
+      stress_dataset: { split: 'stress' }
+    }[key];
+
+    try {
+      if (!backendDataset) throw new Error(`No backend mapping for ${key}`);
+      const params = backendDataset.limit ? `?limit=${backendDataset.limit}` : '';
+      const response = await fetch(`http://127.0.0.1:8000/api/datasets/${backendDataset.split}${params}`);
+      if (!response.ok) throw new Error(`Backend returned ${response.status}`);
+      const dataset = await response.json();
+      dataManager.loadClaims(dataset.claims, dataset.name, dataset.evaluations);
+      globalAudit.logEvent('INGEST_DATASET', { dataset: dataset.name, source: 'backend', count: dataset.claims.length });
       this.currentPage = 1;
-
-      // Select first claim by default
-      if (dataset.claims.length > 0) {
-        this.selectedClaimId = dataset.claims[0].claim_id;
-      }
-
+      if (dataset.claims.length > 0) this.selectedClaimId = dataset.claims[0].claim_id;
       this.updateAllViews();
+      return;
+    } catch (error) {
+      console.warn('Backend API unavailable; using bundled demo data.', error);
     }
+
+    const dataset = PRESET_DATASETS[key];
+    if (!dataset) return;
+    dataManager.loadClaims(dataset.claims, dataset.name);
+    globalAudit.logEvent('INGEST_DATASET', { dataset: dataset.name, source: 'frontend-fallback', count: dataset.claims.length });
+    this.currentPage = 1;
+    if (dataset.claims.length > 0) this.selectedClaimId = dataset.claims[0].claim_id;
+    this.updateAllViews();
   }
 
   bindEvents() {
