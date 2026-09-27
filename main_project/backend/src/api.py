@@ -15,12 +15,32 @@ SPLITS = {
 }
 
 
+def load_claim_file(path):
+    """Load normal JSONL plus adjacent pretty-printed JSON objects."""
+    text = path.read_text(encoding="utf-8")
+    try:
+        return [json.loads(line) for line in text.splitlines() if line.strip()]
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        claims = []
+        position = 0
+        while position < len(text):
+            while position < len(text) and text[position].isspace():
+                position += 1
+            if position >= len(text):
+                break
+            claim, next_position = decoder.raw_decode(text, position)
+            claims.append(claim)
+            position = next_position
+        return claims
+
+
 def load_dataset(split, limit=None):
     if split not in SPLITS:
         raise ValueError(f"Unknown dataset split: {split}")
 
     claims_path, name = SPLITS[split]
-    claims = load_jsonl(claims_path)
+    claims = load_claim_file(claims_path)
     if limit is not None:
         claims = claims[:limit]
 

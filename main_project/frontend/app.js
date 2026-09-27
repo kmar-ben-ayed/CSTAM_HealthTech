@@ -54,6 +54,8 @@ class ClaimGuardApp {
       const response = await fetch(`http://127.0.0.1:8000/api/datasets/${backendDataset.split}${params}`);
       if (!response.ok) throw new Error(`Backend returned ${response.status}`);
       const dataset = await response.json();
+      const selectedOption = document.querySelector(`#dataset-selector option[value="${key}"]`);
+      if (selectedOption) selectedOption.textContent = dataset.name;
       dataManager.loadClaims(dataset.claims, dataset.name, dataset.evaluations);
       globalAudit.logEvent('INGEST_DATASET', { dataset: dataset.name, source: 'backend', count: dataset.claims.length });
       this.currentPage = 1;
