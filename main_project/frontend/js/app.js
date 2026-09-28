@@ -8,6 +8,7 @@ import { PRESET_DATASETS } from './datasets.js';
 import { dataManager } from './data.js';
 import { globalAudit } from './audit.js';
 import { copilotInstance } from './ai_copilot.js';
+import { looksLikeFhir, ingestFhir, exportBundle, summarizeIngest } from './fhir.js';
 
 class ClaimGuardApp {
   constructor() {
@@ -211,6 +212,9 @@ class ClaimGuardApp {
   bindInspectorControls() {
     const payloadButton = document.getElementById('insp-payload-button');
     if (payloadButton) payloadButton.onclick = () => this.toggleSelectedClaimPayload(payloadButton);
+
+    const downloadButton = document.getElementById('insp-download-fhir-button');
+    if (downloadButton) downloadButton.onclick = () => this.downloadSelectedBundle();
   }
 
   toFHIRClaim(claim) {
@@ -257,13 +261,15 @@ class ClaimGuardApp {
     };
   }
 
-  toggleSelectedClaimPayload(button) {
+  async toggleSelectedClaimPayload(button) {
     const claim = dataManager.getClaim(this.selectedClaimId);
     if (!claim) return;
+
     const preview = document.getElementById('insp-payload-preview');
     if (!preview) return;
+
     const isOpen = preview.classList.toggle('open');
-    preview.textContent = isOpen ? JSON.stringify(this.toFHIRClaim(claim), null, 2) : '';
+    preview.textContent = isOpen ? JSON.stringify(await this.fhirBundleFor(claim), null, 2) : '';
     button.classList.toggle('open', isOpen);
   }
 
@@ -453,7 +459,13 @@ class ClaimGuardApp {
           <div class="dossier-facts">
             <div><span>Provider</span><strong id="insp-provider-id">-</strong></div><div><span>Service date</span><strong id="insp-sub-date">-</strong></div><div><span>Payer</span><strong id="insp-policy-id">-</strong></div><div><span>Coverage</span><strong id="insp-cov-status">-</strong></div><div><span>Authorization</span><strong id="insp-invoice">-</strong></div><div><span>Lines</span><strong id="insp-diagnosis">-</strong></div>
           </div>
-          <button class="payload-button" id="insp-payload-button" type="button"><span>♧</span> View synthetic payload <b>›</b></button><pre class="payload-preview" id="insp-payload-preview" aria-label="FHIR JSON payload"></pre>
+          <button class="payload-button" id="insp-payload-button" type="button">
+            <span>♧</span> View synthetic payload <b>›</b>
+          </button>
+          <button class="payload-button" id="insp-download-fhir-button" type="button">
+            <span>⤓</span> Download FHIR Bundle <b>.json</b>
+          </button>
+          <pre class="payload-preview" id="insp-payload-preview" aria-label="FHIR JSON payload"></pre>
           <div class="inspector-hidden-data" aria-hidden="true"><span id="insp-patient-id">-</span><span id="insp-member-id">-</span><span id="insp-cov-period">-</span><span id="insp-cov-beneficiary">-</span><span id="insp-total">-</span></div><div class="inspector-legacy-lines"><table><tbody id="insp-lines-table-body"></tbody></table></div><div class="inspector-hidden-data" id="insp-attachments-container"></div>
         </div>
         <div class="panel inspector-signals-panel">
@@ -722,6 +734,29 @@ Claims Review Officer`;
     const text = await file.text();
     let claims = [];
 
+
+    // FHIR R4 (Bundle / bare Claim / JSON array / JSONL) is mapped by the backend adapter.
+    if (looksLikeFhir(text)) {
+      try {
+        const result = await ingestFhir(text, this.fhirSidecarSplit || null);
+        const report = summarizeIngest(result);
+        this.renderFhirReport(report, result.rejected.length > 0);
+        if (result.claims.length > 0) {
+          dataManager.loadClaims(result.claims, file.name, result.evaluations);
+          await globalAudit.logEvent('INGEST_FHIR', {
+            file: file.name, accepted: result.claims.length, rejected: result.rejected.length
+          });
+          this.currentPage = 1;
+          this.selectedClaimId = result.claims[0].claim_id;
+          this.updateAllViews();
+          this.switchView('queue');
+        }
+      } catch (e) {
+        this.renderFhirReport([`FHIR ingestion failed: ${e.message}`], true);
+      }
+      return;
+    }
+
     if (file.name.endsWith('.jsonl')) {
       claims = dataManager.parseJSONL(text);
     } else if (file.name.endsWith('.csv')) {
@@ -752,6 +787,45 @@ Claims Review Officer`;
       alert(`Successfully ingested & pre-validated ${claims.length} claims from ${file.name}!`);
     }
   }
+
+  renderFhirReport(lines, hasErrors) {
+    let box = document.getElementById('fhir-report');
+    if (!box) {
+      box = document.createElement('pre');
+      box.id = 'fhir-report';
+      document.querySelector('#view-upload .upload-card').appendChild(box);
+    }
+    box.style.cssText = 'margin-top:1rem;padding:0.75rem;font-size:0.75rem;white-space:pre-wrap;' +
+      'border-radius:8px;border:1px solid ' + (hasErrors ? '#e5484d' : '#12a594') + ';max-height:220px;overflow:auto;';
+    box.textContent = lines.join('\n');
+  }
+ 
+  async fhirBundleFor(claim) {
+    try {
+      return await exportBundle(claim);          // authoritative backend mapping
+    } catch {
+      return this.toFHIRClaim(claim);            // offline fallback (single Claim resource)
+    }
+  }
+ 
+  async downloadSelectedBundle() {
+    const claim = dataManager.getClaim(this.selectedClaimId);
+    if (!claim) return;
+    const bundle = await this.fhirBundleFor(claim);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/fhir+json' }));
+    const a = Object.assign(document.createElement('a'), 
+    { 
+      href: url, 
+      download: `${claim.claim_id}.fhir.json` 
+    });
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+ 
 
   renderRulebook() {
     const container = document.getElementById('rulebook-reference-list');
