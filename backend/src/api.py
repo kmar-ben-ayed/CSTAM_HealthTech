@@ -5,8 +5,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from engine_core import baseline, config, load_jsonl, validate_transport
-from fhir_adapter import (FhirError, bundle_to_claim, check_bundle, claim_and_findings,
+from rule_engine.engine_core import baseline, config, load_jsonl, validate_transport
+from normalisation.fhir_adapter import (FhirError, bundle_to_claim, check_bundle, claim_and_findings,
                           claim_to_bundle, parse_bundles_text)
 
 ROOT = Path(__file__).resolve().parents[1]
