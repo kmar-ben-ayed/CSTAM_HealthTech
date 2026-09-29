@@ -1,0 +1,1 @@
+"""Claim input and output adapters."""
