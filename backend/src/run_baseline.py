@@ -1,7 +1,7 @@
 """Run the implemented baseline checks. Extend engine_core.baseline for your MVP."""
 import argparse, json
 from pathlib import Path
-from engine_core import config, load_jsonl, baseline, validate_transport
+from rule_engine.engine_core import config, load_jsonl, baseline, validate_transport
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)

@@ -1,10 +1,10 @@
 import unittest,sys,json,copy,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
-from engine_core import config,base_check,load_jsonl,baseline,validate_transport
+from rule_engine.engine_core import config,base_check,load_jsonl,baseline,validate_transport
 from evaluate import score
-from audit import append,verify
-from llm_adapter import MockExplanationProvider,validate_explanation
+from audit.audit import append,verify
+from AI_agent.llm_adapter import MockExplanationProvider,validate_explanation
 
 class StarterTests(unittest.TestCase):
     @classmethod
@@ -86,7 +86,8 @@ class StarterTests(unittest.TestCase):
     def test_audit_detects_edit(self):
         with tempfile.TemporaryDirectory() as d:
             p=Path(d)/'audit.jsonl';append(p,[dict(claim_id='CG-X',rule_id='R001',action='request_information',actor='tester',reason='Need source invoice')]);self.assertEqual(verify(p)[1],1)
-            p.write_text(p.read_text().replace('source invoice','altered invoice'))
+            self.assertNotIn('Need source invoice',p.read_text())
+            p.write_text(p.read_text().replace('CG-X','CG-Y'))
             with self.assertRaises(ValueError):verify(p)
     def test_validate_transport_rejects_duplicate_line_ids(self):
         claim=copy.deepcopy(self.example)

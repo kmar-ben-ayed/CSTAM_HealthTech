@@ -1,18 +1,17 @@
 import base64
 import copy
-import http.client
 import json
 import sys
-import threading
 import unittest
-from http.server import ThreadingHTTPServer
 from pathlib import Path
+
+from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from engine_core import baseline, config, load_jsonl 
-from fhir_adapter import (FhirError, bundle_to_claim, check_bundle, claim_and_findings, 
+from rule_engine.engine_core import baseline, config, load_jsonl
+from normalisation.fhir_adapter import (FhirError, bundle_to_claim, check_bundle, claim_and_findings,
                           claim_to_bundle, merge_sidecar, parse_bundles_text)
 
 SPLITS = ("development", "validation", "stress")
@@ -176,23 +175,30 @@ class MalformedInputTests(unittest.TestCase):
 class ApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        import api
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), api.ApiHandler)
-        cls.port = cls.server.server_address[1]
-        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        import tempfile
+        from api_app.main import create_app
+
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        app = create_app(audit_log_path=Path(cls.temp_dir.name) / "audit.jsonl")
+        cls.client = TestClient(app)
+        cls.client.__enter__()
         cls.claims, cls.bundles = load("development")
 
     @classmethod
     def tearDownClass(cls):
-        cls.server.shutdown()
+        cls.client.__exit__(None, None, None)
+        cls.temp_dir.cleanup()
 
     def call(self, method, path, body=None):
-        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=15)
-        data = body if isinstance(body, (bytes, type(None))) else (
-            body.encode() if isinstance(body, str) else json.dumps(body).encode())
-        conn.request(method, path, body=data, headers={"Content-Length": str(len(data or b""))})
-        resp = conn.getresponse()
-        return resp.status, json.loads(resp.read().decode())
+        if isinstance(body, bytes):
+            response = self.client.request(method, path, content=body)
+        elif isinstance(body, str):
+            response = self.client.request(method, path, content=body)
+        elif body is None:
+            response = self.client.request(method, path)
+        else:
+            response = self.client.request(method, path, json=body)
+        return response.status_code, response.json()
 
     def test_export_get_matches_pack_bundle(self):
         status, payload = self.call("GET", f"/api/fhir/export/development/{self.claims[0]['claim_id']}")
@@ -241,10 +247,7 @@ class ApiTests(unittest.TestCase):
 
     def test_empty_and_oversized_bodies_rejected_without_leaking_internals(self):
         self.assertEqual(self.call("POST", "/api/fhir/ingest", b"")[0], 400)
-        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=15)
-        conn.request("POST", "/api/fhir/ingest", body=b"{}", headers={"Content-Length": str(6 * 1024 * 1024)})
-        resp = conn.getresponse()
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(self.call("POST", "/api/fhir/ingest", b"x" * (6 * 1024 * 1024))[0], 413)
 
 
 if __name__ == "__main__":

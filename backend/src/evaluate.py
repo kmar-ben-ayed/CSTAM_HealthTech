@@ -2,7 +2,7 @@
 import argparse,json
 from pathlib import Path
 from collections import Counter
-from engine_core import load_jsonl, pointer, STATUSES
+from rule_engine.engine_core import load_jsonl, pointer, STATUSES
 
 def index(rows, claims=None):
     out={}
