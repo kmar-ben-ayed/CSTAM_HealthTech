@@ -53,6 +53,18 @@ POST endpoints accept JSON request objects documented in `/docs`. Claim payloads
 
 Explanations use the deterministic mock provider by default. To explicitly request the OpenAI provider, set `OPENAI_API_KEY` in the process environment; `OPENAI_MODEL` is optional and defaults to `gpt-4o-mini`. Keys are not stored in the repository. Provider errors fall back to the deterministic explanation and are marked in the response.
 
+## Confidence and escalation
+
+The rule engine remains strictly deterministic: rule verdicts such as `FAIL`, `PASS`, or `UNABLE_TO_ASSESS` are computed from explicit evidence and carry `confidence: null` with `confidence_kind: "not_probabilistic"`. This is intentional and required by the challenge; a percentage on a deterministic rule would be invented rather than measured.
+
+The explanation endpoint adds a separate `assessment` object for reviewer-facing triage. It measures three things without changing the verdict itself:
+
+- `evidence_completeness`: for `UNABLE_TO_ASSESS` findings only, the share of known evidence values over the total evidence items.
+- `explanation_grounding`: the overlap between cited evidence paths and the evidence paths actually present in the finding.
+- `explanation_source`: whether the explanation came from the model (`llm`), was skipped for a non-actionable result (`skipped`), or used the deterministic fallback after a model failure (`fallback`).
+
+`review_priority` and `escalate` are used to sort the human-review queue, not to override the deterministic rule verdict. `escalate` is triggered for high-severity failures, low evidence completeness, fallback explanations, weak grounding, and `NOT_IMPLEMENTED` status. The thresholds of `0.5` for completeness and grounding are operational tuning parameters for the validation set, not calibrated probabilities.
+
 ## Audit and local-demo boundaries
 
 Audit events are appended to `backend/outputs/audit_log.jsonl` by default. Override the path with `CLAIMGUARD_AUDIT_LOG`. Rule audit entries contain minimized summaries, AI events contain a finding hash, and human-review reasons are hashed rather than stored as plain text. The API rejects oversized requests and only allows the local frontend origins by default; configure `CLAIMGUARD_CORS_ORIGINS` as a comma-separated list if needed.

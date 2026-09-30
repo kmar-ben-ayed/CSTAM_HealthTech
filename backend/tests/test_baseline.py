@@ -1,10 +1,10 @@
 import unittest,sys,json,copy,tempfile
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'))
-from rule_engine.engine_core import config,base_check,load_jsonl,baseline,validate_transport
-from evaluate import score
-from audit.audit import append,verify
-from AI_agent.llm_adapter import MockExplanationProvider,validate_explanation
+ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'));import paths
+from src.rule_engine.engine_core import config,base_check,load_jsonl,baseline,validate_transport
+from src.evaluate import score
+from src.audit.audit import append,verify
+from src.AI_agent.llm_adapter import MockExplanationProvider,validate_explanation
 
 class StarterTests(unittest.TestCase):
     @classmethod

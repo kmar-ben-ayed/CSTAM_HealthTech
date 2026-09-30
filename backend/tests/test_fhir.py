@@ -9,9 +9,10 @@ from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+import paths
 
-from rule_engine.engine_core import baseline, config, load_jsonl
-from normalisation.fhir_adapter import (FhirError, bundle_to_claim, check_bundle, claim_and_findings,
+from src.rule_engine.engine_core import baseline, config, load_jsonl
+from src.normalisation.fhir_adapter import (FhirError, bundle_to_claim, check_bundle, claim_and_findings,
                           claim_to_bundle, merge_sidecar, parse_bundles_text)
 
 SPLITS = ("development", "validation", "stress")

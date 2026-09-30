@@ -10,8 +10,8 @@ from fastapi.testclient import TestClient
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT / "src"))
 
-from api_app.main import create_app
-from rule_engine.engine_core import load_jsonl
+from src.api_app.main import create_app
+from src.rule_engine.engine_core import load_jsonl
 
 
 class ApiRouteTests(unittest.TestCase):
