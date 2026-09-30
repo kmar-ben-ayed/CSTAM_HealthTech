@@ -1,6 +1,7 @@
 """Create an offline review page with evidence, filters and downloadable reviewer decisions."""
 import argparse,json,html
 from pathlib import Path
+import paths
 from rule_engine.engine_core import load_jsonl
 
 def build(rows):

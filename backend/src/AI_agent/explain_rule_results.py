@@ -4,8 +4,9 @@ import os
 from pathlib import Path
 
 from openai import OpenAI
-from backend.src.AI_agent.llm_adapter import GroundedExplanationAgent, MockExplanationProvider, OpenAIExplanationProvider, load_project_env
-
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from llm_adapter import GroundedExplanationAgent, MockExplanationProvider, OpenAIExplanationProvider, load_project_env
 
 def load_jsonl(path: str):
     with open(path, "r", encoding="utf-8") as f:
@@ -83,4 +84,4 @@ def main():
 
 
 if __name__ == "__main__":
-    pass
+    main()

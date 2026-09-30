@@ -77,6 +77,9 @@ class AuditLogger:
                 "status": result["status"],
                 "severity": result["severity"],
                 "requires_human_review": result["requires_human_review"],
+                "confidence": result.get("confidence"),
+                "confidence_kind": result.get("confidence_kind"),
+                "method": result.get("method"),
             }
             events.append(("rule_execution", claim_id, "system", summary))
         return self.log_batch(events)
@@ -95,6 +98,9 @@ class AuditLogger:
             "status": result["status"],
             "severity": result["severity"],
             "requires_human_review": result["requires_human_review"],
+            "confidence": result.get("confidence"),
+            "confidence_kind": result.get("confidence_kind"),
+            "method": result.get("method"),
         }
         return self.log("rule_execution", claim_id, "system", summary)
 

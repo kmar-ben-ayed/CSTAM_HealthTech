@@ -2,6 +2,7 @@
 import argparse,json
 from pathlib import Path
 from collections import Counter
+import paths
 from rule_engine.engine_core import load_jsonl, pointer, STATUSES
 
 def index(rows, claims=None):
@@ -51,7 +52,13 @@ def main():
     try:
         rows=load_jsonl(a.claims);claims={c['claim_id']:c for c in rows}
         if len(rows)!=len(claims):raise ValueError('Duplicate claim IDs')
-        report=score(load_jsonl(a.gold),load_jsonl(a.pred),claims)
+        gold=load_jsonl(a.gold);pred=load_jsonl(a.pred)
+        labeled={r['claim_id'] for r in gold}
+        skipped=sorted(set(claims)-labeled)
+        if skipped:print(f'WARNING: {len(skipped)} claim(s) have no gold labels and are excluded: {skipped}')
+        claims={k:v for k,v in claims.items() if k in labeled}
+        pred=[r for r in pred if r['claim_id'] in labeled]
+        report=score(gold,pred,claims)
     except (ValueError,KeyError,TypeError,IndexError) as e:p.exit(2,f'Evaluation rejected: {e}\n')
     out=Path(a.output);out.parent.mkdir(parents=True,exist_ok=True);out.write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8');print(json.dumps(report['overall'],indent=2));print('Report:',out)
 if __name__=='__main__':main()

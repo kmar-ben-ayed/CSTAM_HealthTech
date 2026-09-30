@@ -4,6 +4,9 @@ import json
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
+# Rule-certainty heuristic (NOT a calibrated probability): exact checks on present data are
+# near-certain; UNABLE_TO_ASSESS means inputs are missing, so confidence is low -> human review.
+CONFIDENCE={'PASS':0.98,'FAIL':0.98,'NOT_APPLICABLE':0.98,'UNABLE_TO_ASSESS':0.40}
 STATUSES={'PASS','FAIL','UNABLE_TO_ASSESS','NOT_APPLICABLE','NOT_IMPLEMENTED'}
 def load_jsonl(path):
     with open(path,encoding='utf-8') as f:return [json.loads(line) for line in f if line.strip()]
@@ -26,7 +29,7 @@ def make_result(c,r,status,paths,message,line_ids=None):
             'evidence':[{'path':p,'value':pointer(c,p)} for p in dict.fromkeys(paths)],
             'rule_source':r['source'],'explanation':message,
             'corrective_action':r['corrective_action'] if status in ('FAIL','UNABLE_TO_ASSESS') else '',
-            'confidence':None,'confidence_kind':'not_probabilistic',
+            'confidence':CONFIDENCE.get(status),'confidence_kind':'uncalibrated' if status in CONFIDENCE else 'not_probabilistic',
             'requires_human_review':status in ('FAIL','UNABLE_TO_ASSESS'),
             'method':'deterministic','review_status':'unreviewed'}
 
@@ -77,10 +80,10 @@ def base_check(c,r,cfg):
 
     
     if rid=='R003':
-        cv=c['coverage'];start=valid_date(cv['start_date']);end=valid_date(cv['end_date'])
+        cv=c['coverage'];start=valid_date(cv.get('start_date'));end=valid_date(cv.get('end_date'))
         paths=['/coverage/status','/coverage/start_date','/coverage/end_date'];failed=[]
-        if empty(cv['status']):unknown.append('coverage status')
-        elif cv['status']!='active':failed.append('coverage status is not active')
+        if empty(cv.get('status')):unknown.append('coverage status')
+        elif cv.get('status')!='active':failed.append('coverage status is not active')
         if not start or not end:unknown.append('coverage period')
         for i,l in enumerate(c['lines']):
             paths.append(f'/lines/{i}/service_date');d=valid_date(l['service_date'])
@@ -131,7 +134,7 @@ def base_check(c,r,cfg):
             paths.append("/provider_id")
             return make_result(c, r, "UNABLE_TO_ASSESS", paths, "Provider identifier is missing or unavailable.", sorted(set(ids)))
 
-        elif c["policy_id"] not in ("EDU-BASIC", "EDU-PLUS"):
+        elif c["policy_id"] not in cfg["policies"]:
             paths.append("/policy_id")
             return make_result(c, r, "UNABLE_TO_ASSESS", paths, "Policy ID is missing or unavailable.", sorted(set(ids)))
         

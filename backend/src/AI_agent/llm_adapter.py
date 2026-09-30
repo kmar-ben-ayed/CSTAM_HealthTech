@@ -6,8 +6,8 @@ from openai import OpenAI
 
 
 def load_project_env():
-    repo_root = Path(__file__).resolve().parents[1]
-    for candidate in (repo_root / ".env.local", repo_root / ".env"):
+    backend_root = Path(__file__).resolve().parents[2]
+    for candidate in (backend_root / ".env.local", backend_root / ".env"):
         if candidate.exists():
             load_dotenv(dotenv_path=candidate, override=False)
 
