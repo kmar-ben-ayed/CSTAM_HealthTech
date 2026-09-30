@@ -42,7 +42,7 @@ class CsvIngestRequest(StrictModel):
 class ExplanationRequest(StrictModel):
     claim: dict[str, Any]
     rule_id: str = Field(pattern=r"^R0(?:0[1-9]|1[0-5])$")
-    provider: Literal["mock", "openai"] = "mock"
+    provider: Literal["mock", "openai"] = "openai"
 
 
 class ReviewDecisionRequest(StrictModel):

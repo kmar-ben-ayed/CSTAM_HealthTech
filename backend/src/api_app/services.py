@@ -11,7 +11,6 @@ from openai import OpenAI
 from AI_agent.llm_adapter import (
     MockExplanationProvider,
     OpenAIExplanationProvider,
-    deterministic_fallback,
     validate_explanation,
 )
 from audit.chain import verify_chain
@@ -305,22 +304,26 @@ class ExplanationService:
             raise ApiProblem(404, "rule_not_found", "Unknown rule ID")
         finding = next(result for result in baseline(claim, self.claims_service.rules_config) if result["rule_id"] == rule_id)
 
+        fallback_used = False
         if provider_name == "mock":
             provider = MockExplanationProvider()
             provider_label = "mock"
-        else:
-            if not os.environ.get("OPENAI_API_KEY"):
-                raise ApiProblem(503, "provider_not_configured", "OpenAI explanations are not configured")
+        elif os.environ.get("OPENAI_API_KEY"):
             provider = OpenAIExplanationProvider(
                 OpenAI(), model_name=os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
             )
             provider_label = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        else:
+            provider = MockExplanationProvider()
+            provider_label = "mock"
+            fallback_used = True
 
-        fallback_used = False
         try:
             explanation = validate_explanation(provider.explain(finding, rule), finding)
         except Exception:
-            explanation = deterministic_fallback(finding)
+            fallback_used = True
+            fallback = MockExplanationProvider()
+            explanation = validate_explanation(fallback.explain(finding, rule), finding)
             fallback_used = True
 
         finding_hash = hashlib.sha256(
