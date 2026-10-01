@@ -12,13 +12,15 @@ backend\.venv\Scripts\Activate.ps1
 python -m pip install -r backend\requirements.txt
 ```
 
-Start the API on port `8001` (use another free port if needed):
+Start the API on port `8000` (use another free port if needed):
 
 ```powershell
-backend\.venv\Scripts\python.exe backend\src\api.py --host 127.0.0.1 --port 8001
+backend\.venv\Scripts\python.exe backend\src\api.py --host 127.0.0.1 --port 8000
 ```
 
-Open Swagger at **http://127.0.0.1:8001/docs**. The health check is **http://127.0.0.1:8001/api/v1/health**. Stop the server with `Ctrl+C`.
+Open Swagger at **http://127.0.0.1:8000/docs**. The health check is **http://127.0.0.1:8000/api/v1/health**. Stop the server with `Ctrl+C`.
+
+If you use a different backend port, set `VITE_API_BASE_URL` to the matching origin before starting or restarting the frontend. For example, for port `8001`, use `http://127.0.0.1:8001` as described in the repository README's alternate-port instructions.
 
 In Swagger, expand an endpoint, select **Try it out**, enter any path/query parameters and request body below, then select **Execute**. Keep the API server terminal open while testing.
 

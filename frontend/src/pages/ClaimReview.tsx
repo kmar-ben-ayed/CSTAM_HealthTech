@@ -190,6 +190,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
           || result.find((rule) => rule.status === 'UNABLE_TO_ASSESS')
           || result[0],
         );
+        setLoading(false);
 
       })
       .catch((cause: unknown) => {
