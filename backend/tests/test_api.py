@@ -73,6 +73,18 @@ class ApiRouteTests(unittest.TestCase):
         self.assertEqual(len(response.json()["claims"]), 1)
         self.assertEqual(response.json()["rejected"][0]["reason"], "PARSE_ERROR")
 
+    def test_csv_ingestion_rejects_claims_file_without_related_pack(self):
+        response = self.client.post(
+            "/api/v1/ingest/csv",
+            json={"files": {"claims.csv": "claim_id\nAPI-TEST-001\n"}},
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "invalid_csv_pack")
+        self.assertEqual(
+            response.json()["error"],
+            "Missing CSV files: attachments.csv, authorizations.csv, coverage.csv, lines.csv",
+        )
+
     def test_csv_pack_ingestion(self):
         csv_dir = BACKEND_ROOT / "data" / "development" / "csv"
         files = {

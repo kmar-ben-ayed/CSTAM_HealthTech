@@ -33,6 +33,8 @@ const VALIDATION_ISSUES = [
   { row: 9, field: 'member.plan_id', issue: 'Unrecognized plan identifier', severity: 'ERROR' },
 ];
 
+const REQUIRED_CSV_FILES = ['claims.csv', 'lines.csv', 'coverage.csv', 'authorizations.csv', 'attachments.csv'];
+
 function toPreviewRow(claim: BackendClaim): PreviewRow {
   const line = claim.lines?.[0];
   const amount = claim.total_amount === undefined
@@ -104,6 +106,9 @@ export default function Ingest({ onNavigate }: IngestProps) {
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState('');
   const [fileContent, setFileContent] = useState('');
+  const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
+  const [csvFiles, setCsvFiles] = useState<Record<string, string>>({});
+  const [filesLoading, setFilesLoading] = useState(false);
   const [recordCount, setRecordCount] = useState(0);
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
@@ -112,31 +117,63 @@ export default function Ingest({ onNavigate }: IngestProps) {
   const [processingStep, setProcessingStep] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const selectFile = useCallback((file?: File) => {
-    if (!file) return;
-    setFileName(file.name);
-    setFileSize(`${(file.size / 1024 / 1024).toFixed(2)} MB`);
+  const selectFiles = useCallback((files: File[]) => {
+    if (!files.length) return;
+    const filesToRead = selectedFormat === 'upload' ? files : files.slice(0, 1);
+    setSelectedFileNames(filesToRead.map(file => file.name));
+    setFileName(filesToRead.length === 1 ? filesToRead[0].name : `${filesToRead.length} files selected`);
+    setFileSize(`${(filesToRead.reduce((total, file) => total + file.size, 0) / 1024 / 1024).toFixed(2)} MB`);
     setError(null);
-    file.text().then(setFileContent).catch(() => setError('The selected file could not be read.'));
+    setFileContent('');
+    setCsvFiles({});
+    setFilesLoading(true);
     setStep('selected');
-  }, []);
+    Promise.all(filesToRead.map(async file => ({ name: file.name, content: await file.text() })))
+      .then(contents => {
+        setFileContent(contents[0]?.content || '');
+        setCsvFiles(Object.fromEntries(contents
+          .filter(file => file.name.toLowerCase().endsWith('.csv'))
+          .map(file => [file.name, file.content])));
+      })
+      .catch(() => setError('The selected file(s) could not be read.'))
+      .finally(() => setFilesLoading(false));
+  }, [selectedFormat]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    selectFile(e.dataTransfer.files[0]);
-  }, [selectFile]);
+    selectFiles(Array.from(e.dataTransfer.files));
+  }, [selectFiles]);
+
+  const isCsvUpload = selectedFormat === 'upload' && selectedFileNames.some(name => name.toLowerCase().endsWith('.csv'));
+  const selectedCsvFileCount = selectedFileNames.filter(name => name.toLowerCase().endsWith('.csv')).length;
+  const missingCsvFiles = REQUIRED_CSV_FILES.filter(name => !Object.prototype.hasOwnProperty.call(csvFiles, name));
+  const unsupportedCsvFiles = isCsvUpload
+    ? selectedFileNames.filter(name => !name.toLowerCase().endsWith('.csv'))
+    : [];
 
   const handleValidate = async () => {
-    if (!fileContent) return;
+    if (filesLoading) return;
+    if (isCsvUpload && unsupportedCsvFiles.length) {
+      setError(`CSV packs can only contain CSV files. Remove: ${unsupportedCsvFiles.join(', ')}`);
+      return;
+    }
+    if (isCsvUpload && missingCsvFiles.length) {
+      setError(`CSV pack incomplete. Missing CSV files: ${missingCsvFiles.join(', ')}`);
+      return;
+    }
+    if (!isCsvUpload && !fileContent.trim()) {
+      setError('The selected file is empty.');
+      return;
+    }
     setError(null);
     setStep('processing');
     setProcessingStep(1);
     try {
       const result = selectedFormat === 'fhir'
         ? await ingestFhir(fileContent)
-        : selectedFormat === 'upload' && fileName.toLowerCase().endsWith('.csv')
-          ? await ingestCsv({ [fileName]: fileContent })
+        : isCsvUpload
+          ? await ingestCsv(csvFiles)
           : await ingestJsonl(fileContent);
       setIngestionResult(result);
       setPreviewRows(result.claims.slice(0, 5).map(toPreviewRow));
@@ -160,6 +197,9 @@ export default function Ingest({ onNavigate }: IngestProps) {
     setFileName('');
     setFileSize('');
     setFileContent('');
+    setSelectedFileNames([]);
+    setCsvFiles({});
+    setFilesLoading(false);
     setRecordCount(0);
     setPreviewRows([]);
     setValidationIssues([]);
@@ -385,37 +425,52 @@ export default function Ingest({ onNavigate }: IngestProps) {
                     <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '1px 7px' }}>CSV</span>
                     <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>{fileSize}</span>
                     <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>·</span>
-                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#334155' }}>{recordCount} claims detected</span>
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#334155' }}>
+                      {isCsvUpload ? `${selectedCsvFileCount} CSV file${selectedCsvFileCount === 1 ? '' : 's'} selected` : 'Ready to validate'}
+                    </span>
                   </div>
                 </div>
               </div>
               <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500, padding: '4px 8px' }}>Remove</button>
             </div>
-            {/* Pre-validation indicators */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[
-                { ok: true, label: 'Format recognized — CSV' },
-                { ok: true, label: 'File is readable' },
-                { ok: false, warn: true, label: '2 records require attention' },
-              ].map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: s.warn ? '#fffbeb' : '#ecfdf5', border: `1px solid ${s.warn ? '#fde68a' : '#a7f3d0'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {s.warn ? (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1l4 7H1L5 1z" stroke="#f59e0b" strokeWidth="1"/><path d="M5 4v2M5 7.5v.3" stroke="#f59e0b" strokeWidth="1" strokeLinecap="round"/></svg>
-                    ) : (
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5 4-4" stroke="#10b981" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    )}
-                  </div>
-                  <span style={{ fontSize: '0.8125rem', color: s.warn ? '#92400e' : '#334155', fontWeight: s.warn ? 500 : 400 }}>{s.label}</span>
+            {isCsvUpload ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: missingCsvFiles.length ? '#92400e' : '#334155' }}>
+                  {filesLoading ? 'Reading selected files…' : `${REQUIRED_CSV_FILES.length - missingCsvFiles.length} of ${REQUIRED_CSV_FILES.length} required CSV files selected`}
                 </div>
-              ))}
-            </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {REQUIRED_CSV_FILES.map(name => {
+                    const isSelected = filesLoading
+                      ? selectedFileNames.includes(name)
+                      : Object.prototype.hasOwnProperty.call(csvFiles, name);
+                    return (
+                      <span key={name} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: isSelected ? 'var(--accent)' : '#92400e', background: isSelected ? 'var(--accent-subtle)' : '#fffbeb', border: `1px solid ${isSelected ? 'var(--status-pass-border)' : '#fde68a'}`, borderRadius: 4, padding: '3px 7px' }}>
+                        {isSelected ? '✓' : 'Missing: '}{name}
+                      </span>
+                    );
+                  })}
+                </div>
+                {unsupportedCsvFiles.length > 0 && (
+                  <div style={{ fontSize: '0.8125rem', color: '#92400e' }}>
+                    Remove non-CSV files from this pack: {unsupportedCsvFiles.join(', ')}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: 'var(--status-pass)' }}>✓</span>
+                  <span style={{ fontSize: '0.8125rem', color: '#334155' }}>File selected</span>
+                </div>
+                {filesLoading && <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>Reading file…</div>}
+              </div>
+            )}
           </div>
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={handleReset} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '9px 20px', color: '#475569', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
-            <button onClick={handleValidate} style={{ background: '#0f172a', border: 'none', borderRadius: 7, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Validate & Preview →</button>
+            <button onClick={handleValidate} disabled={filesLoading} style={{ background: '#0f172a', border: 'none', borderRadius: 7, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: filesLoading ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, opacity: filesLoading ? 0.7 : 1 }}>Validate & Preview →</button>
           </div>
         </div>
       )}
@@ -461,7 +516,17 @@ export default function Ingest({ onNavigate }: IngestProps) {
               gap: 16,
             }}
           >
-            <input ref={fileInputRef} type="file" style={{ display: 'none' }} accept=".csv,.json" onChange={e => selectFile(e.target.files?.[0])} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              style={{ display: 'none' }}
+              accept=".csv,.json"
+              multiple={selectedFormat === 'upload'}
+              onChange={e => {
+                selectFiles(Array.from(e.target.files || []));
+                e.currentTarget.value = '';
+              }}
+            />
             <div style={{ width: 56, height: 56, borderRadius: 12, background: dragging ? 'rgba(6,182,212,0.1)' : '#f8fafc', border: `1.5px solid ${dragging ? 'rgba(6,182,212,0.3)' : '#e2e8f0'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s ease' }}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                 <path d="M12 3v12M8 9l4-6 4 6" stroke={dragging ? 'var(--accent)' : '#74847c'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -470,9 +535,11 @@ export default function Ingest({ onNavigate }: IngestProps) {
             </div>
             <div>
               <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 4 }}>
-                {dragging ? 'Drop your claim file here' : 'Drop your claim file here'}
+                {selectedFormat === 'upload' ? 'Drop a CSV pack or claim file here' : 'Drop your claim file here'}
               </div>
-              <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: 16 }}>or choose a file from your computer</div>
+              <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: 16 }}>
+                {selectedFormat === 'upload' ? 'For CSV, select all five related files together.' : 'or choose a file from your computer'}
+              </div>
               <button
                 onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
                 style={{ background: 'var(--accent)', border: 'none', borderRadius: 5, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
