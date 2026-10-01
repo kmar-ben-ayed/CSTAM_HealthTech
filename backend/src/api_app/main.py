@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 import json
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -86,6 +87,8 @@ def create_app(
     audit_log_path: Path | None = None,
 ) -> FastAPI:
     backend_root = Path(backend_root)
+    load_dotenv(backend_root / ".env.local", override=False)
+    load_dotenv(backend_root / ".env", override=False)
     configured_audit_path = audit_log_path or Path(
         os.getenv("CLAIMGUARD_AUDIT_LOG", str(backend_root / "outputs" / "audit_log.jsonl"))
     )
@@ -115,11 +118,11 @@ def create_app(
         origin.strip()
         for origin in os.getenv(
             "CLAIMGUARD_CORS_ORIGINS",
-            "http://localhost:3000,http://127.0.0.1:3000",
+            "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:8443,http://127.0.0.1:8443",
         ).split(",")
         if origin.strip()
     ]
-    app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type"])
+    app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "X-Request-ID"])
     app.add_middleware(MaxBodySizeMiddleware, max_bytes=MAX_REQUEST_BODY_BYTES)
 
     @app.exception_handler(ApiProblem)

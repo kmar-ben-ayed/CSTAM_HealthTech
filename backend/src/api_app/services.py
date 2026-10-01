@@ -8,10 +8,10 @@ from uuid import uuid4
 
 from openai import OpenAI
 
+from AI_agent.confidence import assess
 from AI_agent.llm_adapter import (
     MockExplanationProvider,
     OpenAIExplanationProvider,
-    deterministic_fallback,
     validate_explanation,
 )
 from audit.chain import verify_chain
@@ -317,23 +317,27 @@ class ExplanationService:
             raise ApiProblem(404, "rule_not_found", "Unknown rule ID")
         finding = next(result for result in baseline(claim, self.claims_service.rules_config) if result["rule_id"] == rule_id)
 
+        fallback_used = False
         if provider_name == "mock":
             provider = MockExplanationProvider()
             provider_label = "mock"
-        else:
-            if not os.environ.get("OPENAI_API_KEY"):
-                raise ApiProblem(503, "provider_not_configured", "OpenAI explanations are not configured")
+        elif os.environ.get("OPENAI_API_KEY"):
             provider = OpenAIExplanationProvider(
                 OpenAI(), model_name=os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
             )
             provider_label = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+        else:
+            provider = MockExplanationProvider()
+            provider_label = "mock"
+            fallback_used = True
+
+        source = "skipped" if finding["status"] not in {"FAIL", "UNABLE_TO_ASSESS"} else "llm"
 
         fallback_used = False
         source = "skipped" if finding["status"] not in {"FAIL", "UNABLE_TO_ASSESS"} else "llm"
         try:
             explanation = validate_explanation(provider.explain(finding, rule), finding)
         except Exception:
-            explanation = deterministic_fallback(finding)
             fallback_used = True
             source = "fallback"
 
@@ -347,7 +351,7 @@ class ExplanationService:
             )
         except AuditWriteError as error:
             raise ApiProblem(503, "audit_unavailable", "Could not safely record the explanation") from error
-        return {**explanation, "provider": provider_label, "fallback_used": fallback_used}
+        return {**explanation, "provider": provider_label, "fallback_used": fallback_used, "assessment": quality}
 
 
 class AuditService:
