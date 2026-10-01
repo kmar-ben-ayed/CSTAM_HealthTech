@@ -244,7 +244,7 @@ export default function Login({ onLogin }: LoginProps) {
                     style={{
                       width: '100%',
                       background: '#f8fafc',
-                      border: `1px solid ${loginState === 'error' ? '#fecdd3' : '#e2e8f0'}`,
+                      border: `1px solid ${loginState === 'error' ? '#e9c8c7' : '#e2e8f0'}`,
                       borderRadius: 8,
                       padding: '10px 14px',
                       fontSize: '0.9375rem',
@@ -253,8 +253,8 @@ export default function Login({ onLogin }: LoginProps) {
                       outline: 'none',
                       transition: 'border-color 0.15s ease',
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = '#06b6d4')}
-                    onBlur={(e) => (e.target.style.borderColor = loginState === 'error' ? '#fecdd3' : '#e2e8f0')}
+                    onFocus={(e) => (e.target.style.borderColor = '#1d5c8a')}
+                    onBlur={(e) => (e.target.style.borderColor = loginState === 'error' ? '#e9c8c7' : '#e2e8f0')}
                   />
                 </div>
 
@@ -290,7 +290,7 @@ export default function Login({ onLogin }: LoginProps) {
                     style={{
                       width: '100%',
                       background: '#f8fafc',
-                      border: `1px solid ${loginState === 'error' ? '#fecdd3' : '#e2e8f0'}`,
+                      border: `1px solid ${loginState === 'error' ? '#e9c8c7' : '#e2e8f0'}`,
                       borderRadius: 8,
                       padding: '10px 14px',
                       fontSize: '0.9375rem',
@@ -298,8 +298,8 @@ export default function Login({ onLogin }: LoginProps) {
                       fontFamily: 'inherit',
                       outline: 'none',
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = '#06b6d4')}
-                    onBlur={(e) => (e.target.style.borderColor = loginState === 'error' ? '#fecdd3' : '#e2e8f0')}
+                    onFocus={(e) => (e.target.style.borderColor = '#1d5c8a')}
+                    onBlur={(e) => (e.target.style.borderColor = loginState === 'error' ? '#e9c8c7' : '#e2e8f0')}
                   />
                 </div>
 
@@ -337,7 +337,7 @@ export default function Login({ onLogin }: LoginProps) {
                   disabled={loginState === 'loading'}
                   style={{
                     width: '100%',
-                    background: loginState === 'loading' ? '#0891b2' : '#06b6d4',
+                    background: loginState === 'loading' ? '#164a6e' : '#1d5c8a',
                     border: 'none',
                     borderRadius: 8,
                     padding: '11px 0',
@@ -353,10 +353,10 @@ export default function Login({ onLogin }: LoginProps) {
                     transition: 'background 0.15s ease',
                   }}
                   onMouseEnter={(e) => {
-                    if (loginState !== 'loading') (e.currentTarget.style.background = '#0891b2');
+                    if (loginState !== 'loading') (e.currentTarget.style.background = '#164a6e');
                   }}
                   onMouseLeave={(e) => {
-                    if (loginState !== 'loading') (e.currentTarget.style.background = '#06b6d4');
+                    if (loginState !== 'loading') (e.currentTarget.style.background = '#1d5c8a');
                   }}
                 >
                   {loginState === 'loading' ? (
@@ -494,7 +494,7 @@ export default function Login({ onLogin }: LoginProps) {
                       fontFamily: 'inherit',
                       outline: 'none',
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = '#06b6d4')}
+                    onFocus={(e) => (e.target.style.borderColor = '#1d5c8a')}
                     onBlur={(e) => (e.target.style.borderColor = '#e2e8f0')}
                   />
                 </div>
@@ -527,8 +527,8 @@ export default function Login({ onLogin }: LoginProps) {
                   width: 60,
                   height: 60,
                   borderRadius: '50%',
-                  background: '#ecfdf5',
-                  border: '1px solid #a7f3d0',
+                  background: '#e9f5ef',
+                  border: '1px solid #c4e1d1',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -536,7 +536,7 @@ export default function Login({ onLogin }: LoginProps) {
                 }}
               >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path d="M5 12l4 4 10-10" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 12l4 4 10-10" stroke="#1f7a5c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
               <h2 style={{ fontSize: '1.375rem', fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>

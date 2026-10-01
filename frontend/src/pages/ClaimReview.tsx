@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sentinel from '../components/Sentinel';
 import type { SentinelState } from '../components/Sentinel';
-import { evaluationToReviewRules, getDataset, getExplanation, postReview, type BackendClaim, type ReviewAction } from '../api/claims';
+import { evaluationToReviewRules, getDataset, getExplanation, postReview, type BackendClaim, type ExplanationAssessment, type ReviewAction } from '../api/claims';
 
 interface ClaimReviewProps {
   claimId: string;
@@ -83,10 +83,21 @@ const STATUS_STYLE: Record<RuleStatus, { bg: string; text: string; border: strin
   NOT_IMPLEMENTED: { bg: 'var(--status-na-bg)', text: 'var(--status-na)', border: 'var(--status-na-border)', leftBorder: 'var(--status-na)' },
 };
 
+function formatClaimDate(value?: string | null): string {
+  if (!value) return '—';
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+}
+
+function formatClaimAmount(amount?: number | null, currency = 'SAR'): string {
+  if (amount === null || amount === undefined) return '—';
+  return new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount);
+}
+
 const CATEGORY_COLORS: Record<string, string> = {
-  'Eligibility': '#287a5f', 'Provider': '#315e8a', 'Temporal': '#9a6415',
-  'Coverage': '#10b981', 'Integrity': '#f43f5e', 'Clinical': '#3b82f6',
-  'Authorization': '#f97316', 'Facility': '#84cc16',
+  high: '#b4403f', medium: '#96650f', low: '#5f6c76',
 };
 
 export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
@@ -98,6 +109,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [aiProvider, setAiProvider] = useState<string | null>(null);
   const [aiFallback, setAiFallback] = useState(false);
+  const [aiAssessment, setAiAssessment] = useState<ExplanationAssessment | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
@@ -110,23 +123,26 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    setLoadError(null);
     getDataset('development', 500, controller.signal)
       .then((dataset) => {
         const selectedClaim = dataset.claims.find((item) => item.claim_id === claimId);
         const result = evaluationToReviewRules(dataset.evaluations[claimId]);
         if (!selectedClaim || !result.length) {
           setLoadError('This claim was not found in the development dataset.');
+          setLoading(false);
           return;
         }
         setClaim(selectedClaim);
         setRules(result);
         setSelectedRule(result.find((rule) => rule.status === 'FAIL') || result[0]);
+        setLoading(false);
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setLoadError('The claim evaluation could not be loaded.');
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
 
     return () => controller.abort();
   }, [claimId]);
@@ -139,16 +155,21 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
     setAiExplanation(null);
     setAiProvider(null);
     setAiFallback(false);
+    setAiAssessment(null);
+    setAiError(null);
     getExplanation(claim, selectedRule.id, 'openai', controller.signal)
       .then((response) => {
         setAiExplanation(response.explanation);
         setAiProvider(response.provider);
         setAiFallback(response.fallback_used);
+        setAiAssessment(response.assessment);
+        setAiLoading(false);
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
-      })
-      .finally(() => setAiLoading(false));
+        setAiError(cause instanceof Error ? cause.message : 'The explanation request failed.');
+        setAiLoading(false);
+      });
 
     return () => controller.abort();
   }, [claim, rules, selectedRule.id]);
@@ -156,6 +177,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
   const passingRules = rules.filter(r => r.status === 'PASS').length;
   const failingRules = rules.filter(r => r.status === 'FAIL').length;
   const utaRules = rules.filter(r => r.status === 'UNABLE_TO_ASSESS').length;
+  const naRules = rules.filter(r => r.status === 'NOT_APPLICABLE').length;
 
   const ss = STATUS_STYLE[selectedRule.status];
 
@@ -183,6 +205,58 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
       setReviewSubmitting(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '60vh',
+        fontFamily: 'var(--font-sans)',
+        color: 'var(--text-secondary)',
+        fontSize: '0.9375rem',
+      }}>
+        Loading claim {claimId}…
+      </div>
+    );
+  }
+
+  if (loadError || !rules.length) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '60vh',
+        gap: 12,
+        fontFamily: 'var(--font-sans)',
+        textAlign: 'center',
+        padding: 24,
+      }}>
+        <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#8c322f' }}>
+          {loadError || 'This claim could not be loaded.'}
+        </div>
+        <button
+          onClick={() => onNavigate('claims')}
+          style={{
+            background: 'var(--accent)',
+            border: 'none',
+            borderRadius: 6,
+            padding: '8px 16px',
+            color: '#fff',
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          Back to Claims
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="claim-review-shell" style={{ fontFamily: 'var(--font-sans)' }}>
@@ -222,7 +296,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
           </button>
           <div style={{ width: 1, height: 20, background: '#e2e8f0' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '0.02em' }}>
+            <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '0.02em' }}>
               {claimId}
             </span>
             {!confirmed ? (
@@ -351,21 +425,21 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
 
             {[
               { label: 'Claim ID', value: claimId, mono: true },
-              { label: 'Member', value: 'James Chen' },
-              { label: 'Member ID', value: 'MEM-482910', mono: true },
-              { label: 'Provider', value: 'Meridian Health Group' },
-              { label: 'Billing NPI', value: '1234567890', mono: true },
-              { label: 'Rendering NPI', value: '9876543210', mono: true },
-              { label: 'Service date', value: 'Sep 15, 2026', mono: true },
-              { label: 'Submission date', value: 'Sep 25, 2026', mono: true },
-              { label: 'Total amount', value: '$2,840.00', mono: true },
+              { label: 'Invoice number', value: claim?.invoice_number || '—', mono: true },
+              { label: 'Patient ID', value: claim?.patient_id || '—', mono: true },
+              { label: 'Member ID', value: claim?.member_id || '—', mono: true },
+              { label: 'Provider', value: claim?.provider_id || '—', mono: true },
+              { label: 'Payer', value: claim?.payer_id || '—', mono: true },
+              { label: 'Policy', value: claim?.policy_id || '—', mono: true },
+              { label: 'Submission date', value: formatClaimDate(claim?.submission_date), mono: true },
+              { label: 'Total amount', value: formatClaimAmount(claim?.total_amount, claim?.currency), mono: true },
             ].map(f => (
               <div key={f.label} style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: '0.6875rem', color: '#94a3b8', marginBottom: 2, fontWeight: 500 }}>{f.label}</div>
                 <div style={{
                   fontSize: '0.8125rem',
                   color: '#0f172a',
-                  fontFamily: f.mono ? "'JetBrains Mono', monospace" : 'inherit',
+                  fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
                   fontWeight: f.mono ? 500 : 400,
                 }}>
                   {f.value}
@@ -381,12 +455,9 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 12 }}>
               Service lines
             </div>
-            {[
-              { line: 0, code: '99213', desc: 'Office visit, estab. patient', amount: '$150.00', auth: null },
-              { line: 1, code: '90686', desc: 'Influenza vaccine, quad.', amount: '$25.00', auth: 'AUTH-8821' },
-            ].map(line => (
+            {(claim?.lines || []).map((line, idx) => (
               <div
-                key={line.line}
+                key={line.line_id || idx}
                 style={{
                   background: '#f8fafc',
                   border: '1px solid #e2e8f0',
@@ -396,16 +467,16 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>{line.code}</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>{line.amount}</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>{line.service_code || '—'}</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>{formatClaimAmount(line.net_amount, claim?.currency)}</span>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 4 }}>{line.desc}</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 4 }}>{line.line_id} · {formatClaimDate(line.service_date)}</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>Auth:</span>
-                  {line.auth ? (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#10b981' }}>{line.auth}</span>
+                  {line.authorization_id ? (
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#1f7a5c' }}>{line.authorization_id}</span>
                   ) : (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#f43f5e', fontStyle: 'italic' }}>null</span>
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#b4403f', fontStyle: 'italic' }}>null</span>
                   )}
                 </div>
               </div>
@@ -417,17 +488,13 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
           {/* Diagnoses */}
           <div>
             <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 12 }}>
-              Diagnoses
+              Diagnosis
             </div>
-            {[
-              { code: 'J06.9', desc: 'Acute upper respiratory infection' },
-              { code: 'Z23', desc: 'Encounter for immunization' },
-            ].map(d => (
-              <div key={d.code} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600, minWidth: 48 }}>{d.code}</span>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.4 }}>{d.desc}</span>
-              </div>
-            ))}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>
+                {claim?.diagnosis_code || 'Not provided'}
+              </span>
+            </div>
           </div>
 
           {/* Run info */}
@@ -437,18 +504,16 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               Run metadata
             </div>
             {[
-              { label: 'Run ID', value: 'RUN-4821', mono: true },
-              { label: 'Ruleset', value: 'v2.4.1' },
-              { label: 'AI model', value: 'CGM-3.1' },
-              { label: 'Evaluated', value: '10:31:03' },
-              { label: 'Duration', value: '1.2s' },
+              { label: 'Ruleset', value: 'fictional-rulebook@1.0.0', mono: true },
+              { label: 'AI provider', value: aiProvider || 'pending', mono: true },
+              { label: 'Coverage status', value: claim?.coverage?.status || '—', mono: false },
             ].map(f => (
               <div key={f.label} style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>{f.label}</div>
                 <div style={{
                   fontSize: '0.75rem',
                   color: '#334155',
-                  fontFamily: f.mono ? "'JetBrains Mono', monospace" : 'inherit',
+                  fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
                   fontWeight: f.mono ? 500 : 400,
                 }}>
                   {f.value}
@@ -463,10 +528,10 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
           {/* Summary row */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
             {[
-              { label: 'Pass', count: passingRules, color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' },
-              { label: 'Fail', count: failingRules, color: '#f43f5e', bg: '#fff1f2', border: '#fecdd3' },
-              { label: 'Unable to assess', count: utaRules, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-              { label: 'Not applicable', count: 1, color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
+              { label: 'Pass', count: passingRules, color: '#1f7a5c', bg: '#e9f5ef', border: '#c4e1d1' },
+              { label: 'Fail', count: failingRules, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
+              { label: 'Unable to assess', count: utaRules, color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
+              { label: 'Not applicable', count: naRules, color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
             ].map(s => (
               <div key={s.label} style={{
                 background: s.bg,
@@ -477,7 +542,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 gap: 8,
                 alignItems: 'center',
               }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1.125rem', fontWeight: 700, color: s.color }}>{s.count}</span>
+                <span style={{ fontFamily: "var(--font-sans)", fontSize: '1.125rem', fontWeight: 700, color: s.color }}>{s.count}</span>
                 <span style={{ fontSize: '0.75rem', color: s.color, fontWeight: 500 }}>{s.label}</span>
               </div>
             ))}
@@ -510,7 +575,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-sans)",
                         fontSize: '0.75rem',
                         fontWeight: 700,
                         color: 'var(--accent)',
@@ -539,7 +604,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Sentinel state={STATUS_SENTINEL[rule.status]} size={20} />
                       <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-sans)",
                         fontSize: '0.6875rem',
                         fontWeight: 700,
                         color: st.text,
@@ -562,7 +627,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                   {(rule.status === 'FAIL' || rule.status === 'UNABLE_TO_ASSESS') && rule.observed && (
                     <div style={{ marginTop: 10 }}>
                       <div className="evidence-block">
-                        <span className="ev-path">{rule.evidencePaths[rule.evidencePaths.length - 1]}</span>
+                        <span className="ev-path">{rule.evidencePaths[0]}</span>
                         {' = '}
                         <span className={rule.observed === 'null' ? 'ev-null' : 'ev-value'}>{rule.observed}</span>
                       </div>
@@ -593,7 +658,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Sentinel state={STATUS_SENTINEL[selectedRule.status]} size={32} />
                 <div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 700, color: 'var(--accent)' }}>
+                  <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: 'var(--accent)' }}>
                     {selectedRule.id}
                   </div>
                   <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.01em' }}>
@@ -602,7 +667,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 </div>
               </div>
               <span style={{
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "var(--font-sans)",
                 fontSize: '0.6875rem',
                 fontWeight: 700,
                 color: ss.text,
@@ -643,7 +708,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                   </span>
                 </div>
                 <span style={{
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-sans)",
                   fontSize: '0.6875rem',
                   fontWeight: 700,
                   color: ss.text,
@@ -680,7 +745,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                       Observed
                     </div>
                     <div className="evidence-block">
-                      <span className="ev-path">{selectedRule.evidencePaths[selectedRule.evidencePaths.length - 1]}</span>
+                      <span className="ev-path">{selectedRule.evidencePaths[0]}</span>
                       {' = '}
                       <span className={selectedRule.observed === 'null' ? 'ev-null' : 'ev-value'}>
                         {selectedRule.observed}
@@ -695,7 +760,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                       Expected
                     </div>
                     <div className="evidence-block">
-                      <span style={{ color: '#10b981', fontStyle: 'italic' }}>{selectedRule.expected}</span>
+                      <span style={{ color: '#1f7a5c', fontStyle: 'italic' }}>{selectedRule.expected}</span>
                     </div>
                   </>
                 )}
@@ -728,25 +793,27 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {aiAssessment && (
+                    <span style={{
+                      fontSize: '0.6rem',
+                      fontWeight: 600,
+                      color: aiAssessment.explanation_source === 'llm' ? 'var(--accent)' : aiAssessment.explanation_source === 'fallback' ? '#7d540f' : '#64748b',
+                      background: aiAssessment.explanation_source === 'llm' ? 'var(--accent-subtle)' : aiAssessment.explanation_source === 'fallback' ? '#f8f1e3' : '#f1f5f9',
+                      border: `1px solid ${aiAssessment.explanation_source === 'llm' ? 'var(--status-pass-border)' : aiAssessment.explanation_source === 'fallback' ? '#e8d6ac' : '#e2e8f0'}`,
+                      borderRadius: 3,
+                      padding: '1px 6px',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}>
+                      {aiAssessment.explanation_source === 'llm' ? 'Grounded' : aiAssessment.explanation_source === 'fallback' ? 'Fallback' : 'Skipped'}
+                    </span>
+                  )}
                   <span style={{
-                    fontSize: '0.6rem',
-                    fontWeight: 600,
-                    color: 'var(--accent)',
-                    background: 'var(--accent-subtle)',
-                    border: '1px solid var(--status-pass-border)',
-                    borderRadius: 3,
-                    padding: '1px 6px',
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                  }}>
-                    Grounded
-                  </span>
-                  <span style={{
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-sans)",
                     fontSize: '0.625rem',
                     color: '#94a3b8',
                   }}>
-                    {aiProvider || 'pending'}{aiFallback ? ' · fallback' : ''}
+                    {aiProvider || 'pending'}{aiFallback ? ' · fallback used' : ''}
                   </span>
                 </div>
               </div>
@@ -760,8 +827,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                   </div>
                 ) : !aiExplanation ? (
                   <div style={{
-                    background: '#fffbeb',
-                    border: '1px solid #fde68a',
+                    background: '#f8f1e3',
+                    border: '1px solid #e8d6ac',
                     borderRadius: 6,
                     padding: '12px',
                     display: 'flex',
@@ -769,15 +836,15 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                     alignItems: 'flex-start',
                   }}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                      <path d="M8 2l6 11H2L8 2z" stroke="#f59e0b" strokeWidth="1.3" strokeLinejoin="round"/>
-                      <path d="M8 6v4M8 11.5v.5" stroke="#f59e0b" strokeWidth="1.3" strokeLinecap="round"/>
+                      <path d="M8 2l6 11H2L8 2z" stroke="#96650f" strokeWidth="1.3" strokeLinejoin="round"/>
+                      <path d="M8 6v4M8 11.5v.5" stroke="#96650f" strokeWidth="1.3" strokeLinecap="round"/>
                     </svg>
                     <div>
-                      <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#92400e', marginBottom: 4 }}>
+                      <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#6b4a0f', marginBottom: 4 }}>
                         AI explanation unavailable
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#b45309', lineHeight: 1.5 }}>
-                        The deterministic finding remains available. You may proceed with review based on the rule result and evidence above.
+                      <div style={{ fontSize: '0.75rem', color: '#7d540f', lineHeight: 1.5 }}>
+                        {aiError || 'The deterministic finding remains available. You may proceed with review based on the rule result and evidence above.'}
                       </div>
                     </div>
                   </div>
@@ -786,6 +853,37 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                     <p style={{ fontSize: '0.875rem', color: '#334155', lineHeight: 1.7, marginBottom: 14 }}>
                       {aiExplanation}
                     </p>
+
+                    {aiAssessment && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                        <span style={{ fontSize: '0.6875rem', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '2px 8px' }}>
+                          Source: {aiAssessment.explanation_source}
+                        </span>
+                        {aiAssessment.explanation_grounding !== null && (
+                          <span style={{ fontSize: '0.6875rem', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '2px 8px' }}>
+                            Grounding: {Math.round(aiAssessment.explanation_grounding * 100)}%
+                          </span>
+                        )}
+                        {aiAssessment.evidence_completeness !== null && (
+                          <span style={{ fontSize: '0.6875rem', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '2px 8px' }}>
+                            Evidence completeness: {Math.round(aiAssessment.evidence_completeness * 100)}%
+                          </span>
+                        )}
+                        <span style={{
+                          fontSize: '0.6875rem',
+                          color: aiAssessment.escalate ? '#8c322f' : '#64748b',
+                          background: aiAssessment.escalate ? '#fbefee' : '#f8fafc',
+                          border: `1px solid ${aiAssessment.escalate ? '#e9c8c7' : '#e2e8f0'}`,
+                          borderRadius: 4,
+                          padding: '2px 8px',
+                          fontWeight: aiAssessment.escalate ? 700 : 400,
+                        }}>
+                          {aiAssessment.escalate
+                            ? `Escalate (${aiAssessment.escalation_reasons.join(', ')})`
+                            : 'No escalation needed'}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Citations */}
                     <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
@@ -797,7 +895,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                           <span
                             key={p}
                             style={{
-                              fontFamily: "'JetBrains Mono', monospace",
+                              fontFamily: "var(--font-sans)",
                               fontSize: '0.6875rem',
                               color: 'var(--status-review)',
                               background: 'var(--status-review-bg)',
@@ -810,7 +908,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                           </span>
                         ))}
                         <span style={{
-                          fontFamily: "'JetBrains Mono', monospace",
+                          fontFamily: "var(--font-sans)",
                           fontSize: '0.6875rem',
                           color: 'var(--accent)',
                           background: 'var(--accent-subtle)',
@@ -847,8 +945,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 <div style={{ padding: '14px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                     {[
-                      { key: 'confirm', label: 'Confirm issue', desc: 'Issue is valid', color: '#f43f5e', bg: '#fff1f2', border: '#fecdd3' },
-                      { key: 'request-info', label: 'Request information', desc: 'More info needed', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+                      { key: 'confirm', label: 'Confirm issue', desc: 'Issue is valid', color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
+                      { key: 'request-info', label: 'Request information', desc: 'More info needed', color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
                       { key: 'dismiss', label: 'Dismiss', desc: 'Issue is not valid', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
                     ].map(action => (
                       <button
@@ -955,7 +1053,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                         {reviewSubmitting ? 'Recording decision…' : 'Submit decision → record to audit'}
                       </button>
                       {reviewError && (
-                        <p style={{ fontSize: '0.75rem', color: '#be123c', marginTop: 8, lineHeight: 1.4 }}>
+                        <p style={{ fontSize: '0.75rem', color: '#8c322f', marginTop: 8, lineHeight: 1.4 }}>
                           {reviewError}
                         </p>
                       )}
@@ -968,8 +1066,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               </div>
             ) : (
               <div style={{
-                background: '#ecfdf5',
-                border: '1px solid #a7f3d0',
+                background: '#e9f5ef',
+                border: '1px solid #c4e1d1',
                 borderRadius: 8,
                 padding: '16px',
                 display: 'flex',
@@ -977,14 +1075,14 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 alignItems: 'flex-start',
               }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
-                  <circle cx="9" cy="9" r="8" fill="#10b981"/>
+                  <circle cx="9" cy="9" r="8" fill="#1f7a5c"/>
                   <path d="M5 9l3 3 5-6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 <div>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#065f46', marginBottom: 4 }}>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#17503c', marginBottom: 4 }}>
                     Decision recorded
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#047857', lineHeight: 1.5 }}>
+                  <div style={{ fontSize: '0.75rem', color: '#1a6a4f', lineHeight: 1.5 }}>
                     Reviewed by Aya Gaha · {new Date().toLocaleTimeString()} · Recorded to audit trail
                   </div>
                 </div>
@@ -1046,7 +1144,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 display: 'flex',
                 gap: 8,
               }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>{selectedRule.id}</span>
+                <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>{selectedRule.id}</span>
                 <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{selectedRule.name}</span>
               </div>
 

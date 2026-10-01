@@ -189,9 +189,9 @@ const QUEUE_ITEMS: QueueItem[] = [
 ];
 
 const PRIORITY_STYLE: Record<Priority, { bg: string; text: string; border: string }> = {
-  High: { bg: '#fff1f2', text: '#be123c', border: '#fecdd3' },
-  Medium: { bg: '#fffbeb', text: '#92400e', border: '#fde68a' },
-  Low: { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0' },
+  High: { bg: '#fbefee', text: '#8c322f', border: '#e9c8c7' },
+  Medium: { bg: '#f8f1e3', text: '#6b4a0f', border: '#e8d6ac' },
+  Low: { bg: '#e9f5ef', text: '#17503c', border: '#c4e1d1' },
 };
 
 const VALIDATION_STYLE: Record<ValidationOutcome, { bg: string; text: string; border: string }> = {
@@ -203,7 +203,7 @@ const VALIDATION_STYLE: Record<ValidationOutcome, { bg: string; text: string; bo
 
 const REVIEW_STATUS_STYLE: Record<ReviewStatus, { color: string; dot: string }> = {
   Unassigned: { color: '#94a3b8', dot: '#94a3b8' },
-  Assigned: { color: '#3b82f6', dot: '#3b82f6' },
+  Assigned: { color: '#1d5c8a', dot: '#1d5c8a' },
   'In Review': { color: 'var(--accent)', dot: 'var(--accent)' },
   'Waiting for Info': { color: 'var(--status-uta)', dot: 'var(--status-uta)' },
   'Ready for Re-check': { color: 'var(--status-pass)', dot: 'var(--status-pass)' },
@@ -222,9 +222,9 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
 ];
 
 const WORKLOAD = [
-  { label: 'High priority', count: 8, color: '#f43f5e', bg: '#fff1f2', border: '#fecdd3' },
+  { label: 'High priority', count: 8, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
   { label: 'Unassigned', count: 12, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
-  { label: 'Waiting for info', count: 7, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+  { label: 'Waiting for info', count: 7, color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
   { label: 'In review', count: 15, color: 'var(--accent)', bg: 'var(--accent-subtle)', border: 'var(--status-pass-border)' },
 ];
 
@@ -393,7 +393,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                   fontSize: '1.5rem',
                   fontWeight: 700,
                   color: w.color,
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-sans)",
                   lineHeight: 1,
                   letterSpacing: '-0.02em',
                 }}
@@ -451,8 +451,8 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
       {activeFilter === 'high' && highPriority.length > 0 && (
         <div
           style={{
-            background: 'linear-gradient(135deg, rgba(6,182,212,0.06), rgba(139,92,246,0.04))',
-            border: '1px solid rgba(6,182,212,0.2)',
+            background: 'linear-gradient(135deg, rgba(15,122,130,0.06), rgba(150,101,15,0.04))',
+            border: '1px solid rgba(15,122,130,0.2)',
             borderRadius: 8,
             padding: '10px 16px',
             marginBottom: 12,
@@ -514,17 +514,17 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                background: '#ecfdf5',
-                border: '1px solid #a7f3d0',
+                background: '#e9f5ef',
+                border: '1px solid #c4e1d1',
                 borderRadius: 20,
                 padding: '4px 14px',
                 fontSize: '0.8125rem',
                 fontWeight: 600,
-                color: '#065f46',
+                color: '#17503c',
               }}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6l3 3 5-5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 6l3 3 5-5" stroke="#1f7a5c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Queue clear
             </div>
@@ -563,7 +563,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                       <td>
                         <span
                           style={{
-                            fontFamily: "'JetBrains Mono', monospace",
+                            fontFamily: "var(--font-sans)",
                             fontWeight: 600,
                             color: 'var(--accent)',
                             fontSize: '0.8125rem',
@@ -674,7 +674,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                       <td>
                         <span
                           style={{
-                            fontFamily: "'JetBrains Mono', monospace",
+                            fontFamily: "var(--font-sans)",
                             fontSize: '0.8125rem',
                             color: '#64748b',
                             fontWeight: 500,
@@ -698,9 +698,9 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                         <button
                           onClick={() => handleStartReview(item.claimId, idx)}
                           style={{
-                            background: canResume ? 'rgba(6,182,212,0.08)' : '#f8fafc',
+                            background: canResume ? 'rgba(15,122,130,0.08)' : '#f8fafc',
                             border: canResume
-                              ? '1px solid rgba(6,182,212,0.25)'
+                              ? '1px solid rgba(15,122,130,0.25)'
                               : '1px solid #e2e8f0',
                             borderRadius: 6,
                             padding: '5px 12px',
@@ -759,7 +759,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               </button>
               <span
                 style={{
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: "var(--font-sans)",
                   fontSize: '0.8125rem',
                   color: '#64748b',
                   padding: '0 4px',

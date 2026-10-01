@@ -208,16 +208,19 @@ export default function AuditTrail() {
 
   useEffect(() => {
     const controller = new AbortController();
+    setLoading(true);
+    setLoadError(null);
     Promise.all([getAuditEvents(500, controller.signal), verifyAudit(controller.signal)])
       .then(([audit, verification]) => {
         setEvents(audit.events.map(toAuditEvent));
         setVerified(verification.valid);
+        setLoading(false);
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setLoadError('The audit history could not be loaded.');
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
 
     return () => controller.abort();
   }, []);
@@ -260,7 +263,7 @@ export default function AuditTrail() {
           {verified && !verifying && (
             <div className="chain-verified">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <circle cx="6" cy="6" r="5" fill="#10b981"/>
+                <circle cx="6" cy="6" r="5" fill="#1f7a5c"/>
                 <path d="M3.5 6l2 2 3-4" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               Audit chain verified
@@ -287,7 +290,7 @@ export default function AuditTrail() {
           >
             {verifying ? (
               <>
-                <div style={{ width: 12, height: 12, border: '1.5px solid #06b6d4', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sentinel-orbit 0.8s linear infinite' }} />
+                <div style={{ width: 12, height: 12, border: '1.5px solid #1d5c8a', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sentinel-orbit 0.8s linear infinite' }} />
                 Verifying...
               </>
             ) : (
@@ -456,7 +459,7 @@ export default function AuditTrail() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{
-                        fontFamily: "'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-sans)",
                         fontSize: '0.6875rem',
                         fontWeight: 700,
                         color: cfg.color,
@@ -472,11 +475,11 @@ export default function AuditTrail() {
 
                       {event.ruleId && (
                         <span style={{
-                          fontFamily: "'JetBrains Mono', monospace",
+                          fontFamily: "var(--font-sans)",
                           fontSize: '0.6875rem',
-                          color: '#06b6d4',
-                          background: 'rgba(6,182,212,0.08)',
-                          border: '1px solid rgba(6,182,212,0.2)',
+                          color: '#1d5c8a',
+                          background: 'rgba(15,122,130,0.08)',
+                          border: '1px solid rgba(15,122,130,0.2)',
                           borderRadius: 4,
                           padding: '2px 7px',
                           fontWeight: 600,
@@ -490,7 +493,7 @@ export default function AuditTrail() {
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 12 }}>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>{event.time}</div>
+                        <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>{event.time}</div>
                         <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>{event.date}</div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -498,21 +501,21 @@ export default function AuditTrail() {
                           width: 22,
                           height: 22,
                           borderRadius: '50%',
-                          background: event.actorType === 'human' ? '#f5f3ff' : '#f0fdf4',
-                          border: event.actorType === 'human' ? '1px solid #ddd6fe' : '1px solid #bbf7d0',
+                          background: event.actorType === 'human' ? '#f8f1e3' : '#e9f5ef',
+                          border: event.actorType === 'human' ? '1px solid #e8d6ac' : '1px solid #c4e1d1',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}>
                           {event.actorType === 'human' ? (
                             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                              <circle cx="5.5" cy="3.5" r="2" stroke="#8b5cf6" strokeWidth="1.1"/>
-                              <path d="M1 10c0-2.5 2-4.5 4.5-4.5S10 7.5 10 10" stroke="#8b5cf6" strokeWidth="1.1" strokeLinecap="round"/>
+                              <circle cx="5.5" cy="3.5" r="2" stroke="#96650f" strokeWidth="1.1"/>
+                              <path d="M1 10c0-2.5 2-4.5 4.5-4.5S10 7.5 10 10" stroke="#96650f" strokeWidth="1.1" strokeLinecap="round"/>
                             </svg>
                           ) : (
                             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                              <rect x="1.5" y="2" width="8" height="7" rx="1.5" stroke="#059669" strokeWidth="1.1"/>
-                              <path d="M3.5 5h4M3.5 7h2" stroke="#059669" strokeWidth="1.1" strokeLinecap="round"/>
+                              <rect x="1.5" y="2" width="8" height="7" rx="1.5" stroke="#1a6a4f" strokeWidth="1.1"/>
+                              <path d="M3.5 5h4M3.5 7h2" stroke="#1a6a4f" strokeWidth="1.1" strokeLinecap="round"/>
                             </svg>
                           )}
                         </div>
@@ -554,7 +557,7 @@ export default function AuditTrail() {
                             <div style={{
                               fontSize: '0.8125rem',
                               color: '#334155',
-                              fontFamily: f.mono ? "'JetBrains Mono', monospace" : 'inherit',
+                              fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
                               fontWeight: f.mono ? 500 : 400,
                             }}>
                               {f.value}
@@ -581,23 +584,23 @@ export default function AuditTrail() {
                       <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '12px 14px' }}>
                         <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                            <path d="M6 1l5 2v3c0 3-2.5 5.5-5 6C3.5 11.5 1 9 1 6V3L6 1z" stroke="#06b6d4" strokeWidth="1.1" strokeLinejoin="round"/>
+                            <path d="M6 1l5 2v3c0 3-2.5 5.5-5 6C3.5 11.5 1 9 1 6V3L6 1z" stroke="#1d5c8a" strokeWidth="1.1" strokeLinejoin="round"/>
                           </svg>
-                          <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Hash chain</span>
+                          <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#1d5c8a', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Hash chain</span>
                           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#059669' }}>Verified</span>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1f7a5c' }} />
+                            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#1a6a4f' }}>Verified</span>
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <div>
                             <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Previous hash</div>
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#64748b', wordBreak: 'break-all', lineHeight: 1.4 }}>{event.prevHash}</div>
+                            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#64748b', wordBreak: 'break-all', lineHeight: 1.4 }}>{event.prevHash}</div>
                           </div>
                           <div style={{ height: 1, background: '#e2e8f0' }} />
                           <div>
                             <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Event hash</div>
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#0f172a', wordBreak: 'break-all', lineHeight: 1.4, fontWeight: 600 }}>{event.eventHash}</div>
+                            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#0f172a', wordBreak: 'break-all', lineHeight: 1.4, fontWeight: 600 }}>{event.eventHash}</div>
                           </div>
                         </div>
                       </div>

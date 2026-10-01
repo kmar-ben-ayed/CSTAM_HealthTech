@@ -9,10 +9,10 @@ interface SentinelProps {
 
 const STATE_CONFIG = {
   idle: {
-    shieldFill: '#f0f3f1',
-    shieldStroke: '#a4b1a8',
-    orbitColor: '#69776f',
-    coreColor: '#69776f',
+    shieldFill: '#eef2f4',
+    shieldStroke: '#9bafb1',
+    orbitColor: '#5f6c76',
+    coreColor: '#5f6c76',
     glowColor: 'transparent',
     label: 'Idle',
     symbol: null,
@@ -21,11 +21,11 @@ const STATE_CONFIG = {
     orbitAnim: 'sentinel-orbit 12s linear infinite',
   },
   scanning: {
-    shieldFill: '#e8f2ec',
-    shieldStroke: '#287a5f',
-    orbitColor: '#287a5f',
-    coreColor: '#1b654c',
-    glowColor: '#287a5f',
+    shieldFill: '#e8f1f7',
+    shieldStroke: '#1d5c8a',
+    orbitColor: '#1d5c8a',
+    coreColor: '#164a6e',
+    glowColor: '#1d5c8a',
     label: 'Scanning',
     symbol: 'scan',
     orbitSpeed: '2s',
@@ -33,11 +33,11 @@ const STATE_CONFIG = {
     orbitAnim: 'sentinel-orbit 2s linear infinite',
   },
   pass: {
-    shieldFill: '#eaf4ed',
-    shieldStroke: '#237d52',
-    orbitColor: '#237d52',
-    coreColor: '#237d52',
-    glowColor: '#237d52',
+    shieldFill: '#e9f5ef',
+    shieldStroke: '#1f7a5c',
+    orbitColor: '#1f7a5c',
+    coreColor: '#1f7a5c',
+    glowColor: '#1f7a5c',
     label: 'Verified',
     symbol: 'check',
     orbitSpeed: '6s',
@@ -45,11 +45,11 @@ const STATE_CONFIG = {
     orbitAnim: 'sentinel-orbit 6s linear infinite',
   },
   fail: {
-    shieldFill: '#fbefef',
-    shieldStroke: '#b33f47',
-    orbitColor: '#b33f47',
-    coreColor: '#b33f47',
-    glowColor: '#b33f47',
+    shieldFill: '#fbefee',
+    shieldStroke: '#b4403f',
+    orbitColor: '#b4403f',
+    coreColor: '#b4403f',
+    glowColor: '#b4403f',
     label: 'Issue Detected',
     symbol: 'x',
     orbitSpeed: '3s',
@@ -57,11 +57,11 @@ const STATE_CONFIG = {
     orbitAnim: 'sentinel-orbit 3s linear infinite',
   },
   uncertain: {
-    shieldFill: '#f8f2e7',
-    shieldStroke: '#9a6415',
-    orbitColor: '#9a6415',
-    coreColor: '#9a6415',
-    glowColor: '#9a6415',
+    shieldFill: '#f8f1e3',
+    shieldStroke: '#96650f',
+    orbitColor: '#96650f',
+    coreColor: '#96650f',
+    glowColor: '#96650f',
     label: 'Unable to Assess',
     symbol: 'question',
     orbitSpeed: '4s',
@@ -69,11 +69,11 @@ const STATE_CONFIG = {
     orbitAnim: 'sentinel-orbit 4s linear infinite',
   },
   review: {
-    shieldFill: '#edf3f8',
-    shieldStroke: '#315e8a',
-    orbitColor: '#315e8a',
-    coreColor: '#315e8a',
-    glowColor: '#315e8a',
+    shieldFill: '#e8f1f7',
+    shieldStroke: '#1d5c8a',
+    orbitColor: '#1d5c8a',
+    coreColor: '#1d5c8a',
+    glowColor: '#1d5c8a',
     label: 'Human Review',
     symbol: 'person',
     orbitSpeed: '5s',
@@ -121,7 +121,7 @@ function SymbolIcon({ symbol, color, size, state }: { symbol: string | null; col
   if (symbol === 'question') {
     return (
       <g fill={color}>
-        <text x={cx} y={cy + s * 0.4} textAnchor="middle" fontSize={s * 1.6} fontFamily="Geist, system-ui" fontWeight="600">?</text>
+        <text x={cx} y={cy + s * 0.4} textAnchor="middle" fontSize={s * 1.6} fontFamily="'IBM Plex Sans', system-ui" fontWeight="600">?</text>
       </g>
     );
   }

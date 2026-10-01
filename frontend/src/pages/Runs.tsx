@@ -40,12 +40,12 @@ export default function Runs() {
   if (view === 'detail') {
     const run = selectedRun;
     const metrics = [
-      { label: 'Issue precision', value: `${run.precision}%`, desc: 'True positives / (TP + FP)', color: '#10b981' },
+      { label: 'Issue precision', value: `${run.precision}%`, desc: 'True positives / (TP + FP)', color: '#1f7a5c' },
       { label: 'Issue recall', value: `${run.recall}%`, desc: 'True positives / (TP + FN)', color: 'var(--accent)' },
       { label: 'Issue F1', value: `${run.f1}%`, desc: 'Harmonic mean of precision & recall', color: 'var(--status-review)' },
       { label: 'Status accuracy', value: `${run.accuracy}%`, desc: 'Correct status across all claims', color: '#0f172a' },
-      { label: 'False alarm rate', value: `${run.far}%`, desc: 'False positives / (FP + TN)', color: '#f43f5e' },
-      { label: 'False abstention', value: `${run.fabr}%`, desc: 'Unable to assess when assessable', color: '#f59e0b' },
+      { label: 'False alarm rate', value: `${run.far}%`, desc: 'False positives / (FP + TN)', color: '#b4403f' },
+      { label: 'False abstention', value: `${run.fabr}%`, desc: 'Unable to assess when assessable', color: '#96650f' },
     ];
 
     return (
@@ -64,7 +64,7 @@ export default function Runs() {
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
             <Sentinel state={run.sentinel} size={52} />
             <div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', letterSpacing: '0.02em', marginBottom: 4 }}>
+              <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', letterSpacing: '0.02em', marginBottom: 4 }}>
                 {run.id}
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -77,7 +77,7 @@ export default function Runs() {
                 ].map(f => (
                   <span key={f.label} style={{ fontSize: '0.8125rem', color: '#64748b' }}>
                     <span style={{ color: '#94a3b8' }}>{f.label}: </span>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 500, color: '#334155' }}>{f.value}</span>
+                    <span style={{ fontFamily: "var(--font-sans)", fontWeight: 500, color: '#334155' }}>{f.value}</span>
                   </span>
                 ))}
               </div>
@@ -87,13 +87,13 @@ export default function Runs() {
             <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{run.started}</span>
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
-              background: run.status === 'completed' ? '#ecfdf5' : '#fff1f2',
-              color: run.status === 'completed' ? '#059669' : '#e11d48',
-              border: `1px solid ${run.status === 'completed' ? '#a7f3d0' : '#fecdd3'}`,
+              background: run.status === 'completed' ? '#e9f5ef' : '#fbefee',
+              color: run.status === 'completed' ? '#1a6a4f' : '#9a3433',
+              border: `1px solid ${run.status === 'completed' ? '#c4e1d1' : '#e9c8c7'}`,
               borderRadius: 20, padding: '4px 12px',
               fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
             }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: run.status === 'completed' ? '#10b981' : '#f43f5e' }} />
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: run.status === 'completed' ? '#1f7a5c' : '#b4403f' }} />
               {run.status}
             </span>
           </div>
@@ -109,7 +109,7 @@ export default function Runs() {
               {metrics.map(m => (
                 <div key={m.label} style={{ textAlign: 'center' }}>
                   <div style={{
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-sans)",
                     fontSize: '1.5rem',
                     fontWeight: 700,
                     color: m.color,
@@ -144,7 +144,7 @@ export default function Runs() {
                     <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{s.status}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 700, color: s.color }}>{s.count}</span>
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: s.color }}>{s.count}</span>
                     <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{s.pct}%</span>
                   </div>
                 </div>
@@ -175,17 +175,17 @@ export default function Runs() {
                 const total = r.pass + r.fail + r.uta + r.na;
                 return (
                   <tr key={r.id}>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)' }}>{r.id}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)' }}>{r.id}</span></td>
                     <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{r.name}</span></td>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#10b981' }}>{r.pass}</span></td>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: r.fail > 0 ? '#f43f5e' : '#94a3b8' }}>{r.fail}</span></td>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: r.uta > 0 ? '#f59e0b' : '#94a3b8' }}>{r.uta}</span></td>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#94a3b8' }}>{r.na}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: '#1f7a5c' }}>{r.pass}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: r.fail > 0 ? '#b4403f' : '#94a3b8' }}>{r.fail}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: r.uta > 0 ? '#96650f' : '#94a3b8' }}>{r.uta}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: '#94a3b8' }}>{r.na}</span></td>
                     <td>
                       <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', width: 120 }}>
-                        <div style={{ width: `${(r.pass / total) * 100}%`, background: '#10b981' }} />
-                        <div style={{ width: `${(r.fail / total) * 100}%`, background: '#f43f5e' }} />
-                        <div style={{ width: `${(r.uta / total) * 100}%`, background: '#f59e0b' }} />
+                        <div style={{ width: `${(r.pass / total) * 100}%`, background: '#1f7a5c' }} />
+                        <div style={{ width: `${(r.fail / total) * 100}%`, background: '#b4403f' }} />
+                        <div style={{ width: `${(r.uta / total) * 100}%`, background: '#96650f' }} />
                         <div style={{ width: `${(r.na / total) * 100}%`, background: '#e2e8f0' }} />
                       </div>
                     </td>
@@ -235,12 +235,12 @@ export default function Runs() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
         {[
           { label: 'Total runs', value: '4,821', sub: 'All time', color: 'var(--accent)' },
-          { label: 'Avg precision', value: '96.5%', sub: 'Last 30 days', color: '#10b981' },
+          { label: 'Avg precision', value: '96.5%', sub: 'Last 30 days', color: '#1f7a5c' },
           { label: 'Claims processed', value: '28,441', sub: 'Last 30 days', color: 'var(--status-review)' },
-          { label: 'Avg latency', value: '1.2s', sub: 'Per claim', color: '#f59e0b' },
+          { label: 'Avg latency', value: '1.2s', sub: 'Per claim', color: '#96650f' },
         ].map(m => (
           <div key={m.label} className="kpi-card">
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1.5rem', fontWeight: 700, color: m.color, letterSpacing: '-0.04em', marginBottom: 4 }}>
+            <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.5rem', fontWeight: 700, color: m.color, letterSpacing: '-0.04em', marginBottom: 4 }}>
               {m.value}
             </div>
             <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#334155', marginBottom: 2 }}>{m.label}</div>
@@ -274,30 +274,30 @@ export default function Runs() {
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Sentinel state={run.sentinel} size={18} />
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 700, color: '#0f172a' }}>{run.id}</span>
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: '#0f172a' }}>{run.id}</span>
                   </div>
                 </td>
                 <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{run.dataset}</span></td>
-                <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', color: '#64748b' }}>{run.ruleset}</span></td>
-                <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', color: '#64748b' }}>{run.model}</span></td>
-                <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{run.claims}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: '#64748b' }}>{run.ruleset}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: '#64748b' }}>{run.model}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{run.claims}</span></td>
                 <td>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
-                    background: run.status === 'completed' ? '#ecfdf5' : '#fff1f2',
-                    color: run.status === 'completed' ? '#059669' : '#e11d48',
-                    border: `1px solid ${run.status === 'completed' ? '#a7f3d0' : '#fecdd3'}`,
+                    background: run.status === 'completed' ? '#e9f5ef' : '#fbefee',
+                    color: run.status === 'completed' ? '#1a6a4f' : '#9a3433',
+                    border: `1px solid ${run.status === 'completed' ? '#c4e1d1' : '#e9c8c7'}`,
                     borderRadius: 20, padding: '2px 8px',
                     fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
                   }}>
-                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: run.status === 'completed' ? '#10b981' : '#f43f5e' }} />
+                    <span style={{ width: 4, height: 4, borderRadius: '50%', background: run.status === 'completed' ? '#1f7a5c' : '#b4403f' }} />
                     {run.status}
                   </span>
                 </td>
-                <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: '#10b981' }}>{run.precision > 0 ? `${run.precision}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: 'var(--accent)' }}>{run.recall > 0 ? `${run.recall}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: 'var(--status-review)' }}>{run.f1 > 0 ? `${run.f1}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', color: '#64748b' }}>{run.duration}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: '#1f7a5c' }}>{run.precision > 0 ? `${run.precision}%` : '–'}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: 'var(--accent)' }}>{run.recall > 0 ? `${run.recall}%` : '–'}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: 'var(--status-review)' }}>{run.f1 > 0 ? `${run.f1}%` : '–'}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#64748b' }}>{run.duration}</span></td>
                 <td><span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{run.started}</span></td>
                 <td>
                   <button

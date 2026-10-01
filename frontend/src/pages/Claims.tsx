@@ -36,13 +36,17 @@ export default function Claims({ onNavigate }: ClaimsProps) {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    setError(null);
     getDataset('development', 500, controller.signal)
-      .then((dataset) => setClaims(datasetToClaimRows(dataset)))
+      .then((dataset) => {
+        setClaims(datasetToClaimRows(dataset));
+        setLoading(false);
+      })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setError(cause instanceof ApiError ? cause.message : 'The claims service is unavailable.');
-      })
-      .finally(() => setLoading(false));
+        setLoading(false);
+      });
 
     return () => controller.abort();
   }, []);
@@ -231,7 +235,7 @@ export default function Claims({ onNavigate }: ClaimsProps) {
               padding: '1px 7px',
               fontSize: '0.6875rem',
               fontWeight: 700,
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "var(--font-sans)",
             }}>
               {tabCounts[tab.key] || 0}
             </span>
@@ -267,7 +271,7 @@ export default function Claims({ onNavigate }: ClaimsProps) {
               <tr><td colSpan={10} style={{ padding: '48px 24px', textAlign: 'center', color: '#64748b' }}>Loading claims from the API…</td></tr>
             ) : error ? (
               <tr><td colSpan={10} style={{ padding: '48px 24px', textAlign: 'center' }}>
-                <div style={{ color: '#be123c', fontWeight: 600, marginBottom: 8 }}>Unable to load claims</div>
+                <div style={{ color: '#8c322f', fontWeight: 600, marginBottom: 8 }}>Unable to load claims</div>
                 <div style={{ color: '#64748b', fontSize: '0.875rem' }}>{error}</div>
               </td></tr>
             ) : filtered.length === 0 ? (
@@ -292,7 +296,7 @@ export default function Claims({ onNavigate }: ClaimsProps) {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Sentinel state={claim.sentinel} size={20} />
-                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>
+                      <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>
                         {claim.id}
                       </span>
                     </div>
@@ -300,36 +304,26 @@ export default function Claims({ onNavigate }: ClaimsProps) {
                   <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{claim.member}</span></td>
                   <td><span style={{ fontSize: '0.8125rem', color: '#64748b' }}>{claim.provider}</span></td>
                   <td>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', color: '#64748b' }}>
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#64748b' }}>
                       {claim.dos}
                     </span>
                   </td>
                   <td>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>
                       {claim.amount}
                     </span>
                   </td>
                   <td>
                     <span style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: 28,
-                      height: 22,
-                      background: claim.findings > 0 ? '#fff1f2' : '#ecfdf5',
-                      color: claim.findings > 0 ? '#e11d48' : '#059669',
-                      borderRadius: 4,
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      fontFamily: "'JetBrains Mono', monospace",
-                      border: claim.findings > 0 ? '1px solid #fecdd3' : '1px solid #a7f3d0',
-                      padding: '0 6px',
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      color: claim.findings > 0 ? 'var(--status-fail)' : 'var(--text-secondary)',
                     }}>
                       {claim.findings}
                     </span>
                   </td>
                   <td>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: '#94a3b8' }}>
                       {claim.rule}
                     </span>
                   </td>

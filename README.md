@@ -181,7 +181,7 @@ The backend allows local frontend origins by default, including ports `5173` and
 From the repository root:
 
 ```powershell
-backend\.venv\Scripts\python.exe -m unittest discover -s backend\tests -v
+backend\.venv\Scripts\python.exe -m unittest discover -s backend\tests -t backend -v
 ```
 
 The backend tests cover API validation, deterministic evaluations, ingestion, FHIR round trips, explanation auditing, review decisions, audit persistence, tamper detection, and request-size limits.
@@ -191,11 +191,9 @@ The backend tests cover API validation, deterministic evaluations, ingestion, FH
 From `frontend`:
 
 ```powershell
-corepack pnpm exec tsc --noEmit --lib ES2021,DOM
+corepack pnpm exec tsc --noEmit
 corepack pnpm build
 ```
-
-The `ES2021` library override is required by the current frontend use of `String.replaceAll`; the checked-in TypeScript target remains `ES2020`.
 
 The frontend package also provides:
 
@@ -246,10 +244,23 @@ Use the interactive Swagger documentation and [backend/API_TESTING.md](backend/A
 | `PORT` | Frontend Vite port | `8443` |
 | `CLAIMGUARD_CORS_ORIGINS` | Allowed browser origins | Local development origins |
 | `CLAIMGUARD_AUDIT_LOG` | Audit JSONL path | `backend/outputs/audit_log.jsonl` |
-| `OPENAI_API_KEY` | Enables OpenAI explanations | Not set |
-| `OPENAI_MODEL` | OpenAI explanation model | `gpt-4o-mini` |
+| `OPENAI_API_KEY` | Enables LLM explanations | Not set |
+| `OPENAI_MODEL` | Explanation model name | `gpt-4o-mini` |
+| `OPENAI_BASE_URL` | OpenAI-compatible API endpoint | OpenAI's default |
 
 For local testing without an API key, request the `mock` explanation provider. The backend can fall back to a deterministic explanation when the configured AI provider is unavailable, and the response identifies that fallback.
+
+### Using a free NVIDIA NIM model instead of OpenAI
+
+The explanation client is OpenAI-SDK-compatible, so it also works against [NVIDIA's NIM API](https://build.nvidia.com), which offers a free tier. Set in `backend/.env`:
+
+```
+OPENAI_API_KEY=nvapi-your-key-here
+OPENAI_BASE_URL=https://integrate.api.nvidia.com/v1
+OPENAI_MODEL=meta/llama-3.2-11b-vision-instruct
+```
+
+Note that NVIDIA periodically retires older model slugs from this catalog (for example, `meta/llama-3.1-8b-instruct` was retired 2026-08-26); call `GET /v1/models` against the same base URL and key if the configured model starts returning `410 Gone`. Smaller models are more likely to fail the server's strict evidence-grounding validation (fabricating an evidence path or flipping `needs_human_review`); when that happens the backend safely falls back to a deterministic explanation rather than serving an ungrounded one, and `fallback_used: true` / `assessment.explanation_source: "fallback"` reflect it in the response.
 
 ## Data, security, and production boundaries
 
@@ -316,7 +327,7 @@ Use the `mock` provider for local testing, or set `OPENAI_API_KEY` in the enviro
 
 ### CSV ingestion rejects a file pack
 
-The backend CSV endpoint expects the related files with these exact keys: `claims.csv`, `lines.csv`, `coverage.csv`, `authorizations.csv`, and `attachments.csv`. See [backend/API_TESTING.md](backend/API_TESTING.md) for a complete example.
+The backend CSV endpoint expects the related files with these exact keys: `claims.csv`, `lines.csv`, `coverage.csv`, `authorizations.csv`, and `attachments.csv`. In the Ingest Data screen, select or drop all five files together in the "Upload file" tab; a single CSV file is always rejected because the pack is incomplete. See [backend/API_TESTING.md](backend/API_TESTING.md) for a complete example of the raw request.
 
 ## Further documentation
 

@@ -12,6 +12,7 @@ from AI_agent.confidence import assess
 from AI_agent.llm_adapter import (
     MockExplanationProvider,
     OpenAIExplanationProvider,
+    deterministic_fallback,
     validate_explanation,
 )
 from audit.chain import verify_chain
@@ -322,22 +323,22 @@ class ExplanationService:
             provider = MockExplanationProvider()
             provider_label = "mock"
         elif os.environ.get("OPENAI_API_KEY"):
+            model_name = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+            base_url = os.environ.get("OPENAI_BASE_URL") or None
             provider = OpenAIExplanationProvider(
-                OpenAI(), model_name=os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+                OpenAI(base_url=base_url), model_name=model_name
             )
-            provider_label = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+            provider_label = model_name
         else:
             provider = MockExplanationProvider()
             provider_label = "mock"
             fallback_used = True
 
         source = "skipped" if finding["status"] not in {"FAIL", "UNABLE_TO_ASSESS"} else "llm"
-
-        fallback_used = False
-        source = "skipped" if finding["status"] not in {"FAIL", "UNABLE_TO_ASSESS"} else "llm"
         try:
             explanation = validate_explanation(provider.explain(finding, rule), finding)
         except Exception:
+            explanation = deterministic_fallback(finding)
             fallback_used = True
             source = "fallback"
 

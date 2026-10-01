@@ -45,14 +45,14 @@ const SEVERITIES = ['All severities', 'HIGH', 'MEDIUM', 'LOW'];
 const POLICIES = ['All policies', 'EDU-BASIC', 'EDU-PLUS'];
 
 const SEV_STYLE: Record<RuleSeverity, { bg: string; text: string; border: string }> = {
-  HIGH:   { bg: '#fff1f2', text: '#be123c', border: '#fecdd3' },
-  MEDIUM: { bg: '#fffbeb', text: '#92400e', border: '#fde68a' },
-  LOW:    { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0' },
+  HIGH:   { bg: '#fbefee', text: '#8c322f', border: '#e9c8c7' },
+  MEDIUM: { bg: '#f8f1e3', text: '#6b4a0f', border: '#e8d6ac' },
+  LOW:    { bg: '#e9f5ef', text: '#17503c', border: '#c4e1d1' },
 };
 
 const STATUS_STYLE: Record<RuleStatus, { bg: string; text: string; border: string; dot: string }> = {
-  Active:     { bg: '#ecfdf5', text: '#059669', border: '#a7f3d0', dot: '#10b981' },
-  Draft:      { bg: '#f0f9ff', text: '#0369a1', border: '#bae6fd', dot: '#38bdf8' },
+  Active:     { bg: '#e9f5ef', text: '#1a6a4f', border: '#c4e1d1', dot: '#1f7a5c' },
+  Draft:      { bg: '#e8f1f7', text: '#1d5c8a', border: '#c7d9e3', dot: '#1d5c8a' },
   Deprecated: { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0', dot: '#94a3b8' },
 };
 
@@ -66,7 +66,7 @@ const POLICIES_DATA = [
     authRequired: ['SVC-IMAGE', 'SVC-THERAPY'],
     docsRequired: [{ svc: 'SVC-IMAGE', doc: 'imaging-report' }, { svc: 'SVC-DENTAL', doc: 'service-note' }],
     activeRules: 15,
-    color: '#287a5f',
+    color: '#1d5c8a',
   },
   {
     id: 'EDU-PLUS',
@@ -77,7 +77,7 @@ const POLICIES_DATA = [
     authRequired: ['SVC-IMAGE', 'SVC-THERAPY'],
     docsRequired: [{ svc: 'SVC-IMAGE', doc: 'imaging-report' }, { svc: 'SVC-DENTAL', doc: 'service-note' }],
     activeRules: 15,
-    color: '#315e8a',
+    color: '#1d5c8a',
   },
 ];
 
@@ -121,7 +121,7 @@ function Drawer({ rule, onClose, onNavigate }: { rule: Rule; onClose: () => void
         <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 700, color: 'var(--accent)' }}>{rule.id}</span>
+              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: 'var(--accent)' }}>{rule.id}</span>
               <span style={{ ...sev, borderRadius: 4, padding: '2px 8px', fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', border: `1px solid ${sev.border}`, background: sev.bg, color: sev.text }}>{rule.severity}</span>
               <span style={{ ...st, borderRadius: 20, padding: '2px 10px', fontSize: '0.6875rem', fontWeight: 600, border: `1px solid ${st.border}`, background: st.bg, color: st.text, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: st.dot }} />
@@ -153,7 +153,7 @@ function Drawer({ rule, onClose, onNavigate }: { rule: Rule; onClose: () => void
             ].map(f => (
               <div key={f.label}>
                 <div style={{ fontSize: '0.625rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>{f.label}</div>
-                <div style={{ fontSize: '0.8125rem', color: '#0f172a', fontFamily: f.mono ? "'JetBrains Mono', monospace" : 'inherit', fontWeight: f.mono ? 500 : 400 }}>{f.value}</div>
+                <div style={{ fontSize: '0.8125rem', color: '#0f172a', fontFamily: f.mono ? "var(--font-sans)" : 'inherit', fontWeight: f.mono ? 500 : 400 }}>{f.value}</div>
               </div>
             ))}
           </div>
@@ -161,7 +161,7 @@ function Drawer({ rule, onClose, onNavigate }: { rule: Rule; onClose: () => void
           {/* Expected condition */}
           <div>
             <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Expected condition</div>
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', color: '#334155', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 12px', lineHeight: 1.6 }}>
+            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#334155', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '10px 12px', lineHeight: 1.6 }}>
               {rule.expectedCondition}
             </div>
           </div>
@@ -171,7 +171,7 @@ function Drawer({ rule, onClose, onNavigate }: { rule: Rule; onClose: () => void
             <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Evidence paths</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {rule.evidenceRequirement.split(' · ').map(path => (
-                <span key={path} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', color: 'var(--status-review)', background: 'var(--status-review-bg)', border: '1px solid var(--status-review-border)', borderRadius: 4, padding: '3px 8px' }}>{path}</span>
+                <span key={path} style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: 'var(--status-review)', background: 'var(--status-review-bg)', border: '1px solid var(--status-review-border)', borderRadius: 4, padding: '3px 8px' }}>{path}</span>
               ))}
             </div>
           </div>
@@ -179,8 +179,8 @@ function Drawer({ rule, onClose, onNavigate }: { rule: Rule; onClose: () => void
           {/* Reviewer action */}
           <div>
             <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Reviewer action</div>
-            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '10px 12px' }}>
-              <p style={{ fontSize: '0.875rem', color: '#92400e', lineHeight: 1.6 }}>{rule.reviewerAction}</p>
+            <div style={{ background: '#f8f1e3', border: '1px solid #e8d6ac', borderRadius: 6, padding: '10px 12px' }}>
+              <p style={{ fontSize: '0.875rem', color: '#6b4a0f', lineHeight: 1.6 }}>{rule.reviewerAction}</p>
             </div>
           </div>
         </div>
@@ -241,7 +241,7 @@ export default function Rules({ onNavigate }: RulesProps) {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 12px' }}>
               <div style={{ fontSize: '0.6rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 2 }}>Ruleset version</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 700, color: '#06b6d4' }}>v1.0.0</div>
+              <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: '#1d5c8a' }}>v1.0.0</div>
             </div>
             <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 12px' }}>
               <div style={{ fontSize: '0.6rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 2 }}>Last updated</div>
@@ -283,17 +283,17 @@ export default function Rules({ onNavigate }: RulesProps) {
         </div>
 
         {compareMode && diffFields.length > 0 && (
-          <div style={{ background: 'rgba(6,182,212,0.04)', borderBottom: '1px solid rgba(6,182,212,0.12)', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="#06b6d4" strokeWidth="1.2"/><path d="M7 4v4M7 9.5v.5" stroke="#06b6d4" strokeWidth="1.2" strokeLinecap="round"/></svg>
-            <span style={{ fontSize: '0.8125rem', color: '#06b6d4', fontWeight: 500 }}>
+          <div style={{ background: 'rgba(15,122,130,0.04)', borderBottom: '1px solid rgba(15,122,130,0.12)', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="#1d5c8a" strokeWidth="1.2"/><path d="M7 4v4M7 9.5v.5" stroke="#1d5c8a" strokeWidth="1.2" strokeLinecap="round"/></svg>
+            <span style={{ fontSize: '0.8125rem', color: '#1d5c8a', fontWeight: 500 }}>
               {diffFields.length} field{diffFields.length > 1 ? 's' : ''} differ between policies — highlighted below.
             </span>
           </div>
         )}
         {compareMode && diffFields.length === 0 && (
-          <div style={{ background: '#ecfdf5', borderBottom: '1px solid #a7f3d0', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#10b981"/><path d="M4 7l2.5 2.5 4-4" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            <span style={{ fontSize: '0.8125rem', color: '#059669', fontWeight: 500 }}>Policies are identical on all compared fields.</span>
+          <div style={{ background: '#e9f5ef', borderBottom: '1px solid #c4e1d1', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#1f7a5c"/><path d="M4 7l2.5 2.5 4-4" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <span style={{ fontSize: '0.8125rem', color: '#1a6a4f', fontWeight: 500 }}>Policies are identical on all compared fields.</span>
           </div>
         )}
 
@@ -313,10 +313,10 @@ export default function Rules({ onNavigate }: RulesProps) {
               {/* Policy header */}
               <div style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
                 <div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 700, color: pol.color, letterSpacing: '0.04em' }}>{pol.id}</div>
+                  <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: pol.color, letterSpacing: '0.04em' }}>{pol.id}</div>
                   <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 1 }}>{pol.name}</div>
                 </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: '#10b981', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 4, padding: '2px 8px' }}>
+                <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: '#1f7a5c', background: '#e9f5ef', border: '1px solid #c4e1d1', borderRadius: 4, padding: '2px 8px' }}>
                   {pol.activeRules} rules
                 </span>
               </div>
@@ -330,18 +330,18 @@ export default function Rules({ onNavigate }: RulesProps) {
                   { label: 'Authorization required', value: null, list: pol.authRequired, diff: false },
                   { label: 'Documentation required', value: null, entries: pol.docsRequired, diff: false },
                 ].map(f => (
-                  <div key={f.label} style={{ background: f.diff ? 'rgba(6,182,212,0.06)' : 'transparent', borderRadius: f.diff ? 4 : 0, padding: f.diff ? '6px 8px' : 0, marginLeft: f.diff ? -8 : 0, marginRight: f.diff ? -8 : 0, transition: 'background 0.2s ease' }}>
-                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: f.diff ? '#06b6d4' : '#94a3b8', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {f.diff && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#06b6d4', display: 'inline-block' }} />}
+                  <div key={f.label} style={{ background: f.diff ? 'rgba(15,122,130,0.06)' : 'transparent', borderRadius: f.diff ? 4 : 0, padding: f.diff ? '6px 8px' : 0, marginLeft: f.diff ? -8 : 0, marginRight: f.diff ? -8 : 0, transition: 'background 0.2s ease' }}>
+                    <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: f.diff ? '#1d5c8a' : '#94a3b8', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {f.diff && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#1d5c8a', display: 'inline-block' }} />}
                       {f.label}
                     </div>
                     {f.value && (
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: f.diff ? '#06b6d4' : '#0f172a' }}>{f.value}</div>
+                      <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 600, color: f.diff ? '#1d5c8a' : '#0f172a' }}>{f.value}</div>
                     )}
                     {f.list && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {f.list.map(item => (
-                          <span key={item} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#475569', background: '#f1f5f9', borderRadius: 4, padding: '2px 7px' }}>{item}</span>
+                          <span key={item} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#475569', background: '#f1f5f9', borderRadius: 4, padding: '2px 7px' }}>{item}</span>
                         ))}
                       </div>
                     )}
@@ -349,9 +349,9 @@ export default function Rules({ onNavigate }: RulesProps) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         {f.entries.map(e => (
                           <div key={e.svc} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#64748b' }}>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace", color: '#06b6d4' }}>{e.svc}</span>
+                            <span style={{ fontFamily: "var(--font-sans)", color: '#1d5c8a' }}>{e.svc}</span>
                             <span style={{ color: '#cbd5e1' }}>→</span>
-                            <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{e.doc}</span>
+                            <span style={{ fontFamily: "var(--font-sans)" }}>{e.doc}</span>
                           </div>
                         ))}
                       </div>
@@ -373,7 +373,7 @@ export default function Rules({ onNavigate }: RulesProps) {
               <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Deterministic checks executed during claim pre-validation. Showing {filtered.length} of {ALL_RULES.length} rules.</p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: '#10b981', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 4, padding: '3px 10px' }}>
+              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: '#1f7a5c', background: '#e9f5ef', border: '1px solid #c4e1d1', borderRadius: 4, padding: '3px 10px' }}>
                 {ALL_RULES.filter(r => r.status === 'Active').length} active
               </span>
             </div>
@@ -429,22 +429,22 @@ export default function Rules({ onNavigate }: RulesProps) {
               const st = STATUS_STYLE[rule.status];
               return (
                 <tr key={rule.id} onClick={() => setSelectedRule(rule)} style={{ cursor: 'pointer' }}>
-                  <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 700, color: '#06b6d4' }}>{rule.id}</span></td>
+                  <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: '#1d5c8a' }}>{rule.id}</span></td>
                   <td>
                     <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>{rule.name}</div>
                     <div style={{ fontSize: '0.75rem', color: '#94a3b8', maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rule.description}</div>
                   </td>
                   <td><span style={{ fontSize: '0.8125rem', color: '#475569' }}>{rule.category}</span></td>
                   <td>
-                    <span style={{ background: sev.bg, color: sev.text, border: `1px solid ${sev.border}`, borderRadius: 4, padding: '2px 8px', fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', fontFamily: "'JetBrains Mono', monospace" }}>
+                    <span style={{ background: sev.bg, color: sev.text, border: `1px solid ${sev.border}`, borderRadius: 4, padding: '2px 8px', fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', fontFamily: "var(--font-sans)" }}>
                       {rule.severity}
                     </span>
                   </td>
-                  <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', color: '#64748b' }}>{rule.version}</span></td>
+                  <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#64748b' }}>{rule.version}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {rule.policyScope.map(p => (
-                        <span key={p} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: p === 'EDU-BASIC' ? '#06b6d4' : '#8b5cf6', background: p === 'EDU-BASIC' ? 'rgba(6,182,212,0.08)' : 'rgba(139,92,246,0.08)', border: `1px solid ${p === 'EDU-BASIC' ? 'rgba(6,182,212,0.2)' : 'rgba(139,92,246,0.2)'}`, borderRadius: 4, padding: '2px 6px', letterSpacing: '0.04em' }}>{p}</span>
+                        <span key={p} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6rem', fontWeight: 700, color: p === 'EDU-BASIC' ? '#1d5c8a' : '#96650f', background: p === 'EDU-BASIC' ? 'rgba(15,122,130,0.08)' : 'rgba(150,101,15,0.08)', border: `1px solid ${p === 'EDU-BASIC' ? 'rgba(15,122,130,0.2)' : 'rgba(150,101,15,0.2)'}`, borderRadius: 4, padding: '2px 6px', letterSpacing: '0.04em' }}>{p}</span>
                       ))}
                     </div>
                   </td>
@@ -456,7 +456,7 @@ export default function Rules({ onNavigate }: RulesProps) {
                   </td>
                   <td>
                     <button onClick={e => { e.stopPropagation(); setSelectedRule(rule); }}
-                      style={{ background: 'transparent', border: 'none', color: '#06b6d4', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '0.8125rem', padding: '4px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      style={{ background: 'transparent', border: 'none', color: '#1d5c8a', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '0.8125rem', padding: '4px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                       View
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     </button>

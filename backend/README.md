@@ -10,7 +10,7 @@ From the repository root in PowerShell:
 python -m venv backend\.venv
 backend\.venv\Scripts\Activate.ps1
 python -m pip install -r backend\requirements.txt
-python -m unittest discover -s backend\tests -v
+python -m unittest discover -s backend\tests -t backend -v
 ```
 
 Python 3.10 or newer is required.
@@ -51,7 +51,9 @@ POST endpoints accept JSON request objects documented in `/docs`. Claim payloads
 
 ## AI provider configuration
 
-Explanations use the deterministic mock provider by default. To explicitly request the OpenAI provider, set `OPENAI_API_KEY` in the process environment; `OPENAI_MODEL` is optional and defaults to `gpt-4o-mini`. Keys are not stored in the repository. Provider errors fall back to the deterministic explanation and are marked in the response.
+Explanations use the deterministic mock provider by default. To explicitly request the `openai` provider, set `OPENAI_API_KEY` in the process environment; `OPENAI_MODEL` is optional and defaults to `gpt-4o-mini`. Keys are not stored in the repository. Provider errors fall back to the deterministic explanation and are marked in the response (`fallback_used`, `assessment.explanation_source`).
+
+The client is OpenAI-SDK-compatible, so any OpenAI-compatible endpoint works by also setting `OPENAI_BASE_URL`, including [NVIDIA NIM](https://build.nvidia.com)'s free tier (`OPENAI_BASE_URL=https://integrate.api.nvidia.com/v1`, `OPENAI_MODEL=meta/llama-3.2-11b-vision-instruct`, an `nvapi-...` key as `OPENAI_API_KEY`). See the root README's "Using a free NVIDIA NIM model instead of OpenAI" section for details and caveats.
 
 ## Confidence and escalation
 

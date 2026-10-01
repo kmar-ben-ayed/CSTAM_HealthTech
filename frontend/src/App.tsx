@@ -344,13 +344,13 @@ function Sidebar({
                     <span
                       style={{
                         background: 'rgba(244,63,94,0.15)',
-                        color: '#fb7185',
+                        color: '#c25554',
                         border: '1px solid rgba(244,63,94,0.25)',
                         borderRadius: 10,
                         padding: '1px 7px',
                         fontSize: '0.6875rem',
                         fontWeight: 700,
-                        fontFamily: "'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-sans)",
                       }}
                     >
                       {item.badge}
@@ -660,7 +660,7 @@ function TopBar({
           <path d="M9 9l2.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
         <span style={{ flex: 1, textAlign: 'left' }}>Quick search...</span>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.625rem', color: 'var(--text-tertiary)', fontWeight: 600, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 4, padding: '1px 5px' }}>
+        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.625rem', color: 'var(--text-tertiary)', fontWeight: 600, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 4, padding: '1px 5px' }}>
           ⌘K
         </span>
       </button>
@@ -693,7 +693,7 @@ function TopBar({
               <path d="M7 14a2 2 0 004 0" stroke="currentColor" strokeWidth="1.3" />
             </svg>
             {unreadCount > 0 && (
-              <div style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: '50%', background: '#f43f5e', border: '1.5px solid var(--topbar-bg)' }} />
+              <div style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: '50%', background: '#b4403f', border: '1.5px solid var(--topbar-bg)' }} />
             )}
           </button>
 
@@ -756,13 +756,13 @@ function TopBar({
                           display: 'flex',
                           gap: 12,
                           padding: '10px 16px',
-                          background: isRead ? 'transparent' : 'rgba(6,182,212,0.03)',
+                          background: isRead ? 'transparent' : 'rgba(15,122,130,0.03)',
                           borderBottom: '1px solid var(--card-border)',
                           cursor: 'pointer',
                           transition: 'background 0.1s ease',
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--canvas-bg)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = isRead ? 'transparent' : 'rgba(6,182,212,0.03)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = isRead ? 'transparent' : 'rgba(15,122,130,0.03)')}
                         onClick={() => setReadIds((prev) => [...prev, n.id])}
                       >
                         <NotifIcon type={n.icon} />
@@ -892,7 +892,7 @@ function TopBar({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {HOW_IT_WORKS.map((step) => (
                       <div key={step.num} style={{ display: 'flex', gap: 10 }}>
-                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}>
+                        <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}>
                           {step.num}
                         </div>
                         <div>
@@ -997,7 +997,7 @@ function ProfilePage({ theme, onSetTheme }: { theme: ThemeMode; onSetTheme: (m: 
                 }}
               >
                 <div style={{ display: 'flex', width: 28, height: 18, margin: '0 auto 8px', overflow: 'hidden', borderRadius: 3, border: '1px solid var(--card-border)' }}>
-                  {(m === 'dark' ? ['#17251f'] : m === 'light' ? ['#f3f6f3'] : ['#f3f6f3', '#17251f']).map((color) => (
+                  {(m === 'dark' ? ['#0f1f2e'] : m === 'light' ? ['#f4f7f9'] : ['#f4f7f9', '#0f1f2e']).map((color) => (
                     <span key={color} style={{ flex: 1, background: color }} />
                   ))}
                 </div>

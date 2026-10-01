@@ -16,20 +16,20 @@ const FEATURES = [
   {
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <rect x="2" y="3" width="16" height="14" rx="2" stroke="#06b6d4" strokeWidth="1.5"/>
-        <path d="M6 8h8M6 12h5" stroke="#06b6d4" strokeWidth="1.5" strokeLinecap="round"/>
+        <rect x="2" y="3" width="16" height="14" rx="2" stroke="#1d5c8a" strokeWidth="1.5"/>
+        <path d="M6 8h8M6 12h5" stroke="#1d5c8a" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
     title: 'Deterministic Rules',
     desc: 'A rule engine that always returns the same result for the same input. No probabilistic decisions. The engine is authoritative.',
     tag: 'AUTHORITATIVE',
-    tagColor: '#78b89b',
+    tagColor: '#5a93bb',
   },
   {
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <circle cx="10" cy="10" r="7" stroke="#10b981" strokeWidth="1.5"/>
-        <path d="M10 6v4l3 2" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round"/>
+        <circle cx="10" cy="10" r="7" stroke="#1f7a5c" strokeWidth="1.5"/>
+        <path d="M10 6v4l3 2" stroke="#1f7a5c" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
     title: 'Grounded AI',
@@ -40,25 +40,25 @@ const FEATURES = [
   {
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <circle cx="10" cy="7" r="3" stroke="#8b5cf6" strokeWidth="1.5"/>
-        <path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round"/>
+        <circle cx="10" cy="7" r="3" stroke="#96650f" strokeWidth="1.5"/>
+        <path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#96650f" strokeWidth="1.5" strokeLinecap="round"/>
       </svg>
     ),
     title: 'Human Oversight',
     desc: 'Every claim passes through a structured human review step. Humans confirm, dismiss, or request additional information.',
     tag: 'HUMAN-IN-LOOP',
-    tagColor: '#8b5cf6',
+    tagColor: '#96650f',
   },
   {
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <path d="M10 2l2 6h6l-5 3.6 2 6-5-3.6-5 3.6 2-6L2 8h6l2-6z" stroke="#f59e0b" strokeWidth="1.5" strokeLinejoin="round"/>
+        <path d="M10 2l2 6h6l-5 3.6 2 6-5-3.6-5 3.6 2-6L2 8h6l2-6z" stroke="#96650f" strokeWidth="1.5" strokeLinejoin="round"/>
       </svg>
     ),
     title: 'Auditability',
     desc: 'Every system action and human decision is recorded in a cryptographically-chained audit log. Nothing is lost.',
     tag: 'TRACEABLE',
-    tagColor: '#f59e0b',
+    tagColor: '#96650f',
   },
 ];
 
@@ -84,27 +84,27 @@ const UNCERTAINTY_STATES = [
   {
     status: 'PASS',
     sentinelState: 'pass' as SentinelState,
-    color: '#10b981',
-    bg: '#ecfdf5',
-    border: '#a7f3d0',
+    color: '#1f7a5c',
+    bg: '#e9f5ef',
+    border: '#c4e1d1',
     desc: 'All evidence present. Rule requirements met.',
     icon: '✓',
   },
   {
     status: 'FAIL',
     sentinelState: 'fail' as SentinelState,
-    color: '#f43f5e',
-    bg: '#fff1f2',
-    border: '#fecdd3',
+    color: '#b4403f',
+    bg: '#fbefee',
+    border: '#e9c8c7',
     desc: 'Evidence confirms rule requirements are not met.',
     icon: '✗',
   },
   {
     status: 'UNABLE TO ASSESS',
     sentinelState: 'uncertain' as SentinelState,
-    color: '#f59e0b',
-    bg: '#fffbeb',
-    border: '#fde68a',
+    color: '#96650f',
+    bg: '#f8f1e3',
+    border: '#e8d6ac',
     desc: 'Required evidence is absent. Assessment withheld.',
     icon: '~',
   },
@@ -123,18 +123,18 @@ export default function Landing({ onEnterApp }: LandingProps) {
   const activeStep = 2;
 
   const categoryColors: Record<string, string> = {
-    'Eligibility': '#06b6d4',
-    'Provider': '#8b5cf6',
-    'Temporal': '#f59e0b',
-    'Coverage': '#10b981',
-    'Integrity': '#f43f5e',
-    'Clinical': '#3b82f6',
-    'Authorization': '#f97316',
-    'Facility': '#84cc16',
+    'Eligibility': '#1d5c8a',
+    'Provider': '#96650f',
+    'Temporal': '#96650f',
+    'Coverage': '#1f7a5c',
+    'Integrity': '#b4403f',
+    'Clinical': '#1d5c8a',
+    'Authorization': '#96650f',
+    'Facility': '#1d5c8a',
   };
 
   return (
-    <div className="landing-shell" style={{ background: '#17251f', minHeight: '100vh', color: '#f1f5f9', fontFamily: 'var(--font-sans)' }}>
+    <div className="landing-shell" style={{ background: '#0f1f2e', minHeight: '100vh', color: '#f1f5f9', fontFamily: 'var(--font-sans)' }}>
       {/* Nav */}
       <nav style={{
         borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -144,14 +144,14 @@ export default function Landing({ onEnterApp }: LandingProps) {
         justifyContent: 'space-between',
         position: 'sticky',
         top: 0,
-        background: 'rgba(23,37,31,0.96)',
+        background: 'rgba(15,31,46,0.96)',
         backdropFilter: 'blur(12px)',
         zIndex: 50,
       }} className="landing-nav">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Sentinel state="idle" size={28} />
           <span style={{ fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.02em', color: '#f1f5f9' }}>
-            ClaimGuard <span style={{ color: '#06b6d4' }}>AI</span>
+            ClaimGuard <span style={{ color: '#1d5c8a' }}>AI</span>
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -174,7 +174,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
           <button
             onClick={onEnterApp}
             style={{
-              background: '#287a5f',
+              background: '#1d5c8a',
               border: 'none',
               borderRadius: 6,
               padding: '6px 16px',
@@ -200,13 +200,13 @@ export default function Landing({ onEnterApp }: LandingProps) {
               display: 'inline-flex',
               alignItems: 'center',
               gap: 8,
-              background: 'rgba(120,184,155,0.1)',
-              border: '1px solid rgba(120,184,155,0.25)',
+              background: 'rgba(90,147,187,0.1)',
+              border: '1px solid rgba(90,147,187,0.25)',
               borderRadius: 4,
               padding: '4px 14px',
               marginBottom: 28,
             }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#78b89b' }} />
+              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#5a93bb' }} />
               <span style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.06em', color: '#a8d2ba', textTransform: 'uppercase' }}>
                 Claims operations · Evidence-led review
               </span>
@@ -222,7 +222,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
             }}>
               Make every<br />
               claim finding<br />
-              <span style={{ color: '#9bc9ac' }}>inspectable.</span>
+              <span style={{ color: '#7fb0d1' }}>inspectable.</span>
             </h1>
 
             <p style={{
@@ -240,7 +240,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
               <button
                 onClick={onEnterApp}
                 style={{
-                  background: '#287a5f',
+                  background: '#1d5c8a',
                   border: 'none',
                   borderRadius: 8,
                   padding: '12px 24px',
@@ -255,8 +255,8 @@ export default function Landing({ onEnterApp }: LandingProps) {
                   gap: 8,
                   transition: 'all 0.15s ease',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.background = '#1b654c')}
-                onMouseLeave={e => (e.currentTarget.style.background = '#287a5f')}
+                onMouseEnter={e => (e.currentTarget.style.background = '#164a6e')}
+                onMouseLeave={e => (e.currentTarget.style.background = '#1d5c8a')}
               >
                 Open Review Workspace
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -293,7 +293,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
               ].map(t => (
                 <div key={t.label} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ color: '#9bc9ac', fontSize: '0.625rem' }}>{t.icon}</span>
+                    <span style={{ color: '#7fb0d1', fontSize: '0.625rem' }}>{t.icon}</span>
                     <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#e2e8f0', letterSpacing: '-0.01em' }}>{t.label}</span>
                   </div>
                   <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{t.desc}</span>
@@ -311,32 +311,32 @@ export default function Landing({ onEnterApp }: LandingProps) {
               borderRadius: 8,
               padding: '24px',
               width: '100%',
-              color: '#192620',
+              color: '#111f2b',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, paddingBottom: 18, borderBottom: '1px solid #dce5df' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, paddingBottom: 18, borderBottom: '1px solid #dbe4ea' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <Sentinel state="review" size={40} />
                   <div>
                     <div style={{ fontSize: '0.6875rem', color: '#74847c', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Claim under review</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.875rem', fontWeight: 600, color: '#192620' }}>CLM-10482</div>
-                    <div style={{ fontSize: '0.75rem', color: '#50635a', marginTop: 3 }}>Meridian Health Group · Sep 15, 2026</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.875rem', fontWeight: 600, color: '#111f2b' }}>CLM-10482</div>
+                    <div style={{ fontSize: '0.75rem', color: '#4f6372', marginTop: 3 }}>Meridian Health Group · Sep 15, 2026</div>
                   </div>
                 </div>
-                <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#315e8a', background: '#edf3f8', border: '1px solid #cad9e6', borderRadius: 4, padding: '4px 7px', whiteSpace: 'nowrap' }}>Needs review</span>
+                <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#1d5c8a', background: '#e8f1f7', border: '1px solid #c7d9e3', borderRadius: 4, padding: '4px 7px', whiteSpace: 'nowrap' }}>Needs review</span>
               </div>
               <div style={{ padding: '18px 0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: '0.8125rem', fontWeight: 650, color: '#192620' }}>R008 · Authorization reference</div>
-                  <span style={{ color: '#b33f47', background: '#fbefef', border: '1px solid #e8c7c8', borderRadius: 4, padding: '3px 7px', fontFamily: 'var(--font-mono)', fontSize: '0.625rem', fontWeight: 600 }}>FAIL</span>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 650, color: '#111f2b' }}>R008 · Authorization reference</div>
+                  <span style={{ color: '#b4403f', background: '#fbefee', border: '1px solid #e9c8c7', borderRadius: 4, padding: '3px 7px', fontFamily: 'var(--font-mono)', fontSize: '0.625rem', fontWeight: 600 }}>FAIL</span>
                 </div>
-                <p style={{ fontSize: '0.8125rem', color: '#50635a', lineHeight: 1.5, marginBottom: 12 }}>Required authorization reference is missing from the claim line.</p>
-                <div style={{ border: '1px solid #dce5df', borderRadius: 4, padding: '10px 12px', background: '#eef2ef', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#315e8a', overflowWrap: 'anywhere' }}>
-                  /lines/0/authorization_reference <span style={{ color: '#74847c' }}>=</span> <span style={{ color: '#b33f47' }}>null</span>
+                <p style={{ fontSize: '0.8125rem', color: '#4f6372', lineHeight: 1.5, marginBottom: 12 }}>Required authorization reference is missing from the claim line.</p>
+                <div style={{ border: '1px solid #dbe4ea', borderRadius: 4, padding: '10px 12px', background: '#eef2f4', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: '#1d5c8a', overflowWrap: 'anywhere' }}>
+                  /lines/0/authorization_reference <span style={{ color: '#74847c' }}>=</span> <span style={{ color: '#b4403f' }}>null</span>
                 </div>
               </div>
-              <div style={{ paddingTop: 14, borderTop: '1px solid #dce5df', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <span style={{ color: '#50635a', fontSize: '0.75rem', lineHeight: 1.4 }}>Evidence-linked rule result · reviewer decision pending</span>
-                <button onClick={onEnterApp} style={{ flexShrink: 0, background: '#176b52', color: '#fff', border: 0, borderRadius: 4, padding: '8px 12px', font: '600 0.75rem var(--font-sans)', cursor: 'pointer' }}>Review claim</button>
+              <div style={{ paddingTop: 14, borderTop: '1px solid #dbe4ea', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <span style={{ color: '#4f6372', fontSize: '0.75rem', lineHeight: 1.4 }}>Evidence-linked rule result · reviewer decision pending</span>
+                <button onClick={onEnterApp} style={{ flexShrink: 0, background: '#1d5c8a', color: '#fff', border: 0, borderRadius: 4, padding: '8px 12px', font: '600 0.75rem var(--font-sans)', cursor: 'pointer' }}>Review claim</button>
               </div>
             </div>
           </div>
@@ -346,7 +346,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
       {/* Features section */}
       <section style={{ padding: '80px 48px', maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 56 }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#06b6d4', textTransform: 'uppercase', marginBottom: 12 }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#1d5c8a', textTransform: 'uppercase', marginBottom: 12 }}>
             Core principles
           </p>
           <h2 style={{ fontSize: '2.25rem', fontWeight: 700, letterSpacing: '-0.03em', color: '#f8fafc', marginBottom: 16 }}>
@@ -392,7 +392,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
                 padding: '2px 8px',
                 marginBottom: 10,
                 textTransform: 'uppercase',
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "var(--font-sans)",
               }}>
                 {f.tag}
               </div>
@@ -411,7 +411,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
       <section style={{ padding: '80px 48px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 56 }}>
-            <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#06b6d4', textTransform: 'uppercase', marginBottom: 12 }}>
+            <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#1d5c8a', textTransform: 'uppercase', marginBottom: 12 }}>
               Workflow
             </p>
             <h2 style={{ fontSize: '2.25rem', fontWeight: 700, letterSpacing: '-0.03em', color: '#f8fafc' }}>
@@ -427,7 +427,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
               left: '6.25%',
               right: '6.25%',
               height: 1,
-              background: 'linear-gradient(90deg, transparent, rgba(6,182,212,0.3) 20%, rgba(6,182,212,0.3) 80%, transparent)',
+              background: 'linear-gradient(90deg, transparent, rgba(15,122,130,0.3) 20%, rgba(15,122,130,0.3) 80%, transparent)',
             }} />
 
             {WORKFLOW_STEPS.map((step, i) => (
@@ -436,8 +436,8 @@ export default function Landing({ onEnterApp }: LandingProps) {
                   width: 56,
                   height: 56,
                   borderRadius: '50%',
-                  background: i <= activeStep ? 'rgba(6,182,212,0.12)' : 'rgba(255,255,255,0.04)',
-                  border: `1.5px solid ${i <= activeStep ? 'rgba(6,182,212,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                  background: i <= activeStep ? 'rgba(15,122,130,0.12)' : 'rgba(255,255,255,0.04)',
+                  border: `1.5px solid ${i <= activeStep ? 'rgba(15,122,130,0.4)' : 'rgba(255,255,255,0.08)'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -448,8 +448,8 @@ export default function Landing({ onEnterApp }: LandingProps) {
                   <span style={{
                     fontSize: '0.875rem',
                     fontWeight: 700,
-                    color: i <= activeStep ? '#06b6d4' : '#334155',
-                    fontFamily: "'JetBrains Mono', monospace",
+                    color: i <= activeStep ? '#1d5c8a' : '#334155',
+                    fontFamily: "var(--font-sans)",
                   }}>
                     {String(step.id).padStart(2, '0')}
                   </span>
@@ -471,7 +471,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40 }}>
             <div>
-              <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#06b6d4', textTransform: 'uppercase', marginBottom: 12 }}>
+              <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#1d5c8a', textTransform: 'uppercase', marginBottom: 12 }}>
                 Validation engine
               </p>
               <h2 style={{ fontSize: '2.25rem', fontWeight: 700, letterSpacing: '-0.03em', color: '#f8fafc' }}>
@@ -479,11 +479,11 @@ export default function Landing({ onEnterApp }: LandingProps) {
               </h2>
             </div>
             <div style={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "var(--font-sans)",
               fontSize: '0.6875rem',
-              color: '#06b6d4',
-              background: 'rgba(6,182,212,0.08)',
-              border: '1px solid rgba(6,182,212,0.2)',
+              color: '#1d5c8a',
+              background: 'rgba(15,122,130,0.08)',
+              border: '1px solid rgba(15,122,130,0.2)',
               borderRadius: 6,
               padding: '6px 12px',
               letterSpacing: '0.04em',
@@ -511,10 +511,10 @@ export default function Landing({ onEnterApp }: LandingProps) {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                     <span style={{
-                      fontFamily: "'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-sans)",
                       fontSize: '0.6875rem',
                       fontWeight: 600,
-                      color: '#06b6d4',
+                      color: '#1d5c8a',
                       letterSpacing: '0.04em',
                     }}>
                       {rule.id}
@@ -547,7 +547,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
             <div style={{ display: 'grid', gap: 48, alignItems: 'center' }} className="landing-uncertainty-grid">
             <div>
-              <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#06b6d4', textTransform: 'uppercase', marginBottom: 12 }}>
+              <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#1d5c8a', textTransform: 'uppercase', marginBottom: 12 }}>
                 Epistemic integrity
               </p>
               <h2 style={{ fontSize: '2.25rem', fontWeight: 700, letterSpacing: '-0.03em', color: '#f8fafc', marginBottom: 20 }}>
@@ -557,7 +557,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
                 Missing evidence must not become fabricated certainty. ClaimGuard AI distinguishes between what it knows, what it can't determine, and what doesn't apply.
               </p>
               <p style={{ fontSize: '0.9375rem', color: '#475569', lineHeight: 1.7 }}>
-                When evidence is absent, the system returns <strong style={{ color: '#f59e0b', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem' }}>UNABLE TO ASSESS</strong> rather than forcing a binary outcome. The AI will never invent information to fill a gap.
+                When evidence is absent, the system returns <strong style={{ color: '#96650f', fontFamily: "var(--font-sans)", fontSize: '0.875rem' }}>UNABLE TO ASSESS</strong> rather than forcing a binary outcome. The AI will never invent information to fill a gap.
               </p>
             </div>
 
@@ -581,7 +581,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
                   <Sentinel state={s.sentinelState} size={52} />
                   <div>
                     <div style={{
-                      fontFamily: "'JetBrains Mono', monospace",
+                      fontFamily: "var(--font-sans)",
                       fontSize: '0.6875rem',
                       fontWeight: 700,
                       color: s.color,
@@ -605,7 +605,7 @@ export default function Landing({ onEnterApp }: LandingProps) {
       {/* Human-in-the-loop section */}
       <section style={{ padding: '80px 48px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#8b5cf6', textTransform: 'uppercase', marginBottom: 12 }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.1em', color: '#96650f', textTransform: 'uppercase', marginBottom: 12 }}>
             Human oversight
           </p>
           <h2 style={{ fontSize: '2.25rem', fontWeight: 700, letterSpacing: '-0.03em', color: '#f8fafc', marginBottom: 16 }}>
@@ -627,28 +627,28 @@ export default function Landing({ onEnterApp }: LandingProps) {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
               <div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', color: '#06b6d4', fontWeight: 600 }}>CLM-10482</div>
+                <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', color: '#1d5c8a', fontWeight: 600 }}>CLM-10482</div>
                 <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: 2 }}>Meridian Health Group · Dr. Sarah Chen</div>
               </div>
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                background: 'rgba(139,92,246,0.1)',
-                border: '1px solid rgba(139,92,246,0.2)',
+                background: 'rgba(39,115,138,0.1)',
+                border: '1px solid rgba(39,115,138,0.2)',
                 borderRadius: 20,
                 padding: '4px 12px',
               }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8b5cf6' }} />
-                <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Needs Review</span>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#1d5c8a' }} />
+                <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#1d5c8a', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Needs Review</span>
               </div>
             </div>
 
             <div style={{ display: 'grid', gap: 12 }} className="landing-preview-grid">
               {[
-                { rule: 'R001', name: 'Member eligibility', status: 'PASS', color: '#10b981' },
-                { rule: 'R008', name: 'Authorization reference', status: 'FAIL', color: '#f43f5e' },
-                { rule: 'R009', name: 'Authorization validity', status: 'UNABLE TO ASSESS', color: '#f59e0b' },
+                { rule: 'R001', name: 'Member eligibility', status: 'PASS', color: '#1f7a5c' },
+                { rule: 'R008', name: 'Authorization reference', status: 'FAIL', color: '#b4403f' },
+                { rule: 'R009', name: 'Authorization validity', status: 'UNABLE TO ASSESS', color: '#96650f' },
                 { rule: 'R015', name: 'Coordination of benefits', status: 'NOT APPLICABLE', color: '#94a3b8' },
               ].map(r => (
                 <div key={r.rule} style={{
@@ -661,9 +661,9 @@ export default function Landing({ onEnterApp }: LandingProps) {
                   borderRadius: 6,
                   padding: '10px 12px',
                 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#06b6d4', fontWeight: 600, minWidth: 36 }}>{r.rule}</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#1d5c8a', fontWeight: 600, minWidth: 36 }}>{r.rule}</span>
                   <span style={{ fontSize: '0.8125rem', color: '#94a3b8', flex: 1 }}>{r.name}</span>
-                  <span style={{ fontSize: '0.6rem', fontWeight: 700, color: r.color, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "'JetBrains Mono', monospace" }}>{r.status}</span>
+                  <span style={{ fontSize: '0.6rem', fontWeight: 700, color: r.color, letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: "var(--font-sans)" }}>{r.status}</span>
                 </div>
               ))}
             </div>
@@ -673,8 +673,8 @@ export default function Landing({ onEnterApp }: LandingProps) {
                 <button
                   key={action}
                   style={{
-                    background: i === 0 ? '#06b6d4' : 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${i === 0 ? '#06b6d4' : 'rgba(255,255,255,0.08)'}`,
+                    background: i === 0 ? '#1d5c8a' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${i === 0 ? '#1d5c8a' : 'rgba(255,255,255,0.08)'}`,
                     borderRadius: 6,
                     padding: '7px 14px',
                     fontSize: '0.8125rem',

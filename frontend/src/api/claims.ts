@@ -5,14 +5,31 @@ export type EvaluationStatus = 'PASS' | 'FAIL' | 'UNABLE_TO_ASSESS' | 'NOT_APPLI
 
 export interface BackendClaim {
   claim_id: string;
+  invoice_number?: string | null;
+  patient_id?: string;
   member_id?: string;
   provider_id?: string;
   payer_id?: string;
   policy_id?: string;
+  diagnosis_code?: string | null;
   submission_date?: string;
   currency?: string;
   total_amount?: number;
-  lines?: Array<{ service_date?: string; net_amount?: number; service_code?: string }>;
+  coverage?: {
+    coverage_id?: string;
+    status?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+  };
+  lines?: Array<{
+    line_id?: string;
+    service_date?: string;
+    service_code?: string | null;
+    quantity?: number | null;
+    unit_price?: number | null;
+    net_amount?: number | null;
+    authorization_id?: string | null;
+  }>;
   [key: string]: unknown;
 }
 
@@ -31,6 +48,17 @@ export interface DatasetResponse {
   evaluations: Record<string, RuleResult[]>;
 }
 
+export interface ExplanationAssessment {
+  confidence: number | null;
+  confidence_kind: 'not_probabilistic' | 'uncalibrated' | 'calibrated';
+  evidence_completeness: number | null;
+  explanation_grounding: number | null;
+  explanation_source: 'llm' | 'skipped' | 'fallback';
+  review_priority: number;
+  escalate: boolean;
+  escalation_reasons: string[];
+}
+
 export interface ExplanationResponse {
   explanation: string;
   cited_evidence_paths: string[];
@@ -39,6 +67,7 @@ export interface ExplanationResponse {
   recommendation: string;
   provider: string;
   fallback_used: boolean;
+  assessment: ExplanationAssessment;
 }
 
 export type ReviewAction = 'confirm_issue' | 'dismiss_with_reason' | 'request_information' | 'mark_corrected_for_recheck';
