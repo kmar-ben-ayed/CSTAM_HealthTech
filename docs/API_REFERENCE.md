@@ -1,0 +1,27 @@
+# API Reference (`/api/v1`)
+
+Errors always have the shape `{"error": "...", "code": "..."}`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | Liveness + version |
+| GET | `/datasets/{split}?limit=` | Evaluate a built-in split (`development`, `validation`, `stress`), no audit write |
+| GET | `/claims?limit=` | Accumulated ingested claims + evaluations |
+| GET | `/claims/{claim_id}` | One ingested claim + its findings |
+| POST | `/claims/evaluate` | Evaluate one claim `{claim}` (audited) |
+| POST | `/claims/evaluate/batch` | Evaluate 1-100 claims `{claims}` |
+| POST | `/ingest/jsonl` | `{text}` |
+| POST | `/ingest/csv` | `{files: {"claims.csv": "..."}}` |
+| POST | `/ingest/fhir` | `{text, sidecar_split?}` |
+| POST | `/fhir/validate` | `{bundle}` or `{text}` |
+| POST | `/fhir/export` | `{claim}` -> FHIR Bundle |
+| POST | `/explanations` | `{claim, rule_id, provider: "mock"|"openai"}` |
+| POST | `/reviews` | Record human decision (201) |
+| GET | `/audit/events?limit=` | Recent audit events (allow-listed fields) |
+| GET | `/audit/verify` | `{valid, first_broken_index}` |
+
+Review body: `claim_id, rule_id (R001-R015), action (confirm_issue | dismiss_with_reason | request_information | mark_corrected_for_recheck), actor, reason, created_at, original_status`.
+
+Common error codes: `invalid_claim` 422, `request_validation_error` 422, `body_too_large` 413, `claims_not_found` 404, `rule_not_found` 404, `dataset_not_found` 404, `audit_unavailable` 503, `audit_integrity_error` 503.
+
+Legacy routes under `/api/*` (health, datasets, fhir validate/ingest/export) are kept for the first static UI.
