@@ -35,6 +35,24 @@ The following screens are currently product-surface prototypes and still contain
 
 This distinction is intentional. The repository demonstrates the core validation and review vertical slice while the broader operations workspace is being integrated.
 
+## Implemented Phase 1 workflow
+
+The connected workflow is now:
+
+```text
+Ingest -> persist latest batch -> list claims -> open claim -> explain finding -> record review -> audit
+```
+
+Ingestion responses are stored in a process-local read model keyed by a request fingerprint. `GET /api/v1/claims` returns the latest accepted batch and `GET /api/v1/claims/{claim_id}` returns the claim plus its deterministic evaluation. The Claims and Claim Review screens use these routes first and fall back to the development fixture only when the API has no ingested batch, so a newly imported claim remains available to the rest of the workflow. The store is intentionally in memory for this phase: restarting the backend clears it, so it is suitable for a local demo rather than production persistence.
+
+Identical JSONL, CSV, or FHIR uploads are idempotent for the lifetime of the process. The fingerprint is checked before evaluation, which prevents a repeated upload from creating another set of rule-execution audit events. A batch ID is returned with every successful import.
+
+FHIR authorization registry fields are carried in the namespaced ClaimGuard extension `https://claimguard.example/StructureDefinition/authorization-details`. Older or external bundles without that extension remain lossy. The Ingest screen therefore shows a warning that R009 may be `UNABLE_TO_ASSESS` when authorization details are absent.
+
+Audit writes verify the existing chain once when the application starts, then keep the last index and hash in memory while appending. Full verification is reserved for `GET /api/v1/audit/verify`; ordinary event listing no longer re-reads and verifies the complete history on every request. AI audit events include the finding hash, explanation text, provider, fallback status, and assessment. Review reasons remain represented by a hash in the audit chain and are not treated as an authenticated identity or durable feedback store yet.
+
+The login is still a browser-only demo, but review requests now send the signed-in demo email as `X-Actor` and the backend uses that header for the human-decision audit actor. It is not authentication, authorization, or an identity provider.
+
 ## Architecture
 
 ```text
@@ -214,6 +232,8 @@ corepack pnpm preview
 8. Use Verify chain and confirm the audit chain is valid.
 9. Test ingestion through the Ingest Data screen or the examples in [backend/API_TESTING.md](backend/API_TESTING.md).
 
+For an ingestion smoke test, upload a JSONL, CSV pack, or FHIR bundle, select **Start processing**, choose **View claims**, and open one of the imported claim IDs. The review page should show the same claim and rule results returned by the ingestion response. Repeating the exact upload should keep the audit event count unchanged because the import is idempotent in the running backend process.
+
 ## Backend API
 
 The versioned API is rooted at `/api/v1`.
@@ -222,6 +242,8 @@ The versioned API is rooted at `/api/v1`.
 | --- | --- | --- |
 | `GET` | `/api/v1/health` | Service health and version |
 | `GET` | `/api/v1/datasets/{split}` | Synthetic dataset and evaluations |
+| `GET` | `/api/v1/claims` | Latest persisted ingested batch and evaluations |
+| `GET` | `/api/v1/claims/{claim_id}` | One claim and its evaluation from the latest batch |
 | `POST` | `/api/v1/claims/evaluate` | Evaluate one normalized claim |
 | `POST` | `/api/v1/claims/evaluate/batch` | Evaluate up to 100 claims |
 | `POST` | `/api/v1/ingest/jsonl` | Import JSON, arrays, or JSONL |

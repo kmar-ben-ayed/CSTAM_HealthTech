@@ -34,6 +34,16 @@ def get_dataset(split: str, request: Request, limit: int | None = Query(default=
     return _service(request, "dataset_service").get_dataset(split, limit)
 
 
+@v1_router.get("/claims", tags=["claims"])
+def get_ingested_claims(request: Request, limit: int | None = Query(default=None, ge=1, le=500)):
+    return _service(request, "ingestion_service").store.latest(limit)
+
+
+@v1_router.get("/claims/{claim_id}", tags=["claims"])
+def get_ingested_claim(claim_id: str, request: Request):
+    return _service(request, "ingestion_service").store.claim(claim_id)
+
+
 @v1_router.post("/claims/evaluate", tags=["claims"])
 def evaluate_claim(payload: ClaimRequest, request: Request):
     return _service(request, "claim_service").evaluate(payload.claim)
@@ -79,7 +89,11 @@ def explain(payload: ExplanationRequest, request: Request):
 
 @v1_router.post("/reviews", status_code=201, tags=["reviews"])
 def record_review(payload: ReviewDecisionRequest, request: Request):
-    return _service(request, "audit_service").record_review(payload.model_dump(mode="json"))
+    decision = payload.model_dump(mode="json")
+    actor = request.headers.get("X-Actor")
+    if actor:
+        decision["actor"] = actor
+    return _service(request, "audit_service").record_review(decision)
 
 
 @v1_router.get("/audit/events", tags=["audit"])

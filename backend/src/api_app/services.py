@@ -1,6 +1,8 @@
 import hashlib
 import json
 import os
+import threading
+from copy import deepcopy
 from json import JSONDecoder, JSONDecodeError
 from pathlib import Path
 from typing import Any
@@ -44,6 +46,52 @@ class ApiProblem(Exception):
         self.code = code
         self.message = message
         super().__init__(message)
+
+
+class IngestionStore:
+    """Process-local read model for the most recent imported batch."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._latest: dict[str, Any] | None = None
+        self._by_fingerprint: dict[str, dict[str, Any]] = {}
+
+    def get_cached(self, fingerprint: str) -> dict[str, Any] | None:
+        with self._lock:
+            result = self._by_fingerprint.get(fingerprint)
+            return deepcopy(result) if result else None
+
+    def save(self, fingerprint: str, response: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            stored = deepcopy(response)
+            stored["batch_id"] = uuid4().hex
+            self._by_fingerprint[fingerprint] = stored
+            self._latest = stored
+            return deepcopy(stored)
+
+    def latest(self, limit: int | None = None) -> dict[str, Any]:
+        with self._lock:
+            if self._latest is None:
+                raise ApiProblem(404, "claims_not_found", "No ingested claims are available")
+            result = deepcopy(self._latest)
+        if limit is not None:
+            result["claims"] = result["claims"][:limit]
+            result["evaluations"] = {
+                claim["claim_id"]: result["evaluations"][claim["claim_id"]]
+                for claim in result["claims"]
+            }
+        return result
+
+    def claim(self, claim_id: str) -> dict[str, Any]:
+        result = self.latest()
+        for claim in result["claims"]:
+            if claim.get("claim_id") == claim_id:
+                return {
+                    "batch_id": result["batch_id"],
+                    "claim": claim,
+                    "evaluation": result["evaluations"].get(claim_id, []),
+                }
+        raise ApiProblem(404, "claim_not_found", "Claim not found in the latest ingested batch")
 
 
 def load_claim_file(path: Path) -> list[dict[str, Any]]:
@@ -182,9 +230,16 @@ def _decode_records(text: str) -> tuple[list[Any], list[dict[str, Any]]]:
 
 
 class IngestionService:
-    def __init__(self, claims_service: ClaimService, backend_root: Path = BACKEND_ROOT):
+    def __init__(self, claims_service: ClaimService, backend_root: Path = BACKEND_ROOT, store: IngestionStore | None = None):
         self.claims_service = claims_service
         self.backend_root = Path(backend_root)
+        self.store = store or IngestionStore()
+
+    def _cached_or_store(self, fingerprint: str, build_response):
+        cached = self.store.get_cached(fingerprint)
+        if cached is not None:
+            return cached
+        return self.store.save(fingerprint, build_response())
 
     def _evaluate_imports(
         self,
@@ -218,11 +273,19 @@ class IngestionService:
         return accepted, results, rejected
 
     def ingest_jsonl(self, text: str) -> dict[str, Any]:
+        fingerprint = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        return self._cached_or_store(f"jsonl:{fingerprint}", lambda: self._ingest_jsonl(text))
+
+    def _ingest_jsonl(self, text: str) -> dict[str, Any]:
         records, rejected = _decode_records(text)
         claims, evaluations, rejected = self._evaluate_imports(records, rejected)
         return {"claims": claims, "evaluations": evaluations, "rejected": rejected}
 
     def ingest_csv(self, files: dict[str, str]) -> dict[str, Any]:
+        fingerprint = hashlib.sha256(json.dumps(files, sort_keys=True).encode("utf-8")).hexdigest()
+        return self._cached_or_store(f"csv:{fingerprint}", lambda: self._ingest_csv(files))
+
+    def _ingest_csv(self, files: dict[str, str]) -> dict[str, Any]:
         try:
             claims = convert_files(files)
         except (ValueError, KeyError, TypeError) as error:
@@ -242,6 +305,12 @@ class IngestionService:
                 "parse_errors": parse_errors}
 
     def ingest_fhir(self, text: str, sidecar_split: str | None = None) -> dict[str, Any]:
+        fingerprint = hashlib.sha256(f"{sidecar_split or ''}:{text}".encode("utf-8")).hexdigest()
+        return self._cached_or_store(
+            f"fhir:{fingerprint}", lambda: self._ingest_fhir(text, sidecar_split)
+        )
+
+    def _ingest_fhir(self, text: str, sidecar_split: str | None = None) -> dict[str, Any]:
         bundles, parse_errors = parse_bundles_text(text)
         sidecars = {}
         if sidecar_split:
@@ -298,6 +367,7 @@ class IngestionService:
             "evaluations": evaluations,
             "fhir_findings": [item for item in findings_by_claim if item["claim_id"] in accepted_ids],
             "rejected": rejected,
+            "authorization_warning": None if sidecar_split else "FHIR authorization registry details are carried in the bundle extension when present; without them, R009 may be UNABLE_TO_ASSESS.",
         }
 
     def export_fhir(self, claim: dict[str, Any]) -> dict[str, Any]:
@@ -348,7 +418,8 @@ class ExplanationService:
         quality = assess(finding, explanation, source)
         try:
             self.audit_logger.log_ai_decision(
-                claim["claim_id"], rule_id, provider_label, finding_hash, fallback_used, assessment=quality
+                claim["claim_id"], rule_id, provider_label, finding_hash, fallback_used,
+                explanation=explanation.get("explanation"), assessment=quality
             )
         except AuditWriteError as error:
             raise ApiProblem(503, "audit_unavailable", "Could not safely record the explanation") from error
@@ -379,13 +450,9 @@ class AuditService:
             entries = self.store.all_entries()
         except (OSError, ValueError, TypeError, KeyError) as error:
             raise ApiProblem(503, "audit_integrity_error", "Audit history could not be read") from error
-        valid, broken_index = verify_chain(entries)
-        if not valid:
-            raise ApiProblem(503, "audit_integrity_error", f"Audit history is invalid at index {broken_index}")
-
         allowed_fields = {
             "rule_execution": ("evaluation_id", "rule_id", "rule_version", "status", "severity", "requires_human_review", "confidence", "confidence_kind", "method"),
-            "ai_decision": ("rule_id", "provider", "fallback_used"),
+            "ai_decision": ("rule_id", "provider", "fallback_used", "finding_hash", "explanation", "assessment"),
             "human_decision": ("rule_id", "action", "original_status", "decision_timestamp"),
         }
         recent = []

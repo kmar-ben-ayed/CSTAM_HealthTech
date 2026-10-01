@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Sentinel from '../components/Sentinel';
 import type { SentinelState } from '../components/Sentinel';
-import { evaluationToReviewRules, getDataset, getExplanation, postReview, type BackendClaim, type ExplanationAssessment, type ReviewAction } from '../api/claims';
+import { evaluationToReviewRules, getDataset, getExplanation, getIngestedClaim, postReview, type BackendClaim, type ExplanationAssessment, type ReviewAction } from '../api/claims';
 
 interface ClaimReviewProps {
   claimId: string;
@@ -124,12 +124,21 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
     const controller = new AbortController();
     setLoading(true);
     setLoadError(null);
-    getDataset('development', 500, controller.signal)
-      .then((dataset) => {
-        const selectedClaim = dataset.claims.find((item) => item.claim_id === claimId);
-        const result = evaluationToReviewRules(dataset.evaluations[claimId]);
+    getIngestedClaim(claimId, controller.signal)
+      .catch((cause: unknown) => {
+        if (cause instanceof Error && 'status' in cause && (cause as { status?: number }).status === 404) {
+          return getDataset('development', 500, controller.signal).then((dataset) => ({
+            claim: dataset.claims.find((item) => item.claim_id === claimId),
+            evaluation: dataset.evaluations[claimId] || [],
+          }));
+        }
+        throw cause;
+      })
+      .then((stored) => {
+        const selectedClaim = stored.claim;
+        const result = evaluationToReviewRules(stored.evaluation);
         if (!selectedClaim || !result.length) {
-          setLoadError('This claim was not found in the development dataset.');
+          setLoadError('This claim was not found in the latest ingested batch or development dataset.');
           setLoading(false);
           return;
         }

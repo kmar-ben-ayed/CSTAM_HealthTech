@@ -13,7 +13,7 @@ import paths
 
 from src.rule_engine.engine_core import baseline, config, load_jsonl
 from src.normalisation.fhir_adapter import (FhirError, bundle_to_claim, check_bundle, claim_and_findings,
-                          claim_to_bundle, merge_sidecar, parse_bundles_text)
+                          claim_to_bundle, merge_sidecar, parse_bundles_text, EXT_AUTH_DETAILS)
 
 SPLITS = ("development", "validation", "stress")
 
@@ -33,7 +33,21 @@ class RoundTripTests(unittest.TestCase):
         for split in SPLITS:
             claims, bundles = load(split)
             for claim, bundle in zip(claims, bundles):
-                self.assertEqual(claim_to_bundle(claim), bundle, claim["claim_id"])
+                exported = claim_to_bundle(claim)
+                claim_resource = next(entry["resource"] for entry in exported["entry"] if entry["resource"]["resourceType"] == "Claim")
+                claim_resource["extension"] = [
+                    extension for extension in claim_resource.get("extension", [])
+                    if extension.get("url") != EXT_AUTH_DETAILS
+                ]
+                if not claim_resource["extension"]:
+                    claim_resource.pop("extension")
+                self.assertEqual(exported, bundle, claim["claim_id"])
+
+    def test_authorization_details_round_trip_through_fhir_extension(self):
+        claims, _ = load("development")
+        claim = next(claim for claim in claims if claim.get("authorizations"))
+        imported = bundle_to_claim(claim_to_bundle(claim))
+        self.assertEqual(imported["authorizations"], claim["authorizations"])
 
     def test_import_with_sidecar_restores_normalized_claim(self):
         for split in SPLITS:

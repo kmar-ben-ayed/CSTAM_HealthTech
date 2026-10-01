@@ -48,6 +48,17 @@ export interface DatasetResponse {
   evaluations: Record<string, RuleResult[]>;
 }
 
+export interface IngestedClaimsResponse extends DatasetResponse {
+  batch_id: string;
+  authorization_warning?: string | null;
+}
+
+export interface IngestedClaimResponse {
+  batch_id: string;
+  claim: BackendClaim;
+  evaluation: RuleResult[];
+}
+
 export interface ExplanationAssessment {
   confidence: number | null;
   confidence_kind: 'not_probabilistic' | 'uncalibrated' | 'calibrated';
@@ -106,6 +117,14 @@ export async function getDataset(split = 'development', limit = 500, signal?: Ab
   return apiFetch<DatasetResponse>(`/api/v1/datasets/${split}?limit=${limit}`, { signal });
 }
 
+export async function getIngestedClaims(limit = 500, signal?: AbortSignal): Promise<IngestedClaimsResponse> {
+  return apiFetch<IngestedClaimsResponse>(`/api/v1/claims?limit=${limit}`, { signal });
+}
+
+export async function getIngestedClaim(claimId: string, signal?: AbortSignal): Promise<IngestedClaimResponse> {
+  return apiFetch<IngestedClaimResponse>(`/api/v1/claims/${encodeURIComponent(claimId)}`, { signal });
+}
+
 export async function getExplanation(
   claim: BackendClaim,
   ruleId: string,
@@ -133,11 +152,14 @@ export async function postReview(
       claim_id: claimId,
       rule_id: ruleId,
       action,
-      actor: 'Aya Gaha',
+      actor: sessionStorage.getItem('claimguard-demo-actor') || 'unknown-reviewer',
       reason,
       created_at: new Date().toISOString(),
       original_status: originalStatus,
     }),
+    headers: {
+      'X-Actor': sessionStorage.getItem('claimguard-demo-actor') || 'unknown-reviewer',
+    },
     signal,
   });
 }

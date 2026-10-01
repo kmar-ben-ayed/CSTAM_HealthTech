@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Sentinel from '../components/Sentinel';
 import type { SentinelState } from '../components/Sentinel';
 import { ApiError } from '../api/client';
-import { datasetToClaimRows, getDataset, type ClaimRow } from '../api/claims';
+import { datasetToClaimRows, getDataset, getIngestedClaims, type ClaimRow } from '../api/claims';
 
 interface ClaimsProps {
   onNavigate: (page: string, claimId?: string) => void;
@@ -37,7 +37,11 @@ export default function Claims({ onNavigate }: ClaimsProps) {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    getDataset('development', 500, controller.signal)
+    getIngestedClaims(500, controller.signal)
+      .catch((cause: unknown) => {
+        if (cause instanceof ApiError && cause.status === 404) return getDataset('development', 500, controller.signal);
+        throw cause;
+      })
       .then((dataset) => {
         setClaims(datasetToClaimRows(dataset));
         setLoading(false);

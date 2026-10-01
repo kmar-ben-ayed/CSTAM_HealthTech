@@ -251,6 +251,11 @@ export default function Ingest({ onNavigate }: IngestProps) {
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '1.125rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 6 }}>Ingestion complete</div>
               <div style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: 20 }}>{acceptedCount} claims processed · Backend evaluation complete</div>
+              {ingestionResult?.authorization_warning && (
+                <div style={{ background: '#fff8e6', border: '1px solid #ead39a', borderRadius: 7, padding: '10px 12px', marginBottom: 16, color: '#765b12', fontSize: '0.8125rem' }}>
+                  <strong>FHIR limitation:</strong> {ingestionResult.authorization_warning}
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Accepted claims', value: String(acceptedCount), color: 'var(--accent)' },

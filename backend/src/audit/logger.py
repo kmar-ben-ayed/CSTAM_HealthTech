@@ -20,6 +20,11 @@ class AuditLogger:
     def __init__(self, store: AuditStore):
         self.store = store
         self._lock = threading.Lock()
+        entries = self.store.all_entries()
+        valid, broken_index = verify_chain(entries)
+        if not valid:
+            raise AuditIntegrityError(f"Existing audit chain is invalid at index {broken_index}")
+        self._last_entry = entries[-1] if entries else None
 
     def log(self, event_type: str, claim_id: str, actor: str, payload: dict[str, Any]) -> AuditEntry:
         return self.log_batch([(event_type, claim_id, actor, payload)])[0]
@@ -31,15 +36,7 @@ class AuditLogger:
         if not events:
             return []
         with self._lock:
-            try:
-                existing_entries = self.store.all_entries()
-            except (OSError, ValueError, TypeError, KeyError) as exc:
-                raise AuditWriteError("Could not read the existing audit log") from exc
-            valid, broken_index = verify_chain(existing_entries)
-            if not valid:
-                raise AuditIntegrityError(f"Existing audit chain is invalid at index {broken_index}")
-
-            previous = existing_entries[-1] if existing_entries else None
+            previous = self._last_entry
             new_entries = []
             for event_type, claim_id, actor, payload in events:
                 entry = AuditEntry(
@@ -60,6 +57,7 @@ class AuditLogger:
                 self.store.append_many(new_entries)
             except OSError as exc:
                 raise AuditWriteError("Could not persist audit events") from exc
+            self._last_entry = new_entries[-1]
             return new_entries
 
     def log_rule_executions(
@@ -127,12 +125,15 @@ class AuditLogger:
         provider: str,
         finding_hash: str,
         fallback_used: bool,
+        explanation: str | None = None,
         assessment=None
     ) -> AuditEntry:
         payload = {
         "rule_id": rule_id, "provider": provider,
         "finding_hash": finding_hash, "fallback_used": fallback_used,
         }
+        if explanation is not None:
+            payload["explanation"] = explanation
         if assessment:
             payload["assessment"] = {
                 k: assessment.get(k) for k in

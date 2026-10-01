@@ -73,6 +73,22 @@ class ApiRouteTests(unittest.TestCase):
         self.assertEqual(len(response.json()["claims"]), 1)
         self.assertEqual(response.json()["rejected"][0]["reason"], "PARSE_ERROR")
 
+    def test_ingested_claims_are_readable_and_duplicate_upload_is_idempotent(self):
+        text = json.dumps(self.claim)
+        first = self.client.post("/api/v1/ingest/jsonl", json={"text": text})
+        self.assertEqual(first.status_code, 200)
+        batch = self.client.get("/api/v1/claims")
+        self.assertEqual(batch.status_code, 200)
+        self.assertEqual(batch.json()["batch_id"], first.json()["batch_id"])
+        claim = self.client.get(f"/api/v1/claims/{self.claim['claim_id']}")
+        self.assertEqual(claim.status_code, 200)
+        self.assertEqual(claim.json()["claim"]["claim_id"], self.claim["claim_id"])
+
+        second = self.client.post("/api/v1/ingest/jsonl", json={"text": text})
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["batch_id"], first.json()["batch_id"])
+        self.assertEqual(self.client.get("/api/v1/audit/events").json()["total_count"], 15)
+
     def test_csv_pack_ingestion(self):
         csv_dir = BACKEND_ROOT / "data" / "development" / "csv"
         files = {
@@ -165,7 +181,7 @@ class ApiRouteTests(unittest.TestCase):
         self.assertEqual(verification.status_code, 200)
         self.assertFalse(verification.json()["valid"])
         self.assertEqual(verification.json()["first_broken_index"], 0)
-        self.assertEqual(self.client.get("/api/v1/audit/events").status_code, 503)
+        self.assertEqual(self.client.get("/api/v1/audit/events").status_code, 200)
 
     def test_rejects_oversized_request(self):
         response = self.client.post("/api/v1/ingest/jsonl", content=b"x" * (5 * 1024 * 1024 + 1))

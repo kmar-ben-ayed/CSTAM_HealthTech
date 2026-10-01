@@ -4,7 +4,7 @@ import Sentinel from '../components/Sentinel';
 type LoginState = 'idle' | 'loading' | 'error' | 'forgot' | 'forgot-loading';
 
 interface LoginProps {
-  onLogin: () => void;
+  onLogin: (email: string) => void;
 }
 
 export default function Login({ onLogin }: LoginProps) {
@@ -23,7 +23,7 @@ export default function Login({ onLogin }: LoginProps) {
       if (password === 'wrong') {
         setLoginState('error');
       } else {
-        onLogin();
+        onLogin(email);
       }
     }, 1200);
   };

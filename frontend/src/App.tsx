@@ -1030,7 +1030,7 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
 
 function pagePath(page: string, claimId?: string): string {
   if (page === 'claim-review') {
-    return `/app/claims/${encodeURIComponent(claimId || 'CLM-10482')}`;
+    return claimId ? `/app/claims/${encodeURIComponent(claimId)}` : '/app/claims';
   }
   if (page === 'landing') return '/';
   return PAGE_PATHS[page as Page] || '/app/dashboard';
@@ -1044,7 +1044,10 @@ function pageFromPath(pathname: string): Page {
 
 function ClaimReviewRoute({ onNavigate }: { onNavigate: (page: string, claimId?: string) => void }) {
   const { claimId } = useParams();
-  return <ClaimReview claimId={claimId || 'CLM-10482'} onNavigate={(page) => onNavigate(page)} />;
+  if (!claimId || claimId.startsWith('CLM-')) {
+    return <Claims onNavigate={onNavigate} />;
+  }
+  return <ClaimReview claimId={claimId} onNavigate={(page) => onNavigate(page)} />;
 }
 
 function WorkspaceLayout({
@@ -1133,8 +1136,9 @@ function AppRoutes() {
   const navigatePage = (page: string, claimId?: string) => navigate(pagePath(page, claimId));
   const requestedPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
 
-  const handleLogin = () => {
+  const handleLogin = (email: string) => {
     sessionStorage.setItem('claimguard-demo-authenticated', 'true');
+    sessionStorage.setItem('claimguard-demo-actor', email);
     setIsAuthenticated(true);
     navigate(requestedPath || '/app/dashboard', { replace: true });
   };

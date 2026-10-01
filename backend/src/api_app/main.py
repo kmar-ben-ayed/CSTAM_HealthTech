@@ -18,6 +18,7 @@ from api_app.services import (
     ClaimService,
     DatasetService,
     ExplanationService,
+    IngestionStore,
     IngestionService,
 )
 from audit.logger import AuditLogger
@@ -104,7 +105,7 @@ def create_app(
         app.state.audit_service = AuditService(resolved_audit_path, audit_logger)
         app.state.claim_service = claim_service
         app.state.dataset_service = DatasetService(claim_service, backend_root)
-        app.state.ingestion_service = IngestionService(claim_service, backend_root)
+        app.state.ingestion_service = IngestionService(claim_service, backend_root, IngestionStore())
         app.state.explanation_service = ExplanationService(rules_config, claim_service, audit_logger)
         yield
 
@@ -122,7 +123,7 @@ def create_app(
         ).split(",")
         if origin.strip()
     ]
-    app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "X-Request-ID"])
+    app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-Actor"])
     app.add_middleware(MaxBodySizeMiddleware, max_bytes=MAX_REQUEST_BODY_BYTES)
 
     @app.exception_handler(ApiProblem)

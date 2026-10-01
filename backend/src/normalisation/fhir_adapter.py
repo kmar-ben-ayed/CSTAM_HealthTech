@@ -22,6 +22,7 @@ BASE = "https://claimguard.example/fhir"
 CODES = "https://claimguard.example/codes"
 IDS = "https://claimguard.example/ids"
 EXT_LINE_AUTH = "https://claimguard.example/StructureDefinition/line-authorization-id"
+EXT_AUTH_DETAILS = "https://claimguard.example/StructureDefinition/authorization-details"
 SYS_SERVICE = f"{CODES}/services"
 SYS_MODIFIER = f"{CODES}/modifiers"
 SYS_DIAGNOSIS = f"{CODES}/diagnoses"
@@ -148,6 +149,11 @@ def claim_to_bundle(claim):
     if claim.get("diagnosis_code"):
         fhir_claim["diagnosis"] = [{"sequence": 1, "diagnosisCodeableConcept":
                                     _coding(SYS_DIAGNOSIS, claim["diagnosis_code"])}]
+    if claim.get("authorizations"):
+        fhir_claim.setdefault("extension", []).append({
+            "url": EXT_AUTH_DETAILS,
+            "valueString": json.dumps(claim["authorizations"], sort_keys=True, separators=(",", ":")),
+        })
 
     docs = []
     for a in claim.get("attachments", []):
@@ -399,12 +405,27 @@ def claim_and_findings(bundle, sidecar=None):
             "text": _decode_text(doc),
         })
 
-    # Authorization details are not carried by FHIR in this pack. we keep only the ids.
+    authorization_extension = next(
+        (extension.get("valueString") for extension in c.get("extension", [])
+         if extension.get("url") == EXT_AUTH_DETAILS),
+        None,
+    )
+    try:
+        authorizations = json.loads(authorization_extension) if authorization_extension else []
+        if not isinstance(authorizations, list) or not all(isinstance(item, dict) for item in authorizations):
+            authorizations = []
+    except (TypeError, json.JSONDecodeError):
+        authorizations = []
+
     auth_ids = list(dict.fromkeys(ins.get("preAuthRef") or []))
     auth_ids += [l["authorization_id"] for l in lines
                  if l["authorization_id"] and l["authorization_id"] not in auth_ids]
-    authorizations = [{"authorization_id": a, "patient_id": None, "service_code": None, "status": None,
-                       "valid_from": None, "valid_to": None, "max_quantity": None} for a in auth_ids]
+    existing_ids = {a.get("authorization_id") for a in authorizations}
+    authorizations.extend(
+        {"authorization_id": a, "patient_id": None, "service_code": None, "status": None,
+         "valid_from": None, "valid_to": None, "max_quantity": None}
+        for a in auth_ids if a not in existing_ids
+    )
 
     claim = {
         "schema_version": "1.0.0",
@@ -430,7 +451,7 @@ def claim_and_findings(bundle, sidecar=None):
         "lines": lines,
         "authorizations": authorizations,
         "attachments": attachments,
-        "notes": "Imported from FHIR R4 Bundle; authorization details not carried by FHIR.",
+        "notes": "Imported from FHIR R4 Bundle; authorization details are restored from the ClaimGuard extension when present.",
     }
 
     if sidecar:

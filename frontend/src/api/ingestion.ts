@@ -8,10 +8,12 @@ export interface RejectedRecord {
 }
 
 export interface IngestionResponse {
+  batch_id: string;
   claims: BackendClaim[];
   evaluations: Record<string, RuleResult[]>;
   rejected: RejectedRecord[];
   fhir_findings?: Array<{ claim_id: string; findings: unknown[] }>;
+  authorization_warning?: string | null;
 }
 
 export function ingestJsonl(text: string, signal?: AbortSignal): Promise<IngestionResponse> {

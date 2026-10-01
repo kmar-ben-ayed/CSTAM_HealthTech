@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { getDataset, getIngestedClaims } from '../api/claims';
 
 interface SearchModalProps {
   open: boolean;
@@ -18,19 +19,6 @@ interface SearchResult {
 }
 
 const ALL_RESULTS: SearchResult[] = [
-  // Claims
-  { id: 'CLM-10471', label: 'CLM-10471', subtitle: 'Greenfield Mental Health · $3,780.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10471' },
-  { id: 'CLM-10472', label: 'CLM-10472', subtitle: 'Beacon Recovery Services · $5,200.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10472' },
-  { id: 'CLM-10473', label: 'CLM-10473', subtitle: 'Horizon Counseling Group · $980.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10473' },
-  { id: 'CLM-10474', label: 'CLM-10474', subtitle: 'Cedar Ridge Outpatient · $1,640.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10474' },
-  { id: 'CLM-10475', label: 'CLM-10475', subtitle: 'Clearwater Psychology · $4,100.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10475' },
-  { id: 'CLM-10476', label: 'CLM-10476', subtitle: 'Pacific Wellness Partners · $2,310.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10476' },
-  { id: 'CLM-10477', label: 'CLM-10477', subtitle: 'Lakeside Counseling Center · $1,290.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10477' },
-  { id: 'CLM-10478', label: 'CLM-10478', subtitle: 'Sunrise Therapy Associates · $3,100.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10478' },
-  { id: 'CLM-10479', label: 'CLM-10479', subtitle: 'Summit Psychiatry Clinic · $2,875.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10479' },
-  { id: 'CLM-10480', label: 'CLM-10480', subtitle: 'Valley Behavioral Sciences · $2,050.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10480' },
-  { id: 'CLM-10481', label: 'CLM-10481', subtitle: 'Redwood Behavioral Health · $1,800.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10481' },
-  { id: 'CLM-10482', label: 'CLM-10482', subtitle: 'Northside Behavioral Health · $3,420.00', category: 'Claims', page: 'claim-review', navId: 'CLM-10482' },
   // Rules
   { id: 'R001', label: 'R001 — Enrollment Verification', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
   { id: 'R002', label: 'R002 — Coverage Window', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
@@ -94,6 +82,7 @@ const CATEGORY_COLOR: Record<ResultCategory, string> = {
 export default function SearchModal({ open, onClose, onNavigate }: SearchModalProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
+  const [claimResults, setClaimResults] = useState<SearchResult[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -102,12 +91,33 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
       setQuery('');
       setSelected(0);
       setTimeout(() => inputRef.current?.focus(), 50);
+      const controller = new AbortController();
+      getIngestedClaims(500, controller.signal)
+        .catch((error: unknown) => {
+          if (error instanceof Error && 'status' in error && (error as { status?: number }).status === 404) {
+            return getDataset('development', 500, controller.signal);
+          }
+          throw error;
+        })
+        .then((dataset) => {
+          setClaimResults(dataset.claims.map((claim) => ({
+            id: claim.claim_id,
+            label: claim.claim_id,
+            subtitle: `${claim.provider_id || 'Unknown provider'} · ${claim.currency || ''} ${claim.total_amount ?? 'amount unavailable'}`,
+            category: 'Claims',
+            page: 'claim-review',
+            navId: claim.claim_id,
+          })));
+        })
+        .catch(() => setClaimResults([]));
+      return () => controller.abort();
     }
   }, [open]);
 
+  const searchableResults = [...claimResults, ...ALL_RESULTS];
   const results = query.trim().length < 1
     ? []
-    : ALL_RESULTS.filter((r) => {
+    : searchableResults.filter((r) => {
         const q = query.toLowerCase();
         return (
           r.id.toLowerCase().includes(q) ||
