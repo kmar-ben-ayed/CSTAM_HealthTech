@@ -1,9 +1,5 @@
-/**
- * these are the FHIR client helpers.
- * All mapping logic lives in the backend (backend/src/fhir_adapter.py), this file only
- * talks to /api/fhir/* and never invents missing values.
- */
-export const API_BASE = 'http://127.0.0.1:8000';
+import { API_BASE } from './api.js';
+export { API_BASE };
 
 /** True when the text looks like FHIR (Bundle or bare Claim), in JSON, array or JSONL form. */
 export function looksLikeFhir(text) {

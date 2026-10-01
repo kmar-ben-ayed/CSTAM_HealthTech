@@ -115,6 +115,9 @@ class ClaimService:
                         "status": result["status"],
                         "severity": result["severity"],
                         "requires_human_review": result["requires_human_review"],
+                        "confidence": result.get("confidence"),
+                        "confidence_kind": result.get("confidence_kind"),
+                        "method": result.get("method"),
                     }
                     events.append(("rule_execution", evaluation["claim_id"], "system", payload))
             try:
@@ -228,10 +231,14 @@ class IngestionService:
 
     def validate_fhir(self, text: str) -> dict[str, Any]:
         bundles, parse_errors = parse_bundles_text(text)
-        return {
-            "results": [{"index": index, "findings": check_bundle(bundle)} for index, bundle in enumerate(bundles)],
-            "parse_errors": parse_errors,
-        }
+        def safe(bundle):
+            try:
+                return check_bundle(bundle)
+            except Exception:
+                return [{"severity": "error", "code": "FHIR_MALFORMED",
+                         "message": "Bundle structure could not be processed.", "path": ""}]
+        return {"results": [{"index": i, "findings": safe(b)} for i, b in enumerate(bundles)],
+                "parse_errors": parse_errors}
 
     def ingest_fhir(self, text: str, sidecar_split: str | None = None) -> dict[str, Any]:
         bundles, parse_errors = parse_bundles_text(text)
@@ -262,6 +269,11 @@ class IngestionService:
                     "reason": "ENVELOPE_INVALID",
                     "findings": [{"severity": "error", "code": error.code, "message": error.message, "path": ""}],
                 })
+                continue
+            except Exception:  # malformed structure rejects this bundle, not the whole upload
+                rejected.append({"index": index, "reason": "FHIR_MALFORMED", "findings": [{
+                    "severity": "error", "code": "FHIR_MALFORMED",
+                    "message": "Bundle structure could not be processed.", "path": ""}]})
                 continue
             claims.append(claim)
             findings_by_claim.append({"claim_id": claim["claim_id"], "findings": findings})
@@ -317,18 +329,21 @@ class ExplanationService:
             provider_label = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 
         fallback_used = False
+        source = "skipped" if finding["status"] not in {"FAIL", "UNABLE_TO_ASSESS"} else "llm"
         try:
             explanation = validate_explanation(provider.explain(finding, rule), finding)
         except Exception:
             explanation = deterministic_fallback(finding)
             fallback_used = True
+            source = "fallback"
 
         finding_hash = hashlib.sha256(
             json.dumps(finding, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         ).hexdigest()
+        quality = assess(finding, explanation, source)
         try:
             self.audit_logger.log_ai_decision(
-                claim["claim_id"], rule_id, provider_label, finding_hash, fallback_used
+                claim["claim_id"], rule_id, provider_label, finding_hash, fallback_used, assessment=quality
             )
         except AuditWriteError as error:
             raise ApiProblem(503, "audit_unavailable", "Could not safely record the explanation") from error
@@ -364,7 +379,7 @@ class AuditService:
             raise ApiProblem(503, "audit_integrity_error", f"Audit history is invalid at index {broken_index}")
 
         allowed_fields = {
-            "rule_execution": ("evaluation_id", "rule_id", "rule_version", "status", "severity", "requires_human_review"),
+            "rule_execution": ("evaluation_id", "rule_id", "rule_version", "status", "severity", "requires_human_review", "confidence", "confidence_kind", "method"),
             "ai_decision": ("rule_id", "provider", "fallback_used"),
             "human_decision": ("rule_id", "action", "original_status", "decision_timestamp"),
         }
@@ -381,6 +396,6 @@ class AuditService:
                 "claim_id": entry.claim_id,
                 "actor": entry.actor,
                 "payload": payload,
-                "entry_hash": entry.entry_hash,
+                "entry_hash": entry.entry_hash,  
             })
         return {"total_count": len(entries), "events": recent}

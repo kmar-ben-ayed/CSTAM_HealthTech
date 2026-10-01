@@ -9,6 +9,17 @@ import { dataManager } from './data.js';
 import { globalAudit } from './audit.js';
 import { copilotInstance } from './ai_copilot.js';
 import { looksLikeFhir, ingestFhir, exportBundle, summarizeIngest } from './fhir.js';
+import { getDataset, postReview, getAuditEvents, verifyAudit, evaluateClaimRemote } from './api.js';
+
+const REVIEWER_ID = 'OFFICER_REVIEWER';
+const ACTION_MAP = {
+  CONFIRM_DEFECT: 'confirm_issue',
+  DISMISS_FALSE_ALARM: 'dismiss_with_reason',
+  REQUEST_INFORMATION: 'request_information',
+  EDIT_AND_RECHECK: 'mark_corrected_for_recheck',
+};
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 class ClaimGuardApp {
   constructor() {
@@ -41,6 +52,25 @@ class ClaimGuardApp {
     this.renderAuditTimeline();
   }
 
+  async refreshAuditBadges() {
+    const badge = document.getElementById('audit-integrity-badge');
+    const topbar = document.getElementById('topbar-audit-status');
+    try {
+      const res = await verifyAudit();
+      const { total_count } = await getAuditEvents(1);
+      if (res.valid) {
+        if (badge) { badge.className = 'chip chip-pass'; badge.textContent = `✓ Chain verified (${total_count} events, server-side)`; }
+        if (topbar) topbar.textContent = 'SHA-256 Valid';
+      } else {
+        if (badge) { badge.className = 'chip chip-fail'; badge.textContent = `✗ Tampering detected at event #${res.first_broken_index}`; }
+        if (topbar) topbar.textContent = 'Tamper Detected';
+      }
+    } catch (e) {
+      if (badge) { badge.className = 'chip chip-fail'; badge.textContent = `Audit unavailable: ${e.message}`; }
+      if (topbar) topbar.textContent = 'Audit offline';
+    }
+  }
+
   async loadDataset(key) {
     const backendDataset = {
       worked_cases: { split: 'development', limit: 10 },
@@ -51,15 +81,10 @@ class ClaimGuardApp {
 
     try {
       if (!backendDataset) throw new Error(`No backend mapping for ${key}`);
-      const params = backendDataset.limit ? `?limit=${backendDataset.limit}` : '';
-      const response = await fetch(`http://127.0.0.1:8000/api/datasets/${backendDataset.split}${params}`);
-      if (!response.ok) throw new Error(`Backend returned ${response.status}`);
-      const dataset = await response.json();
+      const dataset = await getDataset(backendDataset.split, backendDataset.limit);
       const selectedOption = document.querySelector(`#dataset-selector option[value="${key}"]`);
       if (selectedOption) selectedOption.textContent = dataset.name;
-      dataManager.loadClaims(dataset.claims, dataset.name, dataset.evaluations);
-      globalAudit.logEvent('INGEST_DATASET', { dataset: dataset.name, source: 'backend', count: dataset.claims.length });
-      this.currentPage = 1;
+      dataManager.loadClaims(dataset.claims, dataset.name, dataset.evaluations);      this.currentPage = 1;
       if (dataset.claims.length > 0) this.selectedClaimId = dataset.claims[0].claim_id;
       this.updateAllViews();
       return;
@@ -171,22 +196,10 @@ class ClaimGuardApp {
     // Verify Audit Chain Button
     const verifyAuditBtn = document.getElementById('verify-audit-btn');
     if (verifyAuditBtn) {
-      verifyAuditBtn.addEventListener('click', async () => {
-        const res = await globalAudit.verifyChain();
-        const badge = document.getElementById('audit-integrity-badge');
-        const topbarBadge = document.getElementById('topbar-audit-status');
-        if (badge) {
-          if (res.valid) {
-            badge.className = 'chip chip-pass';
-            badge.textContent = `✓ Chain Cryptographically Verified (${res.totalBlocks} Blocks)`;
-            if (topbarBadge) topbarBadge.textContent = '🛡️ SHA-256 Valid';
-          } else {
-            badge.className = 'chip chip-fail';
-            badge.textContent = `✗ ${res.error}`;
-            if (topbarBadge) topbarBadge.textContent = '⚠️ Tamper Detected';
-          }
-        }
-      });
+      const verifyAuditBtn = document.getElementById('verify-audit-btn');
+      if (verifyAuditBtn) {
+        verifyAuditBtn.addEventListener('click', () => this.refreshAuditBadges());
+      }
     }
 
     // File Upload Handler
@@ -660,17 +673,58 @@ class ClaimGuardApp {
     }
   }
 
+  openFindings(claimId) {
+    return dataManager.getEvaluation(claimId)
+      .filter((r) => r.status === 'FAIL' || r.status === 'UNABLE_TO_ASSESS');
+  }
+
+  /** Posts one review per open finding to the backend hash-chained audit log. */
+  async submitReviews(claimId, uiAction, reason) {
+    const action = ACTION_MAP[uiAction];
+    const findings = this.openFindings(claimId);
+    let recorded = 0;
+    const failures = [];
+
+    for (const f of findings) {            // sequential keeps chain order deterministic
+      try {
+        await postReview({
+          claim_id: claimId,
+          rule_id: f.rule_id,
+          action,
+          actor: REVIEWER_ID,
+          reason,
+          original_status: f.status,
+        });
+        recorded += 1;
+      } catch (e) {
+        failures.push(`${f.rule_id}: ${e.message}`);
+      }
+    }
+
+    if (failures.length) {
+      // Offline or backend error: keep a local record so nothing is silently lost
+      await globalAudit.logEvent(uiAction, { claim_id: claimId, reason, backend_failures: failures }, REVIEWER_ID);
+    }
+    return { total: findings.length, recorded, failures };
+  }
+
   async handleReviewAction(actionType) {
     if (!this.selectedClaimId) return;
     const claim = dataManager.getClaim(this.selectedClaimId);
-    
-    await globalAudit.logEvent(actionType, {
-      claim_id: claim.claim_id,
-      timestamp: new Date().toISOString(),
-      action: actionType
-    }, 'OFFICER_REVIEWER');
 
-    alert(`Action [${actionType}] recorded to cryptographic audit chain.`);
+    if (this.openFindings(claim.claim_id).length === 0) {
+      alert('This claim has no open findings to review.');
+      return;
+    }
+
+    const reason = (window.prompt('Reason for this decision (required):') || '').trim();
+    if (!reason) { alert('A reason is required.'); return; }
+    
+    const res = await this.submitReviews(claim.claim_id, actionType, reason);
+    alert(res.failures.length
+      ? `Recorded ${res.recorded}/${res.total} decisions. Backend unavailable for the rest (kept locally only).`
+      : `Recorded ${res.recorded} decision(s) in the audit chain.`);
+    
     this.renderAuditTimeline();
   }
 
@@ -698,9 +752,13 @@ Claims Review Officer`;
     modal.classList.add('open');
     document.getElementById('close-request-modal').onclick = () => modal.classList.remove('open');
     document.getElementById('send-request-btn').onclick = async () => {
-      await globalAudit.logEvent('REQUEST_INFORMATION', { claim_id: claim.claim_id, note: 'Documentation request dispatched' }, 'OFFICER_REVIEWER');
+      const res = await this.submitReviews(
+        claim.claim_id, 'REQUEST_INFORMATION', 'Documentation request sent to billing department'
+      );
       modal.classList.remove('open');
-      alert('Request dispatched and logged to audit blockchain.');
+      alert(res.failures.length
+        ? 'Request logged locally only (backend audit unavailable).'
+        : `Request logged for ${res.recorded} open finding(s).`);
       this.renderAuditTimeline();
     };
   }
@@ -718,11 +776,29 @@ Claims Review Officer`;
     document.getElementById('save-recheck-btn').onclick = async () => {
       try {
         const updated = JSON.parse(jsonEditor.value);
-        dataManager.updateClaim(claim.claim_id, updated);
-        await globalAudit.logEvent('EDIT_AND_RECHECK', { claim_id: claim.claim_id, updated_version: '2.0' }, 'OFFICER_REVIEWER');
+        const before = this.openFindings(claim.claim_id);   // capture before re-evaluation
+        dataManager.updateClaim(claim.claim_id, updated);   // local engine as fallback
+
+        try {
+          const remote = await evaluateClaimRemote(updated); // authoritative + audited
+          dataManager.evaluations.set(updated.claim_id || claim.claim_id, remote.results);
+        } catch (e) {
+          console.warn('Backend recheck unavailable; using local engine.', e);
+        }
+
+        for (const f of before) {
+          try {
+            await postReview({
+              claim_id: claim.claim_id, rule_id: f.rule_id, action: ACTION_MAP.EDIT_AND_RECHECK,
+              actor: REVIEWER_ID, reason: 'Claim edited by reviewer and re-evaluated',
+              original_status: f.status,
+            });
+          } catch (e) { console.warn('Review not recorded', e); }
+        }
+
         modal.classList.remove('open');
         this.updateAllViews();
-        alert('Claim updated! 15 rules re-evaluated in real time.');
+        alert('Claim updated and all 15 rules re-evaluated.');
       } catch (e) {
         alert('Invalid JSON: ' + e.message);
       }
@@ -850,22 +926,39 @@ Claims Review Officer`;
     });
   }
 
-  renderAuditTimeline() {
+  async renderAuditTimeline() {
     const container = document.getElementById('audit-timeline-container');
     if (!container) return;
 
-    container.innerHTML = '';
-    const entries = globalAudit.getRecentEntries(20);
+    let entries = [];
+    let offline = false;
+    try {
+      const { events } = await getAuditEvents(50);
+      entries = events.map((e) => ({
+        index: e.index, title: e.event_type, time: e.timestamp, actor: e.actor,
+        claim: e.claim_id, data: e.payload, hash: e.entry_hash, prev: e.prev_hash || '',
+      }));
+      this.refreshAuditBadges();
+    } catch (e) {
+      offline = true;
+      entries = globalAudit.getRecentEntries(20).map((b) => ({
+        index: b.index, title: b.action, time: b.timestamp, actor: b.reviewerId || 'SYSTEM',
+        claim: b.payload?.claim_id, data: b.payload, hash: b.hash, prev: b.prevHash,
+      }));
+    }
 
     if (entries.length === 0) {
-      container.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted); font-size:0.85rem; padding:2.5rem;">No audit events yet. Load a dataset to begin.</div>`;
+      container.innerHTML = `<div class="card" style="text-align:center; color:var(--text-muted); font-size:0.85rem; padding:2.5rem;">No audit events yet. Record a review decision to begin.</div>`;
       return;
     }
+
+    container.innerHTML = offline
+      ? `<div class="card" style="font-size:0.78rem; padding:0.75rem;">Backend offline: showing the local, non-persistent chain.</div>`
+      : '';
 
     entries.forEach((b, idx) => {
       const wrapper = document.createElement('div');
       wrapper.className = 'audit-block';
-
       wrapper.innerHTML = `
         <div class="audit-connector">
           <div class="audit-dot"></div>
@@ -873,16 +966,16 @@ Claims Review Officer`;
         </div>
         <div class="audit-body">
           <div class="audit-header">
-            <span class="audit-type">BLOCK #${b.index} &nbsp;·&nbsp; <span style="color:var(--indigo-400);">[${b.action}]</span></span>
-            <span class="audit-time">${b.timestamp}</span>
+            <span class="audit-type">EVENT #${esc(b.index)} &nbsp;·&nbsp; <span style="color:var(--indigo-400);">[${esc(b.title)}]</span></span>
+            <span class="audit-time">${esc(b.time)}</span>
           </div>
           <div style="font-size:0.76rem; color:var(--text-secondary); display:flex; gap:1.25rem; flex-wrap:wrap;">
-            <span>Actor: <strong style="color:var(--text-primary);">${b.reviewerId || 'SYSTEM'}</strong></span>
-            <span>Data: <code style="font-family:var(--font-mono); font-size:0.7rem; color:var(--text-secondary);">${JSON.stringify(b.data || {}).substring(0, 60)}…</code></span>
+            <span>Actor: <strong style="color:var(--text-primary);">${esc(b.actor)}</strong></span>
+            <span>Claim: <strong>${esc(b.claim || '-')}</strong></span>
+            <span>Data: <code style="font-family:var(--font-mono); font-size:0.7rem;">${esc(JSON.stringify(b.data || {}).substring(0, 90))}…</code></span>
           </div>
-          <div class="audit-hash">Prev: ${b.prevHash.substring(0, 32)}…&nbsp;&nbsp;|&nbsp;&nbsp;Hash: <span style="color:var(--pass);">${b.hash.substring(0, 32)}…</span></div>
-        </div>
-      `;
+          <div class="audit-hash">${b.prev ? `Prev: ${esc(b.prev.substring(0, 32))}…&nbsp;&nbsp;|&nbsp;&nbsp;` : ''}Hash: <span style="color:var(--pass);">${esc((b.hash || '').substring(0, 32))}…</span></div>
+        </div>`;
       container.appendChild(wrapper);
     });
   }

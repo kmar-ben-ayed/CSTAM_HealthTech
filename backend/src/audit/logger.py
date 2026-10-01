@@ -127,15 +127,16 @@ class AuditLogger:
         provider: str,
         finding_hash: str,
         fallback_used: bool,
+        assessment=None
     ) -> AuditEntry:
-        return self.log(
-            "ai_decision",
-            claim_id,
-            "ai",
-            {
-                "rule_id": rule_id,
-                "provider": provider,
-                "finding_hash": finding_hash,
-                "fallback_used": fallback_used,
-            },
-        )
+        payload = {
+        "rule_id": rule_id, "provider": provider,
+        "finding_hash": finding_hash, "fallback_used": fallback_used,
+        }
+        if assessment:
+            payload["assessment"] = {
+                k: assessment.get(k) for k in
+                ("explanation_source", "evidence_completeness", "explanation_grounding",
+                "review_priority", "escalate", "escalation_reasons")
+            }
+        return self.log("ai_decision", claim_id, "ai", payload)
