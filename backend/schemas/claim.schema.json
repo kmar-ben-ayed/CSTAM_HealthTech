@@ -239,17 +239,26 @@
             "type": "string"
           },
           "service_code": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "service_date": {
-            "type": "string",
+            "type":[
+              "string",
+              "null"
+            ],
             "format": "date"
           },
           "document_status": {
             "type": "string"
           },
           "text": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [

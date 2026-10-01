@@ -44,11 +44,11 @@ def build_agent():
 
     client = OpenAI(
         api_key=api_key,
-        base_url="https://integrate.api.nvidia.com/v1",
+        base_url=os.environ.get("OPENAI_BASE_URL"),
         timeout=20.0,
         max_retries=0,
     )
-    provider = OpenAIExplanationProvider(client, model_name="meta/llama-3.1-8b-instruct", timeout_seconds=20.0)
+    provider = OpenAIExplanationProvider(client, model_name=os.environ.get("OPENAI_MODEL", "meta/llama-3.1-8b-instruct"), timeout_seconds=20.0)
     return GroundedExplanationAgent(provider)
 
 

@@ -13,27 +13,14 @@ type IngestStep = 'idle' | 'selected' | 'validated' | 'processing' | 'complete';
 type PreviewRow = { id: string; provider: string; service: string; amount: string; dos: string; policy: string };
 type ValidationIssue = { row: number | string; field: string; issue: string; severity: string };
 
+const CSV_PACK_FILES = ['claims.csv', 'lines.csv', 'coverage.csv', 'authorizations.csv', 'attachments.csv'] as const;
+
 const PROCESSING_STEPS = [
   { label: 'Preparing claims', detail: 'Parsing records', done: true },
   { label: 'Normalizing data', detail: 'FHIR R4 mapping', done: true },
   { label: 'Applying validation rules', detail: '15 rules · v1.0.0', done: false },
   { label: 'Creating findings', detail: 'Extracting evidence', done: false },
 ];
-
-const PREVIEW_ROWS = [
-  { id: 'CLM-10490', provider: 'Meridian Health', service: '99213', amount: '$150.00', dos: '2026-09-27', policy: 'EDU-BASIC' },
-  { id: 'CLM-10491', provider: 'Pacific Medical', service: '90686', amount: '$25.00', dos: '2026-09-27', policy: 'EDU-PLUS' },
-  { id: 'CLM-10492', provider: 'Northside Clinic', service: '99214', amount: '$210.00', dos: '2026-09-26', policy: 'EDU-BASIC' },
-  { id: 'CLM-10493', provider: 'Eastern Group', service: '71046', amount: '$340.00', dos: '2026-09-25', policy: 'EDU-PLUS' },
-  { id: 'CLM-10494', provider: 'Metro Health', service: '99203', amount: '$180.00', dos: '2026-09-25', policy: 'EDU-BASIC' },
-];
-
-const VALIDATION_ISSUES = [
-  { row: 7, field: 'authorization.reference', issue: 'Missing required field', severity: 'WARNING' },
-  { row: 9, field: 'member.plan_id', issue: 'Unrecognized plan identifier', severity: 'ERROR' },
-];
-
-const REQUIRED_CSV_FILES = ['claims.csv', 'lines.csv', 'coverage.csv', 'authorizations.csv', 'attachments.csv'];
 
 function toPreviewRow(claim: BackendClaim): PreviewRow {
   const line = claim.lines?.[0];
@@ -50,8 +37,8 @@ function toPreviewRow(claim: BackendClaim): PreviewRow {
   };
 }
 
-function toValidationIssues(rejected: RejectedRecord[]): ValidationIssue[] {
-  return rejected.flatMap((record) => record.findings.length
+function toValidationIssues(rejected: RejectedRecord[], fhirFindings: IngestionResponse['fhir_findings'] = []): ValidationIssue[] {
+  const rejectedIssues = rejected.flatMap((record) => record.findings.length
     ? record.findings.map((finding) => ({
       row: record.index === null ? '—' : record.index + 1,
       field: finding.path || record.reason,
@@ -59,6 +46,16 @@ function toValidationIssues(rejected: RejectedRecord[]): ValidationIssue[] {
       severity: finding.severity?.toUpperCase() || 'ERROR',
     }))
     : [{ row: record.index === null ? '—' : record.index + 1, field: record.reason, issue: record.reason, severity: 'ERROR' }]);
+
+  const structuralIssues = (fhirFindings || []).flatMap((entry) =>
+    (entry.findings as Array<{ severity?: string; code?: string; message?: string; path?: string }>).map((finding) => ({
+      row: entry.claim_id,
+      field: finding.path || finding.code || 'FHIR structure',
+      issue: finding.message || finding.code || 'FHIR structural finding',
+      severity: finding.severity?.toUpperCase() || 'WARNING',
+    })));
+
+  return [...rejectedIssues, ...structuralIssues];
 }
 
 const FORMAT_CARDS = [
@@ -68,9 +65,9 @@ const FORMAT_CARDS = [
     ext: '.csv',
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <rect x="2" y="2" width="18" height="18" rx="3" stroke="#287a5f" strokeWidth="1.4"/>
-        <path d="M2 7h18M7 7v13" stroke="#287a5f" strokeWidth="1.4"/>
-        <path d="M5 11h2M11 11h4M5 14.5h2M11 14.5h4" stroke="#287a5f" strokeWidth="1.2" strokeLinecap="round"/>
+        <rect x="2" y="2" width="18" height="18" rx="3" stroke="#1d5c8a" strokeWidth="1.4"/>
+        <path d="M2 7h18M7 7v13" stroke="#1d5c8a" strokeWidth="1.4"/>
+        <path d="M5 11h2M11 11h4M5 14.5h2M11 14.5h4" stroke="#1d5c8a" strokeWidth="1.2" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -80,9 +77,9 @@ const FORMAT_CARDS = [
     ext: '.json',
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path d="M6 4C4.5 4 4 4.5 4 6v3c0 1-1 2-1 2s1 1 1 2v3c0 1.5.5 2 2 2" stroke="#315e8a" strokeWidth="1.4" strokeLinecap="round"/>
-        <path d="M16 4c1.5 0 2 .5 2 2v3c0 1 1 2 1 2s-1 1-1 2v3c0 1.5-.5 2-2 2" stroke="#315e8a" strokeWidth="1.4" strokeLinecap="round"/>
-        <circle cx="11" cy="11" r="1.5" fill="#315e8a"/>
+        <path d="M6 4C4.5 4 4 4.5 4 6v3c0 1-1 2-1 2s1 1 1 2v3c0 1.5.5 2 2 2" stroke="#1d5c8a" strokeWidth="1.4" strokeLinecap="round"/>
+        <path d="M16 4c1.5 0 2 .5 2 2v3c0 1 1 2 1 2s-1 1-1 2v3c0 1.5-.5 2-2 2" stroke="#1d5c8a" strokeWidth="1.4" strokeLinecap="round"/>
+        <circle cx="11" cy="11" r="1.5" fill="#1d5c8a"/>
       </svg>
     ),
   },
@@ -92,8 +89,8 @@ const FORMAT_CARDS = [
     ext: '.json',
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path d="M11 2l8 4v5c0 4.5-3.5 8-8 9-4.5-1-8-4.5-8-9V6l8-4z" stroke="#10b981" strokeWidth="1.4" strokeLinejoin="round"/>
-        <path d="M8 11l2 2 4-4" stroke="#10b981" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M11 2l8 4v5c0 4.5-3.5 8-8 9-4.5-1-8-4.5-8-9V6l8-4z" stroke="#1f7a5c" strokeWidth="1.4" strokeLinejoin="round"/>
+        <path d="M8 11l2 2 4-4" stroke="#1f7a5c" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -106,9 +103,9 @@ export default function Ingest({ onNavigate }: IngestProps) {
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState('');
   const [fileContent, setFileContent] = useState('');
-  const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
   const [csvFiles, setCsvFiles] = useState<Record<string, string>>({});
-  const [filesLoading, setFilesLoading] = useState(false);
+  const [csvUnrecognized, setCsvUnrecognized] = useState<string[]>([]);
+  const [pasteText, setPasteText] = useState('');
   const [recordCount, setRecordCount] = useState(0);
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [validationIssues, setValidationIssues] = useState<ValidationIssue[]>([]);
@@ -116,74 +113,84 @@ export default function Ingest({ onNavigate }: IngestProps) {
   const [error, setError] = useState<string | null>(null);
   const [processingStep, setProcessingStep] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const addMoreInputRef = useRef<HTMLInputElement>(null);
 
-  const selectFiles = useCallback((files: File[]) => {
-    if (!files.length) return;
-    const filesToRead = selectedFormat === 'upload' ? files : files.slice(0, 1);
-    setSelectedFileNames(filesToRead.map(file => file.name));
-    setFileName(filesToRead.length === 1 ? filesToRead[0].name : `${filesToRead.length} files selected`);
-    setFileSize(`${(filesToRead.reduce((total, file) => total + file.size, 0) / 1024 / 1024).toFixed(2)} MB`);
-    setError(null);
+  const isCsvMode = Object.keys(csvFiles).length > 0;
+  const csvReady = CSV_PACK_FILES.every((name) => csvFiles[name]);
+
+const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
+  const files = fileList ? Array.from(fileList) : [];
+  if (!files.length) return;
+  setError(null);
+
+  const csvOnes = files.filter((f) => f.name.toLowerCase().endsWith('.csv'));
+  if (csvOnes.length > 0) {
     setFileContent('');
-    setCsvFiles({});
-    setFilesLoading(true);
-    setStep('selected');
-    Promise.all(filesToRead.map(async file => ({ name: file.name, content: await file.text() })))
-      .then(contents => {
-        setFileContent(contents[0]?.content || '');
-        setCsvFiles(Object.fromEntries(contents
-          .filter(file => file.name.toLowerCase().endsWith('.csv'))
-          .map(file => [file.name, file.content])));
+    setFileName('');
+    setFileSize('');
+    Promise.all(csvOnes.map((f) => f.text().then((text) => [f.name, text] as const)))
+      .then((entries) => {
+        const recognized: Record<string, string> = {};
+        const unrecognized: string[] = [];
+        for (const [name, text] of entries) {
+          const canonical = CSV_PACK_FILES.find((c) => c === name.toLowerCase());
+          if (canonical) recognized[canonical] = text;
+          else unrecognized.push(name);
+        }
+        setCsvFiles((prev) => ({ ...prev, ...recognized }));
+        setCsvUnrecognized(unrecognized);
       })
-      .catch(() => setError('The selected file(s) could not be read.'))
-      .finally(() => setFilesLoading(false));
-  }, [selectedFormat]);
+      .catch(() => setError('One of the selected CSV files could not be read.'));
+    setStep('selected');
+    return;
+  }
+
+  const file = files[0];
+  setCsvFiles({});
+  setCsvUnrecognized([]);
+  setFileName(file.name);
+  setFileSize(`${(file.size / 1024 / 1024).toFixed(2)} MB`);
+  file.text().then(setFileContent).catch(() => setError('The selected file could not be read.'));
+  setStep('selected');
+}, []);
+
+  const usePastedText = () => {
+    if (!pasteText.trim()) return;
+    setCsvFiles({});
+    setCsvUnrecognized([]);
+    setFileName(selectedFormat === 'fhir' ? 'Pasted FHIR bundle' : 'Pasted JSON');
+    setFileSize(`${(new Blob([pasteText]).size / 1024).toFixed(1)} KB`);
+    setFileContent(pasteText);
+    setError(null);
+    setStep('selected');
+  };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    selectFiles(Array.from(e.dataTransfer.files));
+    selectFiles(e.dataTransfer.files);
   }, [selectFiles]);
-
-  const isCsvUpload = selectedFormat === 'upload' && selectedFileNames.some(name => name.toLowerCase().endsWith('.csv'));
-  const selectedCsvFileCount = selectedFileNames.filter(name => name.toLowerCase().endsWith('.csv')).length;
-  const missingCsvFiles = REQUIRED_CSV_FILES.filter(name => !Object.prototype.hasOwnProperty.call(csvFiles, name));
-  const unsupportedCsvFiles = isCsvUpload
-    ? selectedFileNames.filter(name => !name.toLowerCase().endsWith('.csv'))
-    : [];
-
   const handleValidate = async () => {
-    if (filesLoading) return;
-    if (isCsvUpload && unsupportedCsvFiles.length) {
-      setError(`CSV packs can only contain CSV files. Remove: ${unsupportedCsvFiles.join(', ')}`);
-      return;
-    }
-    if (isCsvUpload && missingCsvFiles.length) {
-      setError(`CSV pack incomplete. Missing CSV files: ${missingCsvFiles.join(', ')}`);
-      return;
-    }
-    if (!isCsvUpload && !fileContent.trim()) {
-      setError('The selected file is empty.');
-      return;
-    }
+    if (isCsvMode ? !csvReady : !fileContent) return;
     setError(null);
     setStep('processing');
     setProcessingStep(1);
     try {
-      const result = selectedFormat === 'fhir'
-        ? await ingestFhir(fileContent)
-        : isCsvUpload
-          ? await ingestCsv(csvFiles)
+
+      const result = isCsvMode
+        ? await ingestCsv(csvFiles)
+        : selectedFormat === 'fhir'
+          ? await ingestFhir(fileContent)
           : await ingestJsonl(fileContent);
       setIngestionResult(result);
       setPreviewRows(result.claims.slice(0, 5).map(toPreviewRow));
-      setValidationIssues(toValidationIssues(result.rejected));
+      setValidationIssues(toValidationIssues(result.rejected, result.fhir_findings));
       setRecordCount(result.claims.length + result.rejected.length);
       setProcessingStep(4);
       setStep('validated');
     } catch (cause: unknown) {
       setStep('selected');
-      setError(cause instanceof ApiError ? cause.message : 'The backend could not process this file.');
+      setError(cause instanceof ApiError ? cause.message : 'The backend could not process this input.');
     }
   };
 
@@ -197,9 +204,10 @@ export default function Ingest({ onNavigate }: IngestProps) {
     setFileName('');
     setFileSize('');
     setFileContent('');
-    setSelectedFileNames([]);
+
     setCsvFiles({});
-    setFilesLoading(false);
+    setCsvUnrecognized([]);
+    setPasteText('');
     setRecordCount(0);
     setPreviewRows([]);
     setValidationIssues([]);
@@ -212,6 +220,7 @@ export default function Ingest({ onNavigate }: IngestProps) {
   const reviewCount = ingestionResult
     ? Object.values(ingestionResult.evaluations).filter((results) => results.some((result) => result.requires_human_review)).length
     : 0;
+  const formatLabel = isCsvMode ? 'CSV' : selectedFormat === 'fhir' ? 'FHIR' : 'JSON';
 
   return (
     <div className="page-shell">
@@ -224,13 +233,13 @@ export default function Ingest({ onNavigate }: IngestProps) {
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginRight: 4 }}>Supported formats:</span>
           {['CSV', 'JSON', 'FHIR'].map(f => (
-            <span key={f} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '3px 9px' }}>{f}</span>
+            <span key={f} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '3px 9px' }}>{f}</span>
           ))}
         </div>
       </div>
 
       {error && (
-        <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#be123c', fontSize: '0.8125rem' }}>
+        <div style={{ background: '#fbefee', border: '1px solid #e9c8c7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#8c322f', fontSize: '0.8125rem' }}>
           <strong>Ingestion failed:</strong> {error}
         </div>
       )}
@@ -238,7 +247,7 @@ export default function Ingest({ onNavigate }: IngestProps) {
       {/* COMPLETE STATE */}
       {step === 'complete' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ background: '#fff', border: '1px solid #a7f3d0', borderRadius: 10, padding: '28px 32px', boxShadow: 'var(--card-shadow)', display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+          <div style={{ background: '#fff', border: '1px solid #c4e1d1', borderRadius: 10, padding: '28px 32px', boxShadow: 'var(--card-shadow)', display: 'flex', gap: 20, alignItems: 'flex-start' }}>
             <Sentinel state="pass" size={64} />
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: '1.125rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 6 }}>Ingestion complete</div>
@@ -246,11 +255,11 @@ export default function Ingest({ onNavigate }: IngestProps) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Accepted claims', value: String(acceptedCount), color: 'var(--accent)' },
-                  { label: 'Rejected records', value: String(rejectedCount), color: '#f43f5e' },
+                  { label: 'Rejected records', value: String(rejectedCount), color: '#b4403f' },
                   { label: 'Require review', value: String(reviewCount), color: 'var(--status-review)' },
                 ].map(s => (
                   <div key={s.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', textAlign: 'center' }}>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1.5rem', fontWeight: 700, color: s.color, letterSpacing: '-0.03em' }}>{s.value}</div>
+                    <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.5rem', fontWeight: 700, color: s.color, letterSpacing: '-0.03em' }}>{s.value}</div>
                     <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>{s.label}</div>
                   </div>
                 ))}
@@ -289,13 +298,13 @@ export default function Ingest({ onNavigate }: IngestProps) {
                     gap: 12,
                     padding: '10px 14px',
                     borderRadius: 8,
-                    background: isActive ? 'rgba(6,182,212,0.05)' : 'transparent',
-                    border: isActive ? '1px solid rgba(6,182,212,0.15)' : '1px solid transparent',
+                    background: isActive ? 'rgba(15,122,130,0.05)' : 'transparent',
+                    border: isActive ? '1px solid rgba(15,122,130,0.15)' : '1px solid transparent',
                     transition: 'all 0.2s ease',
                   }}>
                     <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDone ? 'var(--status-pass-bg)' : isActive ? 'var(--accent-subtle)' : 'var(--canvas-bg)', border: `1.5px solid ${isDone ? 'var(--status-pass)' : isActive ? 'var(--accent)' : 'var(--border)'}`, transition: 'all 0.2s ease' }}>
                       {isDone ? (
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6l2.5 2.5 4.5-5" stroke="#10b981" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6l2.5 2.5 4.5-5" stroke="#1f7a5c" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       ) : isActive ? (
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', animation: 'sentinel-pulse 1s ease-in-out infinite' }} />
                       ) : (
@@ -303,13 +312,13 @@ export default function Ingest({ onNavigate }: IngestProps) {
                       )}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: isDone ? '#059669' : isActive ? '#0f172a' : '#94a3b8', transition: 'color 0.2s ease' }}>{s.label}</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: isDone ? '#1a6a4f' : isActive ? '#0f172a' : '#94a3b8', transition: 'color 0.2s ease' }}>{s.label}</div>
                       <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 1 }}>{s.detail}</div>
                     </div>
                   </div>
                   {i < PROCESSING_STEPS.length - 1 && (
                     <div style={{ display: 'flex', justifyContent: 'center', paddingLeft: 23 }}>
-                      <div style={{ width: 1, height: 10, background: isDone ? '#a7f3d0' : '#f1f5f9' }} />
+                      <div style={{ width: 1, height: 10, background: isDone ? '#c4e1d1' : '#f1f5f9' }} />
                     </div>
                   )}
                 </div>
@@ -325,12 +334,16 @@ export default function Ingest({ onNavigate }: IngestProps) {
           {/* File info row */}
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 20px', boxShadow: 'var(--card-shadow)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 8, background: '#ecfdf5', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 2h8l4 4v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="#10b981" strokeWidth="1.3" strokeLinejoin="round"/><path d="M11 2v4h4" stroke="#10b981" strokeWidth="1.3"/></svg>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: '#e9f5ef', border: '1px solid #c4e1d1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 2h8l4 4v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="#1f7a5c" strokeWidth="1.3" strokeLinejoin="round"/><path d="M11 2v4h4" stroke="#1f7a5c" strokeWidth="1.3"/></svg>
               </div>
               <div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', fontFamily: "'JetBrains Mono', monospace" }}>{fileName}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>CSV · {fileSize} · {recordCount} records</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', fontFamily: "var(--font-sans)" }}>
+                  {isCsvMode ? `${CSV_PACK_FILES.length} CSV files` : fileName}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
+                  {formatLabel}{fileSize ? ` · ${fileSize}` : ''} · {recordCount} records
+                </div>
               </div>
             </div>
             <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500 }}>Remove</button>
@@ -345,11 +358,11 @@ export default function Ingest({ onNavigate }: IngestProps) {
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 {[
-                  { label: `${acceptedCount} valid`, color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' },
-                  { label: `${rejectedCount} invalid`, color: '#f43f5e', bg: '#fff1f2', border: '#fecdd3' },
-                  { label: `${validationIssues.filter(i => i.severity === 'WARNING').length} warnings`, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
+                  { label: `${acceptedCount} valid`, color: '#1f7a5c', bg: '#e9f5ef', border: '#c4e1d1' },
+                  { label: `${rejectedCount} invalid`, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
+                  { label: `${validationIssues.filter(i => i.severity === 'WARNING').length} warnings`, color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
                 ].map(s => (
-                  <span key={s.label} style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}`, borderRadius: 6, padding: '4px 10px', fontSize: '0.75rem', fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{s.label}</span>
+                  <span key={s.label} style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}`, borderRadius: 6, padding: '4px 10px', fontSize: '0.75rem', fontWeight: 700, fontFamily: "var(--font-sans)" }}>{s.label}</span>
                 ))}
               </div>
             </div>
@@ -360,11 +373,11 @@ export default function Ingest({ onNavigate }: IngestProps) {
                 <tbody>
                   {validationIssues.map((issue, i) => (
                     <tr key={i}>
-                      <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{issue.row}</span></td>
-                      <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', color: '#475569' }}>{issue.field}</span></td>
+                      <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{issue.row}</span></td>
+                      <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#475569' }}>{issue.field}</span></td>
                       <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{issue.issue}</span></td>
                       <td>
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', borderRadius: 4, padding: '2px 8px', background: issue.severity === 'ERROR' ? '#fff1f2' : '#fffbeb', color: issue.severity === 'ERROR' ? '#e11d48' : '#b45309', border: `1px solid ${issue.severity === 'ERROR' ? '#fecdd3' : '#fde68a'}` }}>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', borderRadius: 4, padding: '2px 8px', background: issue.severity === 'ERROR' ? '#fbefee' : '#f8f1e3', color: issue.severity === 'ERROR' ? '#9a3433' : '#7d540f', border: `1px solid ${issue.severity === 'ERROR' ? '#e9c8c7' : '#e8d6ac'}` }}>
                           {issue.severity}
                         </span>
                       </td>
@@ -386,12 +399,12 @@ export default function Ingest({ onNavigate }: IngestProps) {
               <tbody>
                 {previewRows.map(row => (
                   <tr key={row.id}>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)' }}>{row.id}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)' }}>{row.id}</span></td>
                     <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{row.provider}</span></td>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', color: '#475569' }}>{row.service}</span></td>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{row.amount}</span></td>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', color: '#64748b' }}>{row.dos}</span></td>
-                    <td><span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: row.policy === 'EDU-BASIC' ? 'var(--accent)' : 'var(--status-review)', background: row.policy === 'EDU-BASIC' ? 'var(--accent-subtle)' : 'var(--status-review-bg)', border: `1px solid ${row.policy === 'EDU-BASIC' ? 'var(--status-pass-border)' : 'var(--status-review-border)'}`, borderRadius: 4, padding: '2px 7px' }}>{row.policy}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', color: '#475569' }}>{row.service}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{row.amount}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#64748b' }}>{row.dos}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: row.policy === 'EDU-BASIC' ? 'var(--accent)' : 'var(--status-review)', background: row.policy === 'EDU-BASIC' ? 'var(--accent-subtle)' : 'var(--status-review-bg)', border: `1px solid ${row.policy === 'EDU-BASIC' ? 'var(--status-pass-border)' : 'var(--status-review-border)'}`, borderRadius: 4, padding: '2px 7px' }}>{row.policy}</span></td>
                   </tr>
                 ))}
               </tbody>
@@ -414,63 +427,95 @@ export default function Ingest({ onNavigate }: IngestProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* File card */}
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '20px 24px', boxShadow: 'var(--card-shadow)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 9, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 3h8l5 5v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M12 3v5h5" stroke="var(--accent)" strokeWidth="1.3"/></svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', fontFamily: "'JetBrains Mono', monospace", marginBottom: 3 }}>{fileName}</div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '1px 7px' }}>CSV</span>
-                    <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>{fileSize}</span>
-                    <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>·</span>
-                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#334155' }}>
-                      {isCsvUpload ? `${selectedCsvFileCount} CSV file${selectedCsvFileCount === 1 ? '' : 's'} selected` : 'Ready to validate'}
-                    </span>
+
+            {isCsvMode ? (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', marginBottom: 3 }}>CSV claim pack</div>
+                    <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                      {Object.keys(csvFiles).length} of {CSV_PACK_FILES.length} required files attached
+                    </div>
                   </div>
+                  <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500, padding: '4px 8px' }}>Remove</button>
                 </div>
-              </div>
-              <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500, padding: '4px 8px' }}>Remove</button>
-            </div>
-            {isCsvUpload ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: missingCsvFiles.length ? '#92400e' : '#334155' }}>
-                  {filesLoading ? 'Reading selected files…' : `${REQUIRED_CSV_FILES.length - missingCsvFiles.length} of ${REQUIRED_CSV_FILES.length} required CSV files selected`}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {REQUIRED_CSV_FILES.map(name => {
-                    const isSelected = filesLoading
-                      ? selectedFileNames.includes(name)
-                      : Object.prototype.hasOwnProperty.call(csvFiles, name);
+
+                {/* Required CSV pack checklist */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: csvUnrecognized.length ? 10 : 0 }}>
+                  {CSV_PACK_FILES.map((name) => {
+                    const present = Boolean(csvFiles[name]);
                     return (
-                      <span key={name} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: isSelected ? 'var(--accent)' : '#92400e', background: isSelected ? 'var(--accent-subtle)' : '#fffbeb', border: `1px solid ${isSelected ? 'var(--status-pass-border)' : '#fde68a'}`, borderRadius: 4, padding: '3px 7px' }}>
-                        {isSelected ? '✓' : 'Missing: '}{name}
-                      </span>
+                      <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: present ? '#e9f5ef' : '#f8f1e3', border: `1px solid ${present ? '#c4e1d1' : '#e8d6ac'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          {present ? (
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5 4-4" stroke="#1f7a5c" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          ) : (
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1l4 7H1L5 1z" stroke="#96650f" strokeWidth="1"/><path d="M5 4v2M5 7.5v.3" stroke="#96650f" strokeWidth="1" strokeLinecap="round"/></svg>
+                          )}
+                        </div>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: present ? '#334155' : '#6b4a0f', fontWeight: present ? 400 : 500 }}>
+                          {name} {present ? '' : '— missing'}
+                        </span>
+                      </div>
                     );
                   })}
                 </div>
-                {unsupportedCsvFiles.length > 0 && (
-                  <div style={{ fontSize: '0.8125rem', color: '#92400e' }}>
-                    Remove non-CSV files from this pack: {unsupportedCsvFiles.join(', ')}
+                {csvUnrecognized.length > 0 && (
+                  <div style={{ fontSize: '0.75rem', color: '#8c322f', marginBottom: 10 }}>
+                    Not recognized (expected one of {CSV_PACK_FILES.join(', ')}): {csvUnrecognized.join(', ')}
                   </div>
                 )}
-              </div>
+                {!csvReady && (
+                  <>
+                    <input
+                      ref={addMoreInputRef}
+                      type="file"
+                      multiple
+                      accept=".csv"
+                      style={{ display: 'none' }}
+                      onChange={(e) => selectFiles(e.target.files)}
+                    />
+                    <button
+                      onClick={() => addMoreInputRef.current?.click()}
+                      style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 14px', fontSize: '0.8125rem', color: '#334155', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                    >
+                      + Add the missing CSV files
+                    </button>
+                  </>
+                )}
+              </>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: 'var(--status-pass)' }}>✓</span>
-                  <span style={{ fontSize: '0.8125rem', color: '#334155' }}>File selected</span>
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 9, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 3h8l5 5v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M12 3v5h5" stroke="var(--accent)" strokeWidth="1.3"/></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', fontFamily: "var(--font-sans)", marginBottom: 3 }}>{fileName}</div>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '1px 7px' }}>{formatLabel}</span>
+                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>{fileSize}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500, padding: '4px 8px' }}>Remove</button>
                 </div>
-                {filesLoading && <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>Reading file…</div>}
-              </div>
+              </>
             )}
           </div>
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={handleReset} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '9px 20px', color: '#475569', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
-            <button onClick={handleValidate} disabled={filesLoading} style={{ background: '#0f172a', border: 'none', borderRadius: 7, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: filesLoading ? 'wait' : 'pointer', fontFamily: 'inherit', fontWeight: 600, opacity: filesLoading ? 0.7 : 1 }}>Validate & Preview →</button>
+
+            <button
+              onClick={handleValidate}
+              disabled={isCsvMode && !csvReady}
+              style={{ background: (isCsvMode && !csvReady) ? '#94a3b8' : '#0f172a', border: 'none', borderRadius: 7, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: (isCsvMode && !csvReady) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+            >
+              Validate & Preview →
+            </button>
           </div>
         </div>
       )}
@@ -495,86 +540,120 @@ export default function Ingest({ onNavigate }: IngestProps) {
             ))}
           </div>
 
-          {/* Drop zone */}
-          <div
-            onDragEnter={() => setDragging(true)}
-            onDragLeave={() => setDragging(false)}
-            onDragOver={e => e.preventDefault()}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              background: dragging ? 'rgba(6,182,212,0.04)' : '#fff',
-              border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
-              borderRadius: 12,
-              padding: '64px 40px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 16,
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              style={{ display: 'none' }}
-              accept=".csv,.json"
-              multiple={selectedFormat === 'upload'}
-              onChange={e => {
-                selectFiles(Array.from(e.target.files || []));
-                e.currentTarget.value = '';
-              }}
-            />
-            <div style={{ width: 56, height: 56, borderRadius: 12, background: dragging ? 'rgba(6,182,212,0.1)' : '#f8fafc', border: `1.5px solid ${dragging ? 'rgba(6,182,212,0.3)' : '#e2e8f0'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s ease' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M12 3v12M8 9l4-6 4 6" stroke={dragging ? 'var(--accent)' : '#74847c'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2" stroke={dragging ? 'var(--accent)' : '#74847c'} strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 4 }}>
-                {selectedFormat === 'upload' ? 'Drop a CSV pack or claim file here' : 'Drop your claim file here'}
-              </div>
-              <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: 16 }}>
-                {selectedFormat === 'upload' ? 'For CSV, select all five related files together.' : 'or choose a file from your computer'}
-              </div>
-              <button
-                onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                style={{ background: 'var(--accent)', border: 'none', borderRadius: 5, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
-              >
-                Browse files
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-              <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Supported:</span>
-              {['.csv', '.json', 'FHIR Claim data'].map(f => (
-                <span key={f} style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#94a3b8', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '1px 7px' }}>{f}</span>
-              ))}
-            </div>
-          </div>
-
-          {/* Format cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-            {FORMAT_CARDS.map(fc => (
+          {selectedFormat === 'upload' ? (
+            <>
+              {/* Drop zone */}
               <div
-                key={fc.label}
-                style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, padding: '16px 18px', display: 'flex', gap: 14, alignItems: 'flex-start', transition: 'all 0.15s ease', cursor: 'default' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'var(--card-shadow-md)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}
+                onDragEnter={() => setDragging(true)}
+                onDragLeave={() => setDragging(false)}
+                onDragOver={e => e.preventDefault()}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  background: dragging ? 'rgba(15,122,130,0.04)' : '#fff',
+                  border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
+                  borderRadius: 12,
+                  padding: '64px 40px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 16,
+                }}
               >
-                <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {fc.icon}
+                <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} accept=".csv,.json" onChange={e => selectFiles(e.target.files)} />
+                <div style={{ width: 56, height: 56, borderRadius: 12, background: dragging ? 'rgba(15,122,130,0.1)' : '#f8fafc', border: `1.5px solid ${dragging ? 'rgba(15,122,130,0.3)' : '#e2e8f0'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s ease' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3v12M8 9l4-6 4 6" stroke={dragging ? 'var(--accent)' : '#74847c'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2" stroke={dragging ? 'var(--accent)' : '#74847c'} strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', marginBottom: 3 }}>{fc.label}</div>
-                  <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>{fc.desc}</div>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', color: '#94a3b8', marginTop: 6 }}>{fc.ext}</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 4 }}>
+                    Drop your claim file(s) here
+                  </div>
+                  <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: 16 }}>a single .json file, or all five .csv pack files at once</div>
+                  <button
+                    onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                    style={{ background: 'var(--accent)', border: 'none', borderRadius: 5, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                  >
+                    Browse files
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                  <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Supported:</span>
+                  {['.csv', '.json', 'FHIR Claim data'].map(f => (
+                    <span key={f} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#94a3b8', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '1px 7px' }}>{f}</span>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
+              <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                CSV uploads require all five pack files selected together: <span style={{ fontFamily: "var(--font-sans)" }}>{CSV_PACK_FILES.join(', ')}</span>.
+              </div>
+
+              {/* Format cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                {FORMAT_CARDS.map(fc => (
+                  <div
+                    key={fc.label}
+                    style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, padding: '16px 18px', display: 'flex', gap: 14, alignItems: 'flex-start', transition: 'all 0.15s ease', cursor: 'default' }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'var(--card-shadow-md)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}
+                  >
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {fc.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', marginBottom: 3 }}>{fc.label}</div>
+                      <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>{fc.desc}</div>
+                      <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: '#94a3b8', marginTop: 6 }}>{fc.ext}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '20px 24px', boxShadow: 'var(--card-shadow)' }}>
+              <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+                {selectedFormat === 'fhir' ? 'Paste a FHIR Bundle (JSON)' : 'Paste JSON, a JSON array, or JSONL'}
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: 12 }}>
+                {selectedFormat === 'fhir'
+                  ? 'One FHIR Bundle per line (JSONL), or a single Bundle / array of Bundles.'
+                  : 'One normalized claim per line (JSONL), or a single claim / array of claims.'}
+              </div>
+              <textarea
+                value={pasteText}
+                onChange={e => setPasteText(e.target.value)}
+                placeholder={selectedFormat === 'fhir' ? '{ "resourceType": "Bundle", ... }' : '{ "claim_id": "...", ... }'}
+                rows={12}
+                style={{
+                  width: '100%',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 8,
+                  padding: '12px 14px',
+                  fontSize: '0.8125rem',
+                  fontFamily: "var(--font-sans)",
+                  color: '#0f172a',
+                  outline: 'none',
+                  resize: 'vertical',
+                  marginBottom: 14,
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={usePastedText}
+                  disabled={!pasteText.trim()}
+                  style={{ background: pasteText.trim() ? 'var(--accent)' : '#94a3b8', border: 'none', borderRadius: 5, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: pasteText.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 600 }}
+                >
+                  Use this input →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

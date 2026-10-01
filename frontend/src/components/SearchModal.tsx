@@ -85,10 +85,10 @@ const CATEGORY_ICONS: Record<ResultCategory, React.ReactNode> = {
 };
 
 const CATEGORY_COLOR: Record<ResultCategory, string> = {
-  Claims: '#06b6d4',
-  Rules: '#8b5cf6',
-  Runs: '#10b981',
-  'Audit Events': '#f59e0b',
+  Claims: '#1d5c8a',
+  Rules: '#96650f',
+  Runs: '#1f7a5c',
+  'Audit Events': '#96650f',
 };
 
 export default function SearchModal({ open, onClose, onNavigate }: SearchModalProps) {
@@ -240,7 +240,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
               padding: '2px 6px',
               fontSize: '0.6875rem',
               color: '#94a3b8',
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "var(--font-sans)",
               fontWeight: 500,
               flexShrink: 0,
             }}
@@ -285,8 +285,8 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                           gap: 12,
                           padding: '9px 18px',
                           cursor: 'pointer',
-                          background: isSelected ? '#f0f9ff' : 'transparent',
-                          borderLeft: isSelected ? '2px solid #06b6d4' : '2px solid transparent',
+                          background: isSelected ? '#e8f1f7' : 'transparent',
+                          borderLeft: isSelected ? '2px solid #1d5c8a' : '2px solid transparent',
                           transition: 'background 0.1s ease',
                         }}
                       >
@@ -314,7 +314,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                               color: '#0f172a',
                               fontFamily:
                                 cat === 'Claims' || cat === 'Runs'
-                                  ? "'JetBrains Mono', monospace"
+                                  ? "var(--font-sans)"
                                   : 'inherit',
                             }}
                           >
@@ -420,7 +420,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                     padding: '1px 6px',
                     fontSize: '0.6875rem',
                     color: '#475569',
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "var(--font-sans)",
                     fontWeight: 600,
                   }}
                 >

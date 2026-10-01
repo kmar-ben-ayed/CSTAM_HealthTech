@@ -95,35 +95,26 @@ def base_check(c,r,cfg):
 
 
     if rid == "R004":
-        status = "PASS"
-        error_msg = ""
-
-        if empty(c["member_id"]) or empty(c["coverage"]["member_id"]):
-            paths.extend(["/member_id", "/coverage/member_id"])
-            error_msg = "Member identifier is missing or unavailable."
-            status = "UNABLE_TO_ASSESS"
-        elif c["member_id"] != c["coverage"]["member_id"]:
-            paths.extend(["/member_id", "/coverage/member_id"])
-            error_msg = "Member ID does not match coverage member ID."
-            status = "FAIL"
-
-        elif empty(c["patient_id"]) or empty(c["coverage"]["beneficiary_patient_id"]):
-            paths.extend(["/patient_id", "/coverage/beneficiary_patient_id"])
-            if status != "FAIL":
-                status = "UNABLE_TO_ASSESS"
-                error_msg = "Patient identifier is missing or unavailable."
-        elif c["patient_id"] != c["coverage"]["beneficiary_patient_id"]:
-            paths.extend(["/patient_id", "/coverage/beneficiary_patient_id"])
-            error_msg = "Patient ID does not match coverage beneficiary patient ID."
-            status = "FAIL"
-
+        cv = c["coverage"]
+        checks = [
+            ("member", "/member_id", "/coverage/member_id", c["member_id"], cv["member_id"]),
+            ("patient", "/patient_id", "/coverage/beneficiary_patient_id", c["patient_id"], cv["beneficiary_patient_id"]),
+        ]
+        failed, unknown, msgs = False, False, []
+        for label, p1, p2, v1, v2 in checks:
+            paths.extend([p1, p2])
+            if empty(v1) or empty(v2):
+                unknown = True
+                msgs.append(f"{label.capitalize()} identifier is missing or unavailable.")
+            elif v1 != v2:
+                failed = True
+                msgs.append(f"{label.capitalize()} ID does not match coverage.")
+        status = "FAIL" if failed else "UNABLE_TO_ASSESS" if unknown else "PASS"
         return make_result(
-            c,
-            r,
-            status if paths else "PASS",
-            paths or ["/member_id", "/patient_id", "/coverage"],
-            error_msg if paths else "Member and beneficiary identifiers match coverage.",
-            sorted(set(ids))
+            c, r, status,
+            paths if status != "PASS" else ["/member_id", "/patient_id", "/coverage"],
+            " ".join(msgs) if msgs else "Member and beneficiary identifiers match coverage.",
+            [],
         )
 
 

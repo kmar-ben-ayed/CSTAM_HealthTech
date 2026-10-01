@@ -1,135 +1,104 @@
-@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'Public Sans', 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
-
-  --color-navy-50: #f0f4ff;
-  --color-navy-100: #e0e9ff;
-  --color-navy-200: #c7d6fe;
-  --color-navy-300: #a3b8fb;
-  --color-navy-400: #7a93f5;
-  --color-navy-500: #5a6ee8;
-  --color-navy-600: #4250d3;
-  --color-navy-700: #3540b8;
-  --color-navy-800: #2d3596;
-  --color-navy-900: #1e2369;
-  --color-navy-950: #0b1221;
-
-  --color-canvas: #f3f6f3;
-  --color-surface: #ffffff;
-  --color-surface-2: #eef2ef;
-
-  --color-teal-400: #2dd4bf;
-  --color-teal-500: #14b8a6;
-  --color-teal-600: #0d9488;
-
-  --color-cyan-400: #58a88c;
-  --color-cyan-500: #287a5f;
-  --color-cyan-600: #1b654c;
-
-  --color-emerald-400: #34d399;
-  --color-emerald-500: #10b981;
-  --color-emerald-600: #059669;
-
-  --color-amber-400: #fbbf24;
-  --color-amber-500: #f59e0b;
-  --color-amber-600: #d97706;
-
-  --color-coral-400: #fb7185;
-  --color-coral-500: #f43f5e;
-  --color-coral-600: #e11d48;
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --font-mono: var(--font-sans);
 }
 
+/*
+  Clinical blue palette: blue is both the brand accent and the semantic
+  "info" status, red is danger (fail), green is stable (pass), amber is
+  caution (unable to assess). No purple, no teal, anywhere.
+*/
 :root {
-  --sidebar-bg: #17251f;
-  --sidebar-border: #2b3b33;
-  --sidebar-text: #aab8b0;
-  --sidebar-text-active: #f4f8f5;
-  --sidebar-accent: #78b89b;
-  --sidebar-danger: #f58b92;
+  --sidebar-bg: #0f1f2e;
+  --sidebar-border: #1c3347;
+  --sidebar-text: #9bb3c4;
+  --sidebar-text-active: #f1f6fa;
+  --sidebar-accent: #5a93bb;
+  --sidebar-danger: #f0969b;
   --sidebar-hover: rgba(255,255,255,0.06);
-  --sidebar-active-bg: rgba(120,184,155,0.14);
+  --sidebar-active-bg: rgba(90,147,187,0.16);
 
   --topbar-bg: #ffffff;
-  --topbar-border: #dce5df;
+  --topbar-border: #dbe4ea;
 
-  --canvas-bg: #f3f6f3;
+  --canvas-bg: #f4f7f9;
   --card-bg: #ffffff;
-  --card-border: #dce5df;
-  --card-shadow: 0 1px 2px rgba(23,37,31,0.04);
-  --card-shadow-md: 0 5px 16px rgba(23,37,31,0.08);
+  --card-border: #dbe4ea;
+  --card-shadow: 0 1px 2px rgba(15,31,46,0.05);
+  --card-shadow-md: 0 5px 16px rgba(15,31,46,0.09);
 
-  --text-primary: #192620;
-  --text-secondary: #50635a;
-  --text-tertiary: #74847c;
-  --text-placeholder: #a8b5ad;
+  --text-primary: #111f2b;
+  --text-secondary: #4f6372;
+  --text-tertiary: #75899a;
+  --text-placeholder: #a7b9c5;
 
-  --border: #dce5df;
-  --border-strong: #bdcbc2;
+  --border: #dbe4ea;
+  --border-strong: #bdd0da;
 
-  --accent: #176b52;
-  --accent-hover: #12583f;
-  --accent-subtle: #e8f2ec;
+  --accent: #1d5c8a;
+  --accent-hover: #164a6e;
+  --accent-subtle: #e8f1f7;
 
-  --status-pass: #237d52;
-  --status-pass-bg: #eaf4ed;
-  --status-pass-border: #c5ddcc;
+  --status-pass: #1f7a5c;
+  --status-pass-bg: #e9f5ef;
+  --status-pass-border: #c4e1d1;
 
-  --status-fail: #b33f47;
-  --status-fail-bg: #fbefef;
-  --status-fail-border: #e8c7c8;
+  --status-fail: #b4403f;
+  --status-fail-bg: #fbefee;
+  --status-fail-border: #e9c8c7;
 
-  --status-uta: #9a6415;
-  --status-uta-bg: #f8f2e7;
-  --status-uta-border: #e8d6b5;
+  --status-uta: #96650f;
+  --status-uta-bg: #f8f1e3;
+  --status-uta-border: #e8d6ac;
 
-  --status-na: #69776f;
-  --status-na-bg: #f0f3f1;
-  --status-na-border: #dce5df;
+  --status-na: #5f6c76;
+  --status-na-bg: #eef2f4;
+  --status-na-border: #d9e0e6;
 
-  --status-review: #315e8a;
-  --status-review-bg: #edf3f8;
-  --status-review-border: #cad9e6;
+  --status-review: #1d5c8a;
+  --status-review-bg: #e8f1f7;
+  --status-review-border: #c7d9e3;
 }
 
 /* ── Dark mode ─────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --canvas-bg: #111a16;
-  --canvas-bg-secondary: #19231e;
-  --card-bg: #19231e;
-  --card-border: #304138;
-  --card-shadow: 0 1px 3px rgba(0,0,0,0.24);
-  --card-shadow-md: 0 5px 16px rgba(0,0,0,0.32);
+  --canvas-bg: #0a1620;
+  --canvas-bg-secondary: #101f2b;
+  --card-bg: #101f2b;
+  --card-border: #223a4a;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.26);
+  --card-shadow-md: 0 5px 16px rgba(0,0,0,0.34);
 
-  --topbar-bg: #17211c;
-  --topbar-border: #304138;
+  --topbar-bg: #0c1c28;
+  --topbar-border: #223a4a;
 
-  --text-primary: #edf3ef;
-  --text-secondary: #b1c0b7;
-  --text-tertiary: #82938a;
-  --text-placeholder: #61736a;
+  --text-primary: #eef4f8;
+  --text-secondary: #a9bfcc;
+  --text-tertiary: #7c93a3;
+  --text-placeholder: #5c7284;
 
-  --border: #304138;
-  --border-strong: #485a50;
-  --accent: #83b99b;
-  --accent-hover: #a0cbb1;
-  --accent-subtle: #203a2e;
+  --border: #223a4a;
+  --border-strong: #3c5668;
+  --accent: #5a9fc9;
+  --accent-hover: #86b9de;
+  --accent-subtle: #14293a;
 
-  --status-pass-bg: #203a2e;
-  --status-pass-border: #355a44;
-  --status-fail-bg: #3a2425;
-  --status-fail-border: #614042;
-  --status-uta-bg: #3a3020;
-  --status-uta-border: #625239;
-  --status-na-bg: #202923;
-  --status-na-border: #39473e;
-  --status-review-bg: #233342;
-  --status-review-border: #3c566c;
+  --status-pass-bg: #163327;
+  --status-pass-border: #2d5542;
+  --status-fail-bg: #38201f;
+  --status-fail-border: #5c3938;
+  --status-uta-bg: #382c17;
+  --status-uta-border: #5e4a28;
+  --status-na-bg: #1a2626;
+  --status-na-border: #314343;
+  --status-review-bg: #14323c;
+  --status-review-border: #2b5565;
 
-  --sidebar-bg: #0d1511;
-  --sidebar-border: #25332a;
+  --sidebar-bg: #0a151f;
+  --sidebar-border: #1b2d3d;
 }
 
 [data-theme="dark"] .evidence-block {
@@ -340,24 +309,31 @@ button, input, select, textarea {
 }
 
 .evidence-block .ev-null {
-  color: #f43f5e;
+  color: var(--status-fail);
   font-style: italic;
 }
 
 .evidence-block .ev-value {
-  color: #10b981;
+  color: var(--status-pass);
 }
 
 .evidence-block .ev-path {
-  color: #315e8a;
+  color: var(--status-review);
 }
 
-/* Table styles */
+/* Table styles — sharp edges on data, not rounded: precision over friendliness. */
 .data-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.875rem;
+  border-radius: 0;
+}
+
+.data-table,
+div:has(> .data-table),
+div:has(> div > .data-table) {
+  border-radius: 0 !important;
 }
 
 .data-table th {
@@ -608,22 +584,18 @@ button, input, select, textarea {
   .review-queue-summary { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Single-column vertical flow throughout — no multi-column feature grids. */
 .landing-shell { overflow: hidden; }
 .landing-nav { padding: 0 clamp(18px, 4vw, 48px); }
 .landing-hero { padding: 82px clamp(18px, 4vw, 48px) 72px; }
 .landing-hero-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 480px); gap: clamp(32px, 6vw, 72px); }
-.landing-feature-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.landing-workflow-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.landing-rule-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.landing-uncertainty-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.landing-feature-grid,
+.landing-workflow-grid,
+.landing-rule-grid,
+.landing-uncertainty-grid,
 .landing-state-grid,
-.landing-preview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.landing-preview-grid { grid-template-columns: minmax(0, 1fr); max-width: 640px; margin-left: auto; margin-right: auto; }
 #review-example { scroll-margin-top: 76px; }
-
-@media (max-width: 980px) {
-  .landing-feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .landing-rule-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-}
 
 @media (max-width: 760px) {
   .landing-nav { padding: 0 18px; }
@@ -631,17 +603,10 @@ button, input, select, textarea {
   .landing-hero-grid { grid-template-columns: minmax(0, 1fr); gap: 36px; }
   .landing-hero h1 { font-size: 2.5rem !important; }
   .landing-shell section { padding-left: 18px !important; padding-right: 18px !important; }
-  .landing-workflow-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 24px; }
-  .landing-uncertainty-grid { grid-template-columns: minmax(0, 1fr); gap: 28px !important; }
-  .landing-rule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .landing-shell footer { gap: 18px; flex-wrap: wrap; }
 }
 
 @media (max-width: 520px) {
-  .landing-feature-grid,
-  .landing-state-grid,
-  .landing-preview-grid { grid-template-columns: minmax(0, 1fr); }
-  .landing-rule-grid { grid-template-columns: minmax(0, 1fr); }
   .landing-shell h2 { font-size: 1.75rem !important; }
   .landing-shell footer { align-items: flex-start !important; }
   .landing-shell footer > div:last-child { gap: 12px !important; flex-wrap: wrap; }
@@ -1244,8 +1209,8 @@ button, input, select, textarea {
 
 /* Selection indicator */
 .selected-row {
-  background: #f0f9ff !important;
-  border-left: 2px solid #06b6d4;
+  background: var(--accent-subtle) !important;
+  border-left: 2px solid var(--accent);
 }
 
 /* Audit chain badge */
@@ -1255,9 +1220,9 @@ button, input, select, textarea {
   gap: 6px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #059669;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  color: var(--status-pass);
+  background: var(--status-pass-bg);
+  border: 1px solid var(--status-pass-border);
   border-radius: 20px;
   padding: 4px 12px;
   letter-spacing: 0.02em;

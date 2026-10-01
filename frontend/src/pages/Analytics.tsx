@@ -50,7 +50,7 @@ function AreaChart({ data, color, fillColor, width = 600, height = 160 }: {
         return (
           <g key={i}>
             <line x1={pad.left} y1={y} x2={pad.left + w} y2={y} stroke="#f1f5f9" strokeWidth="1" />
-            <text x={pad.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="JetBrains Mono, monospace">{val}</text>
+            <text x={pad.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#94a3b8" fontFamily="var(--font-sans)">{val}</text>
           </g>
         );
       })}
@@ -59,7 +59,7 @@ function AreaChart({ data, color, fillColor, width = 600, height = 160 }: {
       {data.filter((_, i) => i % 3 === 0).map((d, idx) => {
         const origIdx = idx * 3;
         return (
-          <text key={d.date} x={toX(origIdx)} y={height - 4} textAnchor="middle" fontSize="10" fill="#94a3b8" fontFamily="JetBrains Mono, monospace">{d.date}</text>
+          <text key={d.date} x={toX(origIdx)} y={height - 4} textAnchor="middle" fontSize="10" fill="#94a3b8" fontFamily="var(--font-sans)">{d.date}</text>
         );
       })}
 
@@ -114,13 +114,13 @@ function HorizontalBar({ label, ruleId, count, maxCount, color, onRuleClick }: {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)', minWidth: 36 }}>{ruleId}</span>
+      <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)', minWidth: 36 }}>{ruleId}</span>
       <span style={{ fontSize: '0.8125rem', color: '#334155', minWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       <div style={{ flex: 1, position: 'relative', height: 8, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
         <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width 0.3s ease' }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 70, justifyContent: 'flex-end' }}>
-        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', minWidth: 28, textAlign: 'right' }}>{count}</span>
+        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: '#0f172a', minWidth: 28, textAlign: 'right' }}>{count}</span>
         {hovered && (
           <button
             onClick={() => onRuleClick(ruleId)}
@@ -135,17 +135,17 @@ function HorizontalBar({ label, ruleId, count, maxCount, color, onRuleClick }: {
 }
 
 const FINDINGS_BY_RULE = [
-  { ruleId: 'R008', label: 'Authorization reference', count: 42, color: '#f43f5e' },
-  { ruleId: 'R003', label: 'Service date validity', count: 31, color: '#f59e0b' },
-  { ruleId: 'R005', label: 'Duplicate service check', count: 18, color: '#f43f5e' },
-  { ruleId: 'R009', label: 'Authorization validity', count: 15, color: '#f59e0b' },
-  { ruleId: 'R004', label: 'Benefit coverage', count: 11, color: '#f43f5e' },
-  { ruleId: 'R013', label: 'Diagnosis–procedure alignment', count: 8, color: '#f59e0b' },
-  { ruleId: 'R002', label: 'Provider eligibility', count: 5, color: '#f43f5e' },
+  { ruleId: 'R008', label: 'Authorization reference', count: 42, color: '#b4403f' },
+  { ruleId: 'R003', label: 'Service date validity', count: 31, color: '#96650f' },
+  { ruleId: 'R005', label: 'Duplicate service check', count: 18, color: '#b4403f' },
+  { ruleId: 'R009', label: 'Authorization validity', count: 15, color: '#96650f' },
+  { ruleId: 'R004', label: 'Benefit coverage', count: 11, color: '#b4403f' },
+  { ruleId: 'R013', label: 'Diagnosis–procedure alignment', count: 8, color: '#96650f' },
+  { ruleId: 'R002', label: 'Provider eligibility', count: 5, color: '#b4403f' },
 ];
 
 const OUTCOME_DATA = [
-  { label: 'PASS', count: 1007, pct: 78.4, color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' },
+  { label: 'PASS', count: 1007, pct: 78.4, color: '#1f7a5c', bg: '#e9f5ef', border: '#c4e1d1' },
   { label: 'NEEDS REVIEW', count: 216, pct: 16.8, color: 'var(--status-review)', bg: 'var(--status-review-bg)', border: 'var(--status-review-border)' },
   { label: 'UNABLE TO ASSESS', count: 62, pct: 4.8, color: 'var(--status-uta)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
   { label: 'FAIL', count: 47, pct: 3.7, color: 'var(--status-fail)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
@@ -169,8 +169,8 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
 
   const kpis = [
     { label: 'Claims processed', value: '1,284', sub: '+12% vs prior period', subPos: true, color: 'var(--accent)', onClick: () => onNavigate('claims') },
-    { label: 'Validation pass rate', value: '78.4%', sub: 'Of all evaluated claims', subPos: null, color: '#10b981', onClick: null },
-    { label: 'Unable to assess', value: '4.8%', sub: 'Missing evidence', subPos: null, color: '#f59e0b', onClick: null },
+    { label: 'Validation pass rate', value: '78.4%', sub: 'Of all evaluated claims', subPos: null, color: '#1f7a5c', onClick: null },
+    { label: 'Unable to assess', value: '4.8%', sub: 'Missing evidence', subPos: null, color: '#96650f', onClick: null },
     { label: 'Review rate', value: '16.8%', sub: 'Human review required', subPos: null, color: 'var(--status-review)', onClick: () => onNavigate('review-queue') },
   ];
 
@@ -215,7 +215,7 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
             {POLICY_OPTIONS.map(r => <option key={r}>{r}</option>)}
           </select>
         </div>
-        <div style={{ marginLeft: 'auto', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#94a3b8' }}>
+        <div style={{ marginLeft: 'auto', fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#94a3b8' }}>
           Showing: <strong style={{ color: '#334155' }}>1,284</strong> claims
         </div>
       </div>
@@ -236,9 +236,9 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="#cbd5e1" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </div>
             )}
-            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1.625rem', fontWeight: 700, color: kpi.color, letterSpacing: '-0.04em', marginBottom: 4 }}>{kpi.value}</div>
+            <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.625rem', fontWeight: 700, color: kpi.color, letterSpacing: '-0.04em', marginBottom: 4 }}>{kpi.value}</div>
             <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#334155', marginBottom: 4 }}>{kpi.label}</div>
-            <div style={{ fontSize: '0.75rem', color: kpi.subPos === true ? '#059669' : kpi.subPos === false ? '#e11d48' : '#94a3b8' }}>{kpi.sub}</div>
+            <div style={{ fontSize: '0.75rem', color: kpi.subPos === true ? '#1a6a4f' : kpi.subPos === false ? '#9a3433' : '#94a3b8' }}>{kpi.sub}</div>
           </div>
         ))}
       </div>
@@ -275,10 +275,10 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
               <div key={o.label} style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: o.color, flexShrink: 0 }} />
-                  <span style={{ color: '#334155', fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.03em' }}>{o.label}</span>
+                  <span style={{ color: '#334155', fontFamily: "var(--font-sans)", fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.03em' }}>{o.label}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.9375rem', fontWeight: 700, color: o.color, minWidth: 44, textAlign: 'right' }}>{o.count}</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: o.color, minWidth: 44, textAlign: 'right' }}>{o.count}</span>
                   <span style={{ fontSize: '0.75rem', color: '#94a3b8', minWidth: 40, textAlign: 'right' }}>{o.pct}%</span>
                 </div>
               </div>
@@ -298,9 +298,9 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
               { label: 'Claims requiring review', value: 216, color: 'var(--status-review)', sub: '16.8% of total' },
-              { label: 'Confirmed findings', value: 148, color: '#f43f5e', sub: '68.5% of reviewed' },
-              { label: 'Dismissed findings', value: 42, color: '#10b981', sub: '19.4% of reviewed' },
-              { label: 'Requests for information', value: 26, color: '#f59e0b', sub: '12.0% of reviewed' },
+              { label: 'Confirmed findings', value: 148, color: '#b4403f', sub: '68.5% of reviewed' },
+              { label: 'Dismissed findings', value: 42, color: '#1f7a5c', sub: '19.4% of reviewed' },
+              { label: 'Requests for information', value: 26, color: '#96650f', sub: '12.0% of reviewed' },
               { label: 'Re-checks completed', value: 19, color: 'var(--accent)', sub: 'After correction' },
             ].map(m => (
               <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -309,7 +309,7 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
                   <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{m.label}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1rem', fontWeight: 700, color: m.color }}>{m.value}</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '1rem', fontWeight: 700, color: m.color }}>{m.value}</span>
                   <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{m.sub}</span>
                 </div>
               </div>
@@ -317,7 +317,7 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
             <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Avg. time to review</span>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.9375rem', fontWeight: 700, color: '#334155' }}>4m 12s</span>
+              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: '#334155' }}>4m 12s</span>
             </div>
           </div>
         </div>
@@ -361,13 +361,13 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
                 <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Unable to assess</h3>
                 <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>4.8% rate · 62 claims this period</p>
               </div>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: '#f59e0b', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 8px' }}>4.8%</span>
+              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: '#96650f', background: '#f8f1e3', border: '1px solid #e8d6ac', borderRadius: 4, padding: '2px 8px' }}>4.8%</span>
             </div>
           </div>
           <div style={{ padding: '14px 20px 6px' }}>
             <div style={{ marginBottom: 16 }}>
-              <LineChart data={UTA_TREND_DATA} color="#f59e0b" />
-              <div style={{ fontSize: '0.6875rem', color: '#94a3b8', textAlign: 'center', marginTop: 4, fontFamily: "'JetBrains Mono', monospace" }}>Rate trend · Sep 1 – Sep 29</div>
+              <LineChart data={UTA_TREND_DATA} color="#96650f" />
+              <div style={{ fontSize: '0.6875rem', color: '#94a3b8', textAlign: 'center', marginTop: 4, fontFamily: "var(--font-sans)" }}>Rate trend · Sep 1 – Sep 29</div>
             </div>
             <div style={{ height: 1, background: '#f1f5f9', marginBottom: 14 }} />
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Top missing evidence</div>
@@ -376,9 +376,9 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
                 <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{m.label}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 60, height: 5, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${m.pct}%`, background: '#f59e0b', borderRadius: 3 }} />
+                    <div style={{ height: '100%', width: `${m.pct}%`, background: '#96650f', borderRadius: 3 }} />
                   </div>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 700, color: '#f59e0b', minWidth: 32, textAlign: 'right' }}>{m.pct}%</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: '#96650f', minWidth: 32, textAlign: 'right' }}>{m.pct}%</span>
                 </div>
               </div>
             ))}
@@ -392,21 +392,21 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
               <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Validation quality</h3>
               <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Based on evaluation runs with ground truth</p>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 4, padding: '3px 8px' }}>
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1l4 7H1L5 1z" stroke="#f59e0b" strokeWidth="1"/><path d="M5 3.5v2.5M5 7.5v.3" stroke="#f59e0b" strokeWidth="1" strokeLinecap="round"/></svg>
-              <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#92400e' }}>Evaluation data</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#f8f1e3', border: '1px solid #e8d6ac', borderRadius: 4, padding: '3px 8px' }}>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1l4 7H1L5 1z" stroke="#96650f" strokeWidth="1"/><path d="M5 3.5v2.5M5 7.5v.3" stroke="#96650f" strokeWidth="1" strokeLinecap="round"/></svg>
+              <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#6b4a0f' }}>Evaluation data</span>
             </div>
           </div>
           <div style={{ padding: '16px 20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
               {[
                 { label: 'Status accuracy', value: '98.2%', color: '#0f172a', desc: 'Correct across all claims' },
-                { label: 'Issue precision', value: '97.8%', color: '#10b981', desc: 'True positive rate' },
+                { label: 'Issue precision', value: '97.8%', color: '#1f7a5c', desc: 'True positive rate' },
                 { label: 'Issue recall', value: '96.2%', color: 'var(--accent)', desc: 'Sensitivity' },
                 { label: 'Issue F1', value: '97.0%', color: 'var(--status-review)', desc: 'Harmonic mean' },
               ].map(m => (
                 <div key={m.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 7, padding: '12px 14px' }}>
-                  <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1.125rem', fontWeight: 700, color: m.color, letterSpacing: '-0.02em', marginBottom: 3 }}>{m.value}</div>
+                  <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.125rem', fontWeight: 700, color: m.color, letterSpacing: '-0.02em', marginBottom: 3 }}>{m.value}</div>
                   <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: 1 }}>{m.label}</div>
                   <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>{m.desc}</div>
                 </div>
@@ -415,15 +415,15 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
             <div style={{ height: 1, background: '#f1f5f9', marginBottom: 14 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { label: 'False alarm rate', value: '1.2%', color: '#f43f5e', desc: 'False positives / (FP + TN)' },
-                { label: 'False abstention rate', value: '0.8%', color: '#f59e0b', desc: 'UTA when assessable' },
+                { label: 'False alarm rate', value: '1.2%', color: '#b4403f', desc: 'False positives / (FP + TN)' },
+                { label: 'False abstention rate', value: '0.8%', color: '#96650f', desc: 'UTA when assessable' },
               ].map(m => (
                 <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#334155' }}>{m.label}</div>
                     <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>{m.desc}</div>
                   </div>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '1rem', fontWeight: 700, color: m.color }}>{m.value}</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '1rem', fontWeight: 700, color: m.color }}>{m.value}</span>
                 </div>
               ))}
             </div>

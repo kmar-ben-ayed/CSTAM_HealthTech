@@ -93,11 +93,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       sub: '24 today',
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <rect x="2" y="3" width="14" height="12" rx="2" stroke="#06b6d4" strokeWidth="1.5"/>
-          <path d="M5 7h8M5 10h5" stroke="#06b6d4" strokeWidth="1.5" strokeLinecap="round"/>
+          <rect x="2" y="3" width="14" height="12" rx="2" stroke="#1d5c8a" strokeWidth="1.5"/>
+          <path d="M5 7h8M5 10h5" stroke="#1d5c8a" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: '#06b6d4',
+      accent: '#1d5c8a',
     },
     {
       label: 'Needs review',
@@ -107,11 +107,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       sub: '3 urgent',
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <circle cx="9" cy="7" r="3" stroke="#8b5cf6" strokeWidth="1.5"/>
-          <path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#8b5cf6" strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="9" cy="7" r="3" stroke="#96650f" strokeWidth="1.5"/>
+          <path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#96650f" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: '#8b5cf6',
+      accent: '#96650f',
     },
     {
       label: 'Unable to assess',
@@ -121,11 +121,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       sub: '3 pending info',
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <circle cx="9" cy="9" r="7" stroke="#f59e0b" strokeWidth="1.5"/>
-          <path d="M9 6v4M9 13v.5" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="9" cy="9" r="7" stroke="#96650f" strokeWidth="1.5"/>
+          <path d="M9 6v4M9 13v.5" stroke="#96650f" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: '#f59e0b',
+      accent: '#96650f',
     },
     {
       label: 'Issues detected',
@@ -135,11 +135,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       sub: 'R008 most frequent',
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <path d="M9 2l7 13H2L9 2z" stroke="#f43f5e" strokeWidth="1.5" strokeLinejoin="round"/>
-          <path d="M9 7v4M9 13v.5" stroke="#f43f5e" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M9 2l7 13H2L9 2z" stroke="#b4403f" strokeWidth="1.5" strokeLinejoin="round"/>
+          <path d="M9 7v4M9 13v.5" stroke="#b4403f" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: '#f43f5e',
+      accent: '#b4403f',
     },
   ];
 
@@ -157,7 +157,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         </div>
         <div className="dashboard-header-actions">
           <div style={{
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "var(--font-sans)",
             fontSize: '0.6875rem',
             color: 'var(--text-secondary)',
             background: 'var(--card-bg)',
@@ -290,7 +290,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         borderRadius: 4,
                         fontSize: '0.75rem',
                         fontWeight: 700,
-                        fontFamily: "'JetBrains Mono', monospace",
+                        fontFamily: "var(--font-sans)",
                         border: item.findings > 0 ? '1px solid var(--status-fail-border)' : '1px solid var(--status-pass-border)',
                       }}>
                         {item.findings}
