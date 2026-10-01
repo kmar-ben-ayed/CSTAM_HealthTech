@@ -15,6 +15,7 @@ export interface BackendClaim {
   submission_date?: string;
   currency?: string;
   total_amount?: number;
+
   coverage?: {
     coverage_id?: string;
     status?: string | null;
@@ -32,6 +33,8 @@ export interface BackendClaim {
   }>;
   [key: string]: unknown;
 }
+
+export type FhirPayload = Record<string, unknown>;
 
 export interface RuleResult {
   rule_id: string;
@@ -106,11 +109,17 @@ export interface ReviewRule {
   name: string;
   status: EvaluationStatus;
   finding: string;
+  evidence: ReviewEvidence[];
   evidencePaths: string[];
   observed?: string;
   expected?: string;
   aiExplanation: string;
   category: string;
+}
+
+export interface ReviewEvidence {
+  path: string;
+  value: unknown;
 }
 
 export async function getDataset(split = 'development', limit = 500, signal?: AbortSignal): Promise<DatasetResponse> {
@@ -123,6 +132,13 @@ export async function getIngestedClaims(limit = 500, signal?: AbortSignal): Prom
 
 export async function getIngestedClaim(claimId: string, signal?: AbortSignal): Promise<IngestedClaimResponse> {
   return apiFetch<IngestedClaimResponse>(`/api/v1/claims/${encodeURIComponent(claimId)}`, { signal });
+}
+export async function exportFhirPayload(claim: BackendClaim, signal?: AbortSignal): Promise<FhirPayload> {
+  return apiFetch<FhirPayload>('/api/v1/fhir/export', {
+    method: 'POST',
+    body: JSON.stringify({ claim }),
+    signal,
+  });
 }
 
 export async function getExplanation(
@@ -208,14 +224,19 @@ export function datasetToClaimRows(dataset: DatasetResponse): ClaimRow[] {
 
 export function evaluationToReviewRules(results: RuleResult[] = []): ReviewRule[] {
   return results.map((result) => {
-    const evidence = Array.isArray(result.evidence) ? result.evidence as Array<{ path?: string; value?: unknown }> : [];
+    const evidence = Array.isArray(result.evidence)
+      ? (result.evidence as Array<{ path?: string; value?: unknown }>)
+        .filter((item): item is { path: string; value?: unknown } => typeof item?.path === 'string' && item.path.length > 0)
+        .map((item) => ({ path: item.path, value: item.value }))
+      : [];
     const explanation = typeof result.explanation === 'string' ? result.explanation : 'No explanation was returned for this result.';
     return {
       id: result.rule_id,
       name: `Rule ${result.rule_id}`,
       status: result.status,
       finding: explanation,
-      evidencePaths: evidence.map((item) => item.path || '').filter(Boolean),
+      evidence,
+      evidencePaths: evidence.map((item) => item.path),
       observed: evidence.length ? JSON.stringify(evidence[0].value) : undefined,
       expected: typeof result.corrective_action === 'string' && result.corrective_action ? result.corrective_action : undefined,
       aiExplanation: explanation,

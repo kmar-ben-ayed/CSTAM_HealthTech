@@ -1083,6 +1083,7 @@ function WorkspaceLayout({
     <>
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={onNavigate} />
       <div
+        className={currentPage === 'claim-review' ? 'workspace-shell claim-review-workspace' : 'workspace-shell'}
         style={{
           display: 'flex',
           height: '100vh',

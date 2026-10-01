@@ -118,41 +118,41 @@ export default function Ingest({ onNavigate }: IngestProps) {
   const isCsvMode = Object.keys(csvFiles).length > 0;
   const csvReady = CSV_PACK_FILES.every((name) => csvFiles[name]);
 
-  const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
-    const files = fileList ? Array.from(fileList) : [];
-    if (!files.length) return;
-    setError(null);
+const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
+  const files = fileList ? Array.from(fileList) : [];
+  if (!files.length) return;
+  setError(null);
 
-    const csvOnes = files.filter((f) => f.name.toLowerCase().endsWith('.csv'));
-    if (csvOnes.length > 0) {
-      setFileContent('');
-      setFileName('');
-      setFileSize('');
-      Promise.all(csvOnes.map((f) => f.text().then((text) => [f.name, text] as const)))
-        .then((entries) => {
-          const recognized: Record<string, string> = {};
-          const unrecognized: string[] = [];
-          for (const [name, text] of entries) {
-            const canonical = CSV_PACK_FILES.find((c) => c === name.toLowerCase());
-            if (canonical) recognized[canonical] = text;
-            else unrecognized.push(name);
-          }
-          setCsvFiles((prev) => ({ ...prev, ...recognized }));
-          setCsvUnrecognized(unrecognized);
-        })
-        .catch(() => setError('One of the selected CSV files could not be read.'));
-      setStep('selected');
-      return;
-    }
-
-    const file = files[0];
-    setCsvFiles({});
-    setCsvUnrecognized([]);
-    setFileName(file.name);
-    setFileSize(`${(file.size / 1024 / 1024).toFixed(2)} MB`);
-    file.text().then(setFileContent).catch(() => setError('The selected file could not be read.'));
+  const csvOnes = files.filter((f) => f.name.toLowerCase().endsWith('.csv'));
+  if (csvOnes.length > 0) {
+    setFileContent('');
+    setFileName('');
+    setFileSize('');
+    Promise.all(csvOnes.map((f) => f.text().then((text) => [f.name, text] as const)))
+      .then((entries) => {
+        const recognized: Record<string, string> = {};
+        const unrecognized: string[] = [];
+        for (const [name, text] of entries) {
+          const canonical = CSV_PACK_FILES.find((c) => c === name.toLowerCase());
+          if (canonical) recognized[canonical] = text;
+          else unrecognized.push(name);
+        }
+        setCsvFiles((prev) => ({ ...prev, ...recognized }));
+        setCsvUnrecognized(unrecognized);
+      })
+      .catch(() => setError('One of the selected CSV files could not be read.'));
     setStep('selected');
-  }, []);
+    return;
+  }
+
+  const file = files[0];
+  setCsvFiles({});
+  setCsvUnrecognized([]);
+  setFileName(file.name);
+  setFileSize(`${(file.size / 1024 / 1024).toFixed(2)} MB`);
+  file.text().then(setFileContent).catch(() => setError('The selected file could not be read.'));
+  setStep('selected');
+}, []);
 
   const usePastedText = () => {
     if (!pasteText.trim()) return;
@@ -170,13 +170,13 @@ export default function Ingest({ onNavigate }: IngestProps) {
     setDragging(false);
     selectFiles(e.dataTransfer.files);
   }, [selectFiles]);
-
   const handleValidate = async () => {
     if (isCsvMode ? !csvReady : !fileContent) return;
     setError(null);
     setStep('processing');
     setProcessingStep(1);
     try {
+
       const result = isCsvMode
         ? await ingestCsv(csvFiles)
         : selectedFormat === 'fhir'
@@ -204,6 +204,7 @@ export default function Ingest({ onNavigate }: IngestProps) {
     setFileName('');
     setFileSize('');
     setFileContent('');
+
     setCsvFiles({});
     setCsvUnrecognized([]);
     setPasteText('');
@@ -431,6 +432,7 @@ export default function Ingest({ onNavigate }: IngestProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* File card */}
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '20px 24px', boxShadow: 'var(--card-shadow)' }}>
+
             {isCsvMode ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -442,6 +444,7 @@ export default function Ingest({ onNavigate }: IngestProps) {
                   </div>
                   <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500, padding: '4px 8px' }}>Remove</button>
                 </div>
+
                 {/* Required CSV pack checklist */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: csvUnrecognized.length ? 10 : 0 }}>
                   {CSV_PACK_FILES.map((name) => {
@@ -510,6 +513,7 @@ export default function Ingest({ onNavigate }: IngestProps) {
           {/* Actions */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button onClick={handleReset} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '9px 20px', color: '#475569', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
+
             <button
               onClick={handleValidate}
               disabled={isCsvMode && !csvReady}
