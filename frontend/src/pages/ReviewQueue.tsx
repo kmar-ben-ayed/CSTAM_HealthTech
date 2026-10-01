@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sentinel from '../components/Sentinel';
+import { datasetToClaimRows, getIngestedClaims, type ClaimRow } from '../api/claims';
 
 interface ReviewQueueProps {
   onNavigate: (page: string, claimId?: string) => void;
@@ -28,165 +29,6 @@ interface QueueItem {
   serviceDate: string;
   amount: string;
 }
-
-const QUEUE_ITEMS: QueueItem[] = [
-  {
-    claimId: 'CLM-10482',
-    provider: 'Northside Behavioral Health',
-    priority: 'High',
-    validationOutcome: 'FAIL',
-    reviewStatus: 'In Review',
-    topFinding: 'Authorization reference missing',
-    assignedTo: 'Aya Gaha',
-    age: '2h',
-    lastAction: 'Rule R008 flagged',
-    serviceDate: '2026-09-14',
-    amount: '$3,420.00',
-  },
-  {
-    claimId: 'CLM-10479',
-    provider: 'Summit Psychiatry Clinic',
-    priority: 'High',
-    validationOutcome: 'NEEDS REVIEW',
-    reviewStatus: 'Unassigned',
-    topFinding: 'Session count exceeds plan limit',
-    assignedTo: null,
-    age: '4h',
-    lastAction: 'Flagged by run RUN-4821',
-    serviceDate: '2026-09-12',
-    amount: '$2,875.00',
-  },
-  {
-    claimId: 'CLM-10477',
-    provider: 'Lakeside Counseling Center',
-    priority: 'High',
-    validationOutcome: 'UNABLE TO ASSESS',
-    reviewStatus: 'Waiting for Info',
-    topFinding: 'Clinical notes not submitted',
-    assignedTo: 'Marcus Webb',
-    age: '1d',
-    lastAction: 'Information requested',
-    serviceDate: '2026-09-10',
-    amount: '$1,290.00',
-  },
-  {
-    claimId: 'CLM-10475',
-    provider: 'Clearwater Psychology',
-    priority: 'High',
-    validationOutcome: 'FAIL',
-    reviewStatus: 'Ready for Re-check',
-    topFinding: 'Diagnosis code unsupported for service',
-    assignedTo: 'Priya Nair',
-    age: '1d 6h',
-    lastAction: 'Corrected records submitted',
-    serviceDate: '2026-09-09',
-    amount: '$4,100.00',
-  },
-  {
-    claimId: 'CLM-10480',
-    provider: 'Valley Behavioral Sciences',
-    priority: 'High',
-    validationOutcome: 'NEEDS REVIEW',
-    reviewStatus: 'Assigned',
-    topFinding: 'Provider NPI not enrolled',
-    assignedTo: 'Aya Gaha',
-    age: '3h',
-    lastAction: 'Assigned to reviewer',
-    serviceDate: '2026-09-13',
-    amount: '$2,050.00',
-  },
-  {
-    claimId: 'CLM-10471',
-    provider: 'Greenfield Mental Health',
-    priority: 'High',
-    validationOutcome: 'NEEDS REVIEW',
-    reviewStatus: 'In Review',
-    topFinding: 'Modifier 95 unverified',
-    assignedTo: 'Marcus Webb',
-    age: '5h',
-    lastAction: 'Evidence reviewed',
-    serviceDate: '2026-09-08',
-    amount: '$3,780.00',
-  },
-  {
-    claimId: 'CLM-10472',
-    provider: 'Beacon Recovery Services',
-    priority: 'High',
-    validationOutcome: 'FAIL',
-    reviewStatus: 'Unassigned',
-    topFinding: 'Service outside coverage window',
-    assignedTo: null,
-    age: '7h',
-    lastAction: 'Flagged by run RUN-4820',
-    serviceDate: '2026-09-07',
-    amount: '$5,200.00',
-  },
-  {
-    claimId: 'CLM-10474',
-    provider: 'Cedar Ridge Outpatient',
-    priority: 'High',
-    validationOutcome: 'NEEDS REVIEW',
-    reviewStatus: 'Unassigned',
-    topFinding: 'Duplicate claim suspected',
-    assignedTo: null,
-    age: '9h',
-    lastAction: 'Rule R014 flagged',
-    serviceDate: '2026-09-06',
-    amount: '$1,640.00',
-  },
-  {
-    claimId: 'CLM-10476',
-    provider: 'Pacific Wellness Partners',
-    priority: 'Medium',
-    validationOutcome: 'NEEDS REVIEW',
-    reviewStatus: 'In Review',
-    topFinding: 'Place of service mismatch',
-    assignedTo: 'Priya Nair',
-    age: '2d',
-    lastAction: 'Notes under review',
-    serviceDate: '2026-09-05',
-    amount: '$2,310.00',
-  },
-  {
-    claimId: 'CLM-10473',
-    provider: 'Horizon Counseling Group',
-    priority: 'Medium',
-    validationOutcome: 'UNABLE TO ASSESS',
-    reviewStatus: 'Waiting for Info',
-    topFinding: 'Plan enrollment unverifiable',
-    assignedTo: 'Marcus Webb',
-    age: '2d 4h',
-    lastAction: 'Enrollment query sent',
-    serviceDate: '2026-09-04',
-    amount: '$980.00',
-  },
-  {
-    claimId: 'CLM-10478',
-    provider: 'Sunrise Therapy Associates',
-    priority: 'Medium',
-    validationOutcome: 'NEEDS REVIEW',
-    reviewStatus: 'Unassigned',
-    topFinding: 'Units exceed expected maximum',
-    assignedTo: null,
-    age: '3d',
-    lastAction: 'Flagged by run RUN-4819',
-    serviceDate: '2026-09-03',
-    amount: '$3,100.00',
-  },
-  {
-    claimId: 'CLM-10481',
-    provider: 'Redwood Behavioral Health',
-    priority: 'Low',
-    validationOutcome: 'NEEDS REVIEW',
-    reviewStatus: 'Unassigned',
-    topFinding: 'Rendering provider not listed',
-    assignedTo: null,
-    age: '4d',
-    lastAction: 'Flagged by run RUN-4818',
-    serviceDate: '2026-09-02',
-    amount: '$1,800.00',
-  },
-];
 
 const PRIORITY_STYLE: Record<Priority, { bg: string; text: string; border: string }> = {
   High: { bg: '#fbefee', text: '#8c322f', border: '#e9c8c7' },
@@ -219,13 +61,6 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'high', label: 'High Priority' },
   { key: 'waiting', label: 'Waiting for Info' },
   { key: 'recheck', label: 'Ready for Re-check' },
-];
-
-const WORKLOAD = [
-  { label: 'High priority', count: 8, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
-  { label: 'Unassigned', count: 12, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
-  { label: 'Waiting for info', count: 7, color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
-  { label: 'In review', count: 15, color: 'var(--accent)', bg: 'var(--accent-subtle)', border: 'var(--status-pass-border)' },
 ];
 
 function Badge({
@@ -263,10 +98,32 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
   const [sortBy, setSortBy] = useState<'age' | 'priority' | 'status'>('priority');
   const [reviewerFilter, setReviewerFilter] = useState('All reviewers');
   const [sessionIndex, setSessionIndex] = useState<number | null>(null);
+  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getIngestedClaims(undefined, controller.signal).then((response) => {
+      const rows = datasetToClaimRows(response).filter((row) => row.status !== 'pass');
+      setQueueItems(rows.map((row: ClaimRow) => ({
+        claimId: row.id,
+        provider: row.provider,
+        priority: row.status === 'fail' ? 'High' : row.status === 'review' ? 'Medium' : 'Low',
+        validationOutcome: row.status === 'fail' ? 'FAIL' : row.status === 'review' ? 'NEEDS REVIEW' : 'UNABLE TO ASSESS',
+        reviewStatus: 'Unassigned',
+        topFinding: row.rule === '—' ? 'Evaluation requires review' : row.rule,
+        assignedTo: null,
+        age: 'Current batch',
+        lastAction: 'Flagged by backend evaluation',
+        serviceDate: row.dos,
+        amount: row.amount,
+      })));
+    }).catch(() => setQueueItems([]));
+    return () => controller.abort();
+  }, []);
 
   const currentUser = 'Aya Gaha';
 
-  const filtered = QUEUE_ITEMS.filter((item) => {
+  const filtered = queueItems.filter((item) => {
     if (activeFilter === 'mine') return item.assignedTo === currentUser;
     if (activeFilter === 'unassigned') return item.assignedTo === null;
     if (activeFilter === 'high') return item.priority === 'High';
@@ -280,6 +137,12 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
   });
 
   const highPriority = filtered.filter((i) => i.priority === 'High');
+  const workload = [
+    { label: 'High priority', count: queueItems.filter((item) => item.priority === 'High').length, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
+    { label: 'Unassigned', count: queueItems.filter((item) => item.assignedTo === null).length, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
+    { label: 'Waiting for info', count: queueItems.filter((item) => item.reviewStatus === 'Waiting for Info').length, color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
+    { label: 'In review', count: queueItems.filter((item) => item.reviewStatus === 'In Review').length, color: 'var(--accent)', bg: 'var(--accent-subtle)', border: 'var(--status-pass-border)' },
+  ];
 
   const handleStartReview = (claimId: string, idx: number) => {
     setSessionIndex(idx);
@@ -304,7 +167,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               Review Queue
             </h1>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>42</strong> claims need your attention
+              <strong style={{ color: 'var(--text-primary)' }}>{queueItems.length}</strong> claims need your attention
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -364,7 +227,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
 
       {/* Workload summary */}
       <div className="review-queue-summary" style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
-        {WORKLOAD.map((w) => (
+        {workload.map((w) => (
           <div
             key={w.label}
             style={{
@@ -740,7 +603,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
             }}
           >
             <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-              Showing {filtered.length} of 42 claims
+              Showing {filtered.length} of {queueItems.length} claims
             </span>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <button

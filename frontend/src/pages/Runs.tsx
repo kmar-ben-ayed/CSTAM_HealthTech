@@ -1,51 +1,94 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sentinel from '../components/Sentinel';
 import type { SentinelState } from '../components/Sentinel';
+import { getIngestionRuns, type IngestionRun } from '../api/runs';
 
-const RUNS = [
-  { id: 'RUN-4821', dataset: 'Meridian Q3 Batch', ruleset: 'v2.4.1', model: 'CGM-3.1', status: 'completed', claims: 24, duration: '18.4s', precision: 97.8, recall: 96.2, f1: 97.0, accuracy: 98.2, far: 1.2, fabr: 0.8, started: 'Today 10:31', sentinel: 'pass' as SentinelState },
-  { id: 'RUN-4820', dataset: 'Pacific Medical Batch', ruleset: 'v2.4.1', model: 'CGM-3.1', status: 'completed', claims: 18, duration: '14.1s', precision: 95.5, recall: 94.1, f1: 94.8, accuracy: 96.7, far: 2.1, fabr: 1.4, started: 'Today 09:44', sentinel: 'pass' as SentinelState },
-  { id: 'RUN-4819', dataset: 'Eastern Group Audit', ruleset: 'v2.4.0', model: 'CGM-3.1', status: 'completed', claims: 52, duration: '41.8s', precision: 98.4, recall: 97.9, f1: 98.1, accuracy: 99.1, far: 0.8, fabr: 0.5, started: 'Yesterday 16:22', sentinel: 'pass' as SentinelState },
-  { id: 'RUN-4818', dataset: 'Emergency Review Dataset', ruleset: 'v2.4.0', model: 'CGM-3.1', status: 'failed', claims: 8, duration: '–', precision: 0, recall: 0, f1: 0, accuracy: 0, far: 0, fabr: 0, started: 'Yesterday 14:05', sentinel: 'fail' as SentinelState },
-  { id: 'RUN-4817', dataset: 'Monthly Audit Sample', ruleset: 'v2.3.9', model: 'CGM-3.0', status: 'completed', claims: 100, duration: '82.3s', precision: 94.2, recall: 93.8, f1: 94.0, accuracy: 95.6, far: 3.1, fabr: 2.2, started: 'Sep 24, 17:00', sentinel: 'pass' as SentinelState },
-];
-
-const RULE_BREAKDOWN = [
-  { id: 'R001', name: 'Member eligibility', pass: 22, fail: 2, uta: 0, na: 0 },
-  { id: 'R002', name: 'Provider enrollment', pass: 24, fail: 0, uta: 0, na: 0 },
-  { id: 'R003', name: 'Service date validity', pass: 23, fail: 1, uta: 0, na: 0 },
-  { id: 'R005', name: 'Duplicate claim check', pass: 24, fail: 0, uta: 0, na: 0 },
-  { id: 'R008', name: 'Authorization reference', pass: 18, fail: 4, uta: 0, na: 2 },
-  { id: 'R009', name: 'Authorization validity', pass: 16, fail: 2, uta: 4, na: 2 },
-  { id: 'R013', name: 'Diagnosis-procedure', pass: 22, fail: 2, uta: 0, na: 0 },
-  { id: 'R015', name: 'Coordination of benefits', pass: 12, fail: 0, uta: 0, na: 12 },
-];
-
-const STATUS_DIST = [
-  { status: 'PASS', count: 14, pct: 58.3, color: 'var(--status-pass)', bg: 'var(--status-pass-bg)', border: 'var(--status-pass-border)' },
-  { status: 'NEEDS REVIEW', count: 6, pct: 25.0, color: 'var(--status-review)', bg: 'var(--status-review-bg)', border: 'var(--status-review-border)' },
-  { status: 'FAIL', count: 3, pct: 12.5, color: 'var(--status-fail)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
-  { status: 'UNABLE TO ASSESS', count: 1, pct: 4.2, color: 'var(--status-uta)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
-];
+type DisplayRun = IngestionRun & {
+  id: string;
+  dataset: string;
+  ruleset: string;
+  model: string;
+  claims: number;
+  duration: string;
+  precision: number;
+  recall: number;
+  f1: number;
+  accuracy: number;
+  far: number;
+  fabr: number;
+  started: string;
+  sentinel: SentinelState;
+};
 
 export default function Runs() {
-  const [selectedRun, setSelectedRun] = useState(RUNS[0]);
+  const [runs, setRuns] = useState<DisplayRun[]>([]);
+  const [selectedRun, setSelectedRun] = useState<DisplayRun | null>(null);
   const [view, setView] = useState<'table' | 'detail'>('table');
 
-  const openRun = (run: typeof RUNS[0]) => {
+  useEffect(() => {
+    const controller = new AbortController();
+    getIngestionRuns(controller.signal).then(({ runs: responseRuns }) => {
+      const mapped = responseRuns.map((run) => ({
+        ...run,
+        id: run.run_id,
+        dataset: run.source,
+        ruleset: 'Backend rules',
+        model: 'Deterministic engine',
+        claims: run.accepted_claims,
+        status_counts: run.status_counts || {},
+        rule_counts: run.rule_counts || {},
+        duration: '—',
+        precision: 0,
+        recall: 0,
+        f1: 0,
+        accuracy: 0,
+        far: 0,
+        fabr: 0,
+        started: '—',
+        sentinel: 'pass' as SentinelState,
+      }));
+      setRuns(mapped);
+      setSelectedRun(mapped[0] || null);
+    }).catch(() => {
+      setRuns([]);
+      setSelectedRun(null);
+    });
+    return () => controller.abort();
+  }, []);
+
+  const openRun = (run: DisplayRun) => {
     setSelectedRun(run);
     setView('detail');
   };
 
-  if (view === 'detail') {
+  if (view === 'detail' && selectedRun) {
     const run = selectedRun;
+    const statusCounts = run.status_counts || {};
+    const ruleCounts = run.rule_counts || {};
+    const evaluationTotal = Object.values(statusCounts).reduce((total, count) => total + count, 0);
+    const statusDist = Object.entries(statusCounts)
+      .filter(([, count]) => count > 0)
+      .map(([status, count]) => ({
+        status: status.replaceAll('_', ' '),
+        count,
+        pct: evaluationTotal ? (count / evaluationTotal) * 100 : 0,
+        color: status === 'PASS' ? 'var(--status-pass)' : status === 'FAIL' ? 'var(--status-fail)' : 'var(--status-uta)',
+      }));
+    const ruleBreakdown = Object.entries(ruleCounts).map(([id, counts]) => ({
+      id,
+      name: id,
+      pass: counts.PASS || 0,
+      fail: counts.FAIL || 0,
+      uta: counts.UNABLE_TO_ASSESS || 0,
+      na: counts.NOT_APPLICABLE || 0,
+    }));
     const metrics = [
-      { label: 'Issue precision', value: `${run.precision}%`, desc: 'True positives / (TP + FP)', color: '#1f7a5c' },
-      { label: 'Issue recall', value: `${run.recall}%`, desc: 'True positives / (TP + FN)', color: 'var(--accent)' },
-      { label: 'Issue F1', value: `${run.f1}%`, desc: 'Harmonic mean of precision & recall', color: 'var(--status-review)' },
-      { label: 'Status accuracy', value: `${run.accuracy}%`, desc: 'Correct status across all claims', color: '#0f172a' },
-      { label: 'False alarm rate', value: `${run.far}%`, desc: 'False positives / (FP + TN)', color: '#b4403f' },
-      { label: 'False abstention', value: `${run.fabr}%`, desc: 'Unable to assess when assessable', color: '#96650f' },
+      { label: 'Accepted claims', value: String(run.accepted_claims), desc: 'Claims accepted from this upload', color: 'var(--accent)' },
+      { label: 'Rejected records', value: String(run.rejected_records), desc: 'Records rejected during ingestion', color: 'var(--status-fail)' },
+      { label: 'Pass rate', value: `${evaluationTotal ? ((statusCounts.PASS || 0) / evaluationTotal * 100).toFixed(1) : '0.0'}%`, desc: 'Rule evaluations returning PASS', color: 'var(--status-pass)' },
+      { label: 'Failures', value: String(statusCounts.FAIL || 0), desc: 'Rule evaluations returning FAIL', color: 'var(--status-fail)' },
+      { label: 'Unable to assess', value: String(statusCounts.UNABLE_TO_ASSESS || 0), desc: 'Evaluations missing required evidence', color: 'var(--status-uta)' },
+      { label: 'Rule evaluations', value: String(evaluationTotal), desc: 'All stored rule outcomes', color: 'var(--status-review)' },
     ];
 
     return (
@@ -133,11 +176,11 @@ export default function Runs() {
             <div style={{ padding: '16px 20px' }}>
               {/* Stacked bar */}
               <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}>
-                {STATUS_DIST.map(s => (
+                {statusDist.map(s => (
                   <div key={s.status} style={{ width: `${s.pct}%`, background: s.color, transition: 'width 0.3s ease' }} />
                 ))}
               </div>
-              {STATUS_DIST.map(s => (
+              {statusDist.map(s => (
                 <div key={s.status} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color }} />
@@ -171,7 +214,7 @@ export default function Runs() {
               </tr>
             </thead>
             <tbody>
-              {RULE_BREAKDOWN.map(r => {
+              {ruleBreakdown.map(r => {
                 const total = r.pass + r.fail + r.uta + r.na;
                 return (
                   <tr key={r.id}>
@@ -234,10 +277,10 @@ export default function Runs() {
       {/* Summary metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
         {[
-          { label: 'Total runs', value: '4,821', sub: 'All time', color: 'var(--accent)' },
-          { label: 'Avg precision', value: '96.5%', sub: 'Last 30 days', color: '#1f7a5c' },
-          { label: 'Claims processed', value: '28,441', sub: 'Last 30 days', color: 'var(--status-review)' },
-          { label: 'Avg latency', value: '1.2s', sub: 'Per claim', color: '#96650f' },
+          { label: 'Total runs', value: String(runs.length), sub: 'Stored ingestion batches', color: 'var(--accent)' },
+          { label: 'Avg precision', value: '—', sub: 'Not recorded by backend', color: '#1f7a5c' },
+          { label: 'Claims processed', value: String(runs.reduce((total, run) => total + run.claims, 0)), sub: 'Across stored batches', color: 'var(--status-review)' },
+          { label: 'Avg latency', value: '—', sub: 'Not recorded by backend', color: '#96650f' },
         ].map(m => (
           <div key={m.label} className="kpi-card">
             <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.5rem', fontWeight: 700, color: m.color, letterSpacing: '-0.04em', marginBottom: 4 }}>
@@ -269,7 +312,7 @@ export default function Runs() {
             </tr>
           </thead>
           <tbody>
-            {RUNS.map(run => (
+            {runs.map(run => (
               <tr key={run.id} onClick={() => openRun(run)} style={{ cursor: 'pointer' }}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

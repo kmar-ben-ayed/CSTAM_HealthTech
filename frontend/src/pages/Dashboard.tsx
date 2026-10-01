@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sentinel from '../components/Sentinel';
 import type { SentinelState } from '../components/Sentinel';
+import { getAuditEvents, type BackendAuditEvent } from '../api/audit';
+import { datasetToClaimRows, getIngestedClaims, type ClaimRow } from '../api/claims';
 
 interface DashboardProps {
   onNavigate: (page: string, claimId?: string) => void;
@@ -40,7 +42,6 @@ const QUEUE_ITEMS = [
   {
     id: 'CLM-10476',
     provider: 'Riverside Medical Center',
-    service: 'Sep 11, 2026',
     findings: 1,
     status: 'fail',
     statusLabel: 'Failed',
@@ -54,7 +55,6 @@ const QUEUE_ITEMS = [
     findings: 2,
     status: 'review',
     statusLabel: 'Needs Review',
-    updated: '6h ago',
     sentinel: 'review' as SentinelState,
   },
 ];
@@ -83,14 +83,54 @@ const ACTIVITY_COLORS: Record<string, string> = {
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [claims, setClaims] = useState<ClaimRow[]>([]);
+  const [activity, setActivity] = useState<BackendAuditEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([
+      getIngestedClaims(undefined, controller.signal),
+      getAuditEvents(6, controller.signal),
+    ]).then(([ingested, audit]) => {
+      setClaims(datasetToClaimRows(ingested));
+      setActivity(audit.events);
+    }).catch(() => {
+      setClaims([]);
+      setActivity([]);
+    }).finally(() => setLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  const reviewClaims = claims.filter((claim) => claim.status !== 'pass');
+  const statusCounts = claims.reduce<Record<string, number>>((counts, claim) => {
+    counts[claim.status] = (counts[claim.status] || 0) + 1;
+    return counts;
+  }, {});
+  const queueItems = reviewClaims.slice(0, 5);
+  const statusLabels: Record<ClaimRow['status'], string> = {
+    review: 'Needs Review', fail: 'Failed', uncertain: 'Unable to Assess', pass: 'Passed',
+  };
+  const activityColor = (event: BackendAuditEvent) => event.event_type === 'human_decision'
+    ? ACTIVITY_COLORS.human
+    : event.event_type === 'rule_execution' ? ACTIVITY_COLORS.rule : ACTIVITY_COLORS.system;
+  const activityLabel = (event: BackendAuditEvent) => event.event_type === 'rule_execution'
+    ? 'RULE_EVALUATED'
+    : event.event_type === 'human_decision' ? 'REVIEW_ACTION' : event.event_type.toUpperCase();
+  const activityDetail = (event: BackendAuditEvent) => {
+    const payload = event.payload;
+    if (event.event_type === 'rule_execution') return `${event.claim_id || 'Claim'} · ${String(payload.status || 'evaluated')}`;
+    if (event.event_type === 'human_decision') return `${event.claim_id || 'Claim'} · ${String(payload.action || 'review recorded')}`;
+    return event.claim_id ? `Claim ${event.claim_id}` : 'System event recorded';
+  };
 
   const kpis = [
     {
       label: 'Claims processed',
-      value: '1,284',
-      change: '+12% this week',
-      changePos: true,
-      sub: '24 today',
+      value: String(claims.length),
+      change: 'Accumulated locally',
+      changePos: null,
+      sub: `${reviewClaims.length} need review`,
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
           <rect x="2" y="3" width="14" height="12" rx="2" stroke="#1d5c8a" strokeWidth="1.5"/>
@@ -101,10 +141,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
     {
       label: 'Needs review',
-      value: '23',
-      change: '+5 since yesterday',
-      changePos: false,
-      sub: '3 urgent',
+      value: String((statusCounts.review || 0) + (statusCounts.fail || 0)),
+      change: 'From current claims',
+      changePos: null,
+      sub: `${statusCounts.fail || 0} failed`,
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
           <circle cx="9" cy="7" r="3" stroke="#96650f" strokeWidth="1.5"/>
@@ -115,7 +155,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
     {
       label: 'Unable to assess',
-      value: '8',
+      value: String(statusCounts.uncertain || 0),
       change: 'Awaiting evidence',
       changePos: null,
       sub: '3 pending info',
@@ -129,8 +169,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
     {
       label: 'Issues detected',
-      value: '41',
-      change: 'Across 18 claims',
+      value: String(claims.reduce((total, claim) => total + claim.findings, 0)),
+      change: 'Across accumulated claims',
       changePos: null,
       sub: 'R008 most frequent',
       icon: (
@@ -252,7 +292,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </tr>
             </thead>
             <tbody>
-              {QUEUE_ITEMS.map(item => {
+              {queueItems.map(item => {
                 const sc = STATUS_COLORS[item.status] || STATUS_COLORS['review'];
                 return (
                   <tr
@@ -275,7 +315,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     </td>
                     <td>
                       <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                        {item.service}
+                        {item.dos}
                       </span>
                     </td>
                     <td>
@@ -312,7 +352,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         whiteSpace: 'nowrap',
                       }}>
                         <span style={{ width: 5, height: 5, borderRadius: '50%', background: sc.dot, display: 'inline-block', flexShrink: 0 }} />
-                        {item.statusLabel}
+                        {statusLabels[item.status]}
                       </span>
                     </td>
                     <td>
@@ -351,10 +391,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <button onClick={() => onNavigate('runs')} className="text-action">Run details</button>
             </div>
             <dl className="run-context">
-              <div><dt>Run</dt><dd>RUN-4821</dd></div>
-              <div><dt>Claims evaluated</dt><dd>24</dd></div>
-              <div><dt>Ruleset</dt><dd>v2.4.1</dd></div>
-              <div><dt>Completed</dt><dd>10:31</dd></div>
+              <div><dt>Source</dt><dd>Accumulated store</dd></div>
+              <div><dt>Claims evaluated</dt><dd>{claims.length}</dd></div>
+              <div><dt>Ruleset</dt><dd>Configured backend rules</dd></div>
+              <div><dt>Last event</dt><dd>{activity[0] ? new Date(activity[0].timestamp).toLocaleTimeString() : '—'}</dd></div>
             </dl>
             <p className="context-note">Rule outcomes are deterministic. AI explanations are linked to the recorded evidence.</p>
           </section>
@@ -368,10 +408,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <button onClick={() => onNavigate('audit')} className="text-action">Audit trail</button>
             </div>
             <div className="activity-list">
-              {ACTIVITY.map((a, i) => (
+              {activity.map((a, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, position: 'relative' }}>
                   {/* Timeline line */}
-                  {i < ACTIVITY.length - 1 && (
+                  {i < activity.length - 1 && (
                     <div style={{
                       position: 'absolute',
                       left: 5,
@@ -385,7 +425,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     width: 11,
                     height: 11,
                     borderRadius: '50%',
-                    background: ACTIVITY_COLORS[a.type],
+                    background: activityColor(a),
                     marginTop: 4,
                     flexShrink: 0,
                     zIndex: 1,
@@ -396,14 +436,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         fontFamily: 'var(--font-mono)',
                         fontSize: '0.6875rem',
                         fontWeight: 600,
-                        color: ACTIVITY_COLORS[a.type],
+                        color: activityColor(a),
                         letterSpacing: '0.02em',
                       }}>
-                        {a.event}
+                        {activityLabel(a)}
                       </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>{a.time}</span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>{new Date(a.timestamp).toLocaleTimeString()}</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>{a.detail}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>{activityDetail(a)}</div>
                     <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: 1 }}>{a.actor}</div>
                   </div>
                 </div>

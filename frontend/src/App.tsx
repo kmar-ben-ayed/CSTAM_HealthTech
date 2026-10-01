@@ -14,6 +14,7 @@ import AuditTrail from './pages/AuditTrail';
 import Rules from './pages/Rules';
 import Ingest from './pages/Ingest';
 import Analytics from './pages/Analytics';
+import { getIngestedClaims } from './api/claims';
 
 type Page =
   | 'landing'
@@ -68,7 +69,6 @@ const NAV_SECTIONS: NavSection[] = [
       {
         key: 'review-queue',
         label: 'Review Queue',
-        badge: '42',
         icon: (
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="6.5" r="2.5" stroke="currentColor" strokeWidth="1.3" />
@@ -255,7 +255,19 @@ function Sidebar({
 }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
+  const [reviewCount, setReviewCount] = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getIngestedClaims(undefined, controller.signal).then((response) => {
+      const count = Object.values(response.evaluations).filter((results) =>
+        results.some((result) => result.status === 'FAIL' || result.status === 'UNABLE_TO_ASSESS' || result.requires_human_review),
+      ).length;
+      setReviewCount(count);
+    }).catch(() => setReviewCount(0));
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -340,7 +352,7 @@ function Sidebar({
                     </span>
                     {item.label}
                   </div>
-                  {item.badge && (
+                  {item.key === 'review-queue' && reviewCount > 0 && (
                     <span
                       style={{
                         background: 'rgba(244,63,94,0.15)',
@@ -353,7 +365,7 @@ function Sidebar({
                         fontFamily: "var(--font-sans)",
                       }}
                     >
-                      {item.badge}
+                      {reviewCount}
                     </span>
                   )}
                 </button>

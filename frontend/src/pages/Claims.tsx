@@ -255,7 +255,7 @@ export default function Claims({ onNavigate }: ClaimsProps) {
         overflow: 'hidden',
         boxShadow: 'var(--card-shadow)',
       }}>
-        <table className="data-table">
+        <table className="data-table claims-table">
           <thead>
             <tr>
               <th>Claim ID</th>
@@ -293,6 +293,7 @@ export default function Claims({ onNavigate }: ClaimsProps) {
               return (
                 <tr
                   key={claim.id}
+                  className={`claim-row claim-row-${claim.status}`}
                   onClick={() => onNavigate('claim-review', claim.id)}
                   onMouseEnter={() => setHoveredRow(claim.id)}
                   onMouseLeave={() => setHoveredRow(null)}

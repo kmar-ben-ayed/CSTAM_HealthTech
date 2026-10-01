@@ -44,6 +44,11 @@ def get_ingested_claim(claim_id: str, request: Request):
     return _service(request, "ingestion_service").store.claim(claim_id)
 
 
+@v1_router.get("/runs", tags=["ingestion"])
+def get_ingestion_runs(request: Request):
+    return {"runs": _service(request, "ingestion_service").store.runs()}
+
+
 @v1_router.post("/claims/evaluate", tags=["claims"])
 def evaluate_claim(payload: ClaimRequest, request: Request):
     return _service(request, "claim_service").evaluate(payload.claim)

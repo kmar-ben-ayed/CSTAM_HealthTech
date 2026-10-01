@@ -1,9 +1,10 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
-  --font-mono: var(--font-sans);
+  --font-sans: 'DM Sans', 'Segoe UI', sans-serif;
+  --font-display: 'Space Grotesk', 'DM Sans', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
 /*
@@ -24,7 +25,7 @@
   --topbar-bg: #ffffff;
   --topbar-border: #dbe4ea;
 
-  --canvas-bg: #f4f7f9;
+  --canvas-bg: #f3f6f5;
   --card-bg: #ffffff;
   --card-border: #dbe4ea;
   --card-shadow: 0 1px 2px rgba(15,31,46,0.05);
@@ -179,7 +180,7 @@
 
 html, body {
   font-family: var(--font-sans);
-  background-color: var(--canvas-bg);
+  background: linear-gradient(135deg, var(--canvas-bg) 0%, #edf2f1 52%, #f7f5f0 100%);
   color: var(--text-primary);
   min-height: 100%;
   -webkit-font-smoothing: antialiased;
@@ -187,7 +188,10 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-h1, h2, h3 { letter-spacing: 0 !important; }
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0 !important;
+}
 
 button, input, select, textarea {
   font: inherit;
@@ -383,7 +387,7 @@ div:has(> div > .data-table) {
   transition: all 0.15s ease;
   text-decoration: none;
   white-space: nowrap;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .nav-item:hover {
@@ -415,7 +419,14 @@ div:has(> div > .data-table) {
   border: 1px solid var(--card-border);
   border-radius: 10px;
   padding: 20px 24px;
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--card-shadow-md);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: 0 10px 24px rgba(15,31,46,0.10);
 }
 
 .dashboard-shell {
@@ -431,6 +442,75 @@ div:has(> div > .data-table) {
   margin: 0 auto;
   padding: 28px clamp(16px, 3vw, 40px) 48px;
   color: var(--text-primary);
+}
+
+.page-shell > div:first-child h1,
+.dashboard-shell h1 {
+  font-weight: 700;
+  letter-spacing: -0.02em !important;
+}
+
+.dashboard-panel,
+.page-shell .kpi-card {
+  box-shadow: 0 8px 24px rgba(15,31,46,0.055);
+}
+
+.data-table th {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.data-table td {
+  transition: background-color 140ms ease;
+}
+
+.claims-table {
+  border-spacing: 0;
+}
+
+.claims-table tbody .claim-row {
+  position: relative;
+  background: var(--card-bg);
+  box-shadow: 0 3px 12px rgba(15,31,46,0.035);
+}
+
+.claims-table tbody .claim-row td {
+  padding-top: 15px;
+  padding-bottom: 15px;
+  background: var(--card-bg);
+}
+
+.claims-table tbody .claim-row td:first-child {
+  border-left: 4px solid var(--border-strong);
+  padding-left: 13px;
+}
+
+.claims-table tbody .claim-row td:first-child,
+.claims-table tbody .claim-row td:last-child {
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.claims-table tbody .claim-row.claim-row-review td:first-child { border-left-color: var(--status-review); }
+.claims-table tbody .claim-row.claim-row-fail td:first-child { border-left-color: var(--status-fail); }
+.claims-table tbody .claim-row.claim-row-uncertain td:first-child { border-left-color: var(--status-uta); }
+.claims-table tbody .claim-row.claim-row-pass td:first-child { border-left-color: var(--status-pass); }
+
+.claims-table tbody .claim-row:hover td {
+  background: var(--accent-subtle);
+}
+
+.claims-table tbody .claim-row:hover td:first-child {
+  border-left-color: var(--accent);
+}
+
+.claims-table tbody .claim-row td:nth-child(1) span {
+  letter-spacing: 0.02em;
+}
+
+.claims-table tbody .claim-row td:nth-child(2),
+.claims-table tbody .claim-row td:nth-child(3) {
+  color: var(--text-secondary);
 }
 
 .page-shell h1 { color: var(--text-primary) !important; }
@@ -913,8 +993,8 @@ div:has(> div > .data-table) {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--color-navy-950);
-  color: #d7e6f4;
+  background: #f7fafc;
+  color: #172b3a;
   font-family: var(--font-mono);
   font-size: 0.75rem;
   line-height: 1.65;
@@ -922,6 +1002,11 @@ div:has(> div > .data-table) {
   white-space: pre;
 }
 .claim-review-fhir-code code { font: inherit; }
+[data-theme="dark"] .claim-review-fhir-code {
+  background: #0d1829;
+  color: #d7e6f4;
+  border-color: #1e3048;
+}
 .claim-review-fhir-message {
   flex: 1;
   display: flex;

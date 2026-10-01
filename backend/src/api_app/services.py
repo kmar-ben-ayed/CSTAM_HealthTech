@@ -146,6 +146,39 @@ class IngestionStore:
             }
         return result
 
+    def runs(self) -> list[dict[str, Any]]:
+        with self._lock:
+            with closing(sqlite3.connect(self.storage_path)) as connection:
+                rows = connection.execute(
+                    "SELECT fingerprint, response FROM ingestion_fingerprints ORDER BY rowid DESC"
+                ).fetchall()
+        runs = []
+        for fingerprint, raw_response in rows:
+            response = self._read_response(raw_response)
+            source = fingerprint.split(":", 1)[0].upper()
+            accepted = len(response.get("claims", []))
+            rejected = len(response.get("rejected", []))
+            status_counts = {"PASS": 0, "FAIL": 0, "UNABLE_TO_ASSESS": 0, "NOT_APPLICABLE": 0, "NOT_IMPLEMENTED": 0}
+            rule_counts: dict[str, dict[str, int]] = {}
+            for results in response.get("evaluations", {}).values():
+                for result in results:
+                    status = result.get("status", "NOT_IMPLEMENTED")
+                    status_counts[status] = status_counts.get(status, 0) + 1
+                    rule_id = result.get("rule_id", "UNKNOWN")
+                    counts = rule_counts.setdefault(rule_id, {"PASS": 0, "FAIL": 0, "UNABLE_TO_ASSESS": 0, "NOT_APPLICABLE": 0, "NOT_IMPLEMENTED": 0})
+                    counts[status] = counts.get(status, 0) + 1
+            runs.append({
+                "run_id": response["batch_id"],
+                "source": source,
+                "accepted_claims": accepted,
+                "rejected_records": rejected,
+                "total_records": accepted + rejected,
+                "status": "completed",
+                "status_counts": status_counts,
+                "rule_counts": rule_counts,
+            })
+        return runs
+
     def claim(self, claim_id: str) -> dict[str, Any]:
         result = self.latest()
         for claim in result["claims"]:

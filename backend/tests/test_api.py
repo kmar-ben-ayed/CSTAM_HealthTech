@@ -129,6 +129,14 @@ class ApiRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["claims"][0]["claim_id"], self.claim["claim_id"])
+
+    def test_ingestion_runs_report_real_batches(self):
+        response = self.client.post("/api/v1/ingest/jsonl", json={"text": json.dumps(self.claim)})
+        self.assertEqual(response.status_code, 200)
+        runs = self.client.get("/api/v1/runs")
+        self.assertEqual(runs.status_code, 200)
+        self.assertEqual(runs.json()["runs"][0]["run_id"], response.json()["batch_id"])
+        self.assertEqual(runs.json()["runs"][0]["source"], "JSONL")
     def test_csv_ingestion_rejects_claims_file_without_related_pack(self):
         response = self.client.post(
             "/api/v1/ingest/csv",
