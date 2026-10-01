@@ -32,6 +32,7 @@ export default function Claims({ onNavigate }: ClaimsProps) {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   useEffect(() => {
     const controller = new AbortController();
@@ -247,6 +248,46 @@ export default function Claims({ onNavigate }: ClaimsProps) {
         ))}
       </div>
 
+      <div className="claims-view-switcher" role="group" aria-label="Claim view">
+        <button className={viewMode === 'cards' ? 'active' : ''} onClick={() => setViewMode('cards')} aria-label="Card view">Cards</button>
+        <button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')} aria-label="Table view">Table</button>
+      </div>
+
+      {viewMode === 'cards' && (
+        <div className="claims-card-grid">
+          {loading ? (
+            <div className="claims-card-state">Loading claims from the API…</div>
+          ) : error ? (
+            <div className="claims-card-state claims-card-state-error"><strong>Unable to load claims</strong><span>{error}</span></div>
+          ) : filtered.length === 0 ? (
+            <div className="claims-card-state"><Sentinel state="idle" size={48} /><strong>No claims found</strong><span>Try adjusting your search or filters</span></div>
+          ) : filtered.map((claim) => {
+            const sc = STATUS_CONFIG[claim.status];
+            return (
+              <article key={claim.id} className={`claim-card claim-card-${claim.status}`} onClick={() => onNavigate('claim-review', claim.id)}>
+                <div className="claim-card-header">
+                  <div className="claim-card-id"><Sentinel state={claim.sentinel} size={24} /><span>{claim.id}</span></div>
+                  <span className="claim-card-status" style={{ background: sc.bg, color: sc.text, borderColor: sc.border }}><span />{sc.label}</span>
+                </div>
+                <div className="claim-card-provider">{claim.provider}</div>
+                <div className="claim-card-member">Member <strong>{claim.member}</strong></div>
+                <div className="claim-card-facts">
+                  <div><span>Service date</span><strong>{claim.dos}</strong></div>
+                  <div><span>Billed amount</span><strong>{claim.amount}</strong></div>
+                  <div><span>Findings</span><strong className={claim.findings ? 'has-findings' : ''}>{claim.findings}</strong></div>
+                </div>
+                <div className="claim-card-footer">
+                  <span>{claim.rule === '—' ? 'No rule findings' : claim.rule}</span>
+                  <button onClick={(event) => { event.stopPropagation(); onNavigate('claim-review', claim.id); }}>Review <span aria-hidden="true">→</span></button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {viewMode === 'table' && (
+        <>
       {/* Table */}
       <div style={{
         background: '#fff',
@@ -420,6 +461,8 @@ export default function Claims({ onNavigate }: ClaimsProps) {
           </div>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
