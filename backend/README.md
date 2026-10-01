@@ -44,7 +44,12 @@ For Swagger-ready request bodies, field alternatives, limits, and endpoint-by-en
 | `POST` | `/api/v1/fhir/export` | Export a normalized claim as a FHIR bundle |
 | `POST` | `/api/v1/explanations` | Recompute a finding and return a grounded explanation |
 | `POST` | `/api/v1/reviews` | Record a reviewer decision in the audit chain |
-| `GET` | `/api/v1/audit/events` | List recent minimized audit events |
+| `POST` | `/api/v1/reviews/opened` | Record a claim review visit in the audit chain |
+| `POST` | `/api/v1/runs` | Evaluate a dataset and persist a run record |
+| `GET` | `/api/v1/runs` | List persisted dataset runs |
+| `GET` | `/api/v1/runs/{run_id}` | Return one persisted dataset run |
+| `GET` | `/api/v1/audit/events` | List minimized audit events with offset pagination |
+| `GET` | `/api/v1/audit/export` | Export the complete hash-linked audit chain |
 | `GET` | `/api/v1/audit/verify` | Verify the stored audit hash chain |
 
 POST endpoints accept JSON request objects documented in `/docs`. Claim payloads are checked against `schemas/claim.schema.json` and the engine's transport validation before evaluation. Invalid inputs return `422`; request bodies larger than 5 MB return `413`.
@@ -69,7 +74,7 @@ The explanation endpoint adds a separate `assessment` object for reviewer-facing
 
 ## Audit and local-demo boundaries
 
-Audit events are appended to `backend/outputs/audit_log.jsonl` by default. Override the path with `CLAIMGUARD_AUDIT_LOG`. Rule audit entries contain minimized summaries, AI events contain a finding hash, and human-review reasons are hashed rather than stored as plain text. The API rejects oversized requests and only allows the local frontend origins by default; configure `CLAIMGUARD_CORS_ORIGINS` as a comma-separated list if needed.
+Audit events are appended to `backend/outputs/audit_log.jsonl` by default. Override the path with `CLAIMGUARD_AUDIT_LOG`. Rule audit entries contain minimized summaries, AI events contain a finding hash, and human-review reasons are hashed rather than stored as plain text. Dataset runs are appended to `backend/outputs/run_log.jsonl`; override the path with `CLAIMGUARD_RUNS_LOG`. The stress split contains 52 source claims but only 50 expected-result labels, so unlabeled claims are evaluated while excluded from benchmark metrics. The API rejects oversized requests and only allows the local frontend origins by default; configure `CLAIMGUARD_CORS_ORIGINS` as a comma-separated list if needed.
 
 This is a local educational demo using synthetic claims. The hash chain is tamper-evident, not immutable storage or a substitute for authentication, authorization, external backups, or a production security review. Do not use real patient data or expose this service publicly.
 

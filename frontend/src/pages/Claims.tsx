@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Sentinel from '../components/Sentinel';
 import type { SentinelState } from '../components/Sentinel';
-import { ApiError } from '../api/client';
-import { datasetToClaimRows, getDataset, getIngestedClaims, type ClaimRow } from '../api/claims';
+import type { DataSource } from '../hooks/useOperationalData';
+import { useOperationalData } from '../hooks/useOperationalData';
 
 interface ClaimsProps {
   onNavigate: (page: string, claimId?: string) => void;
@@ -24,36 +24,15 @@ const TABS = [
 ];
 
 export default function Claims({ onNavigate }: ClaimsProps) {
-  const [claims, setClaims] = useState<ClaimRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const data = useOperationalData();
+  const claims = data.records.map((record) => record.row);
+  const loading = data.loading;
+  const error = data.error;
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('');
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    getIngestedClaims(500, controller.signal)
-      .catch((cause: unknown) => {
-        if (cause instanceof ApiError && cause.status === 404) return getDataset('development', 500, controller.signal);
-        throw cause;
-      })
-      .then((dataset) => {
-        setClaims(datasetToClaimRows(dataset));
-        setLoading(false);
-      })
-      .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setError(cause instanceof ApiError ? cause.message : 'The claims service is unavailable.');
-        setLoading(false);
-      });
-
-    return () => controller.abort();
-  }, []);
 
   const filtered = claims.filter(c => {
     const matchTab = activeTab === 'all' || c.status === activeTab;
@@ -78,11 +57,11 @@ export default function Claims({ onNavigate }: ClaimsProps) {
             Claims
           </h1>
           <p style={{ fontSize: '0.9rem', color: '#64748b' }}>
-            {loading ? 'Loading claims…' : `${claims.length} total · ${tabCounts.review || 0} need review`}
+            {loading ? 'Loading claims…' : `${claims.length} claims · ${data.sourceLabel} · ${tabCounts.review || 0} need review`}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button style={{
+          <button onClick={() => onNavigate('runs')} style={{
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
             borderRadius: 7,
@@ -125,6 +104,18 @@ export default function Claims({ onNavigate }: ClaimsProps) {
 
       {/* Search and filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center' }}>
+        <select
+          aria-label="Claim data source"
+          value={data.source}
+          onChange={(event) => data.setSource(event.target.value as DataSource)}
+          style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '8px 12px', fontSize: '0.875rem', color: '#0f172a', fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
+        >
+          <option value="all">All synthetic splits ({data.counts.all})</option>
+          <option value="development">Development ({data.counts.development})</option>
+          <option value="validation">Validation ({data.counts.validation})</option>
+          <option value="stress">Stress ({data.counts.stress})</option>
+          <option value="ingested" disabled={!data.counts.ingested}>Latest ingested batch ({data.counts.ingested})</option>
+        </select>
         <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
           <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.4"/>

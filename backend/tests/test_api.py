@@ -23,7 +23,8 @@ class ApiRouteTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.audit_path = Path(self.temp_dir.name) / "audit.jsonl"
-        self.client = TestClient(create_app(audit_log_path=self.audit_path))
+        self.run_path = Path(self.temp_dir.name) / "runs.jsonl"
+        self.client = TestClient(create_app(audit_log_path=self.audit_path, run_log_path=self.run_path))
         self.client.__enter__()
 
     def tearDown(self):
@@ -36,6 +37,19 @@ class ApiRouteTests(unittest.TestCase):
         current = self.client.get("/api/datasets/development?limit=1")
         self.assertEqual(current.status_code, 200)
         self.assertEqual(len(current.json()["claims"]), 1)
+
+    def test_dataset_split_counts_match_manifest_and_label_coverage(self):
+        manifest = json.loads((BACKEND_ROOT / "data" / "dataset_manifest.json").read_text(encoding="utf-8"))
+        for split, expected_count in (("development", 400), ("validation", 150), ("stress", 52)):
+            response = self.client.get(f"/api/v1/datasets/{split}?limit=500")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(response.json()["claims"]), expected_count)
+            self.assertEqual(manifest["splits"][split]["claims"], expected_count)
+
+        stress = manifest["splits"]["stress"]
+        self.assertEqual(stress["labeled_claims"], 50)
+        self.assertEqual(stress["unlabeled_claims"], 2)
+        self.assertEqual(stress["rule_results"], 750)
 
     def test_claim_evaluation_records_minimized_audit_events(self):
         response = self.client.post("/api/v1/claims/evaluate", json={"claim": self.claim})
@@ -166,6 +180,102 @@ class ApiRouteTests(unittest.TestCase):
             "valid": True,
             "first_broken_index": None,
         })
+
+    def test_review_opened_event_records_visit_without_claim_data(self):
+        response = self.client.post(
+            "/api/v1/reviews/opened",
+            headers={"X-Actor": "reviewer-1"},
+            json={
+                "claim_id": "CG-TEST",
+                "actor": "ignored-body-actor",
+                "visit_id": "visit-1",
+                "opened_at": "2026-10-01T12:00:00Z",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        event = self.client.get("/api/v1/audit/events").json()["events"][0]
+        self.assertEqual(event["event_type"], "review_opened")
+        self.assertEqual(event["claim_id"], "CG-TEST")
+        self.assertEqual(event["actor"], "reviewer-1")
+        self.assertEqual(event["payload"]["visit_id"], "visit-1")
+        self.assertTrue(self.client.get("/api/v1/audit/verify").json()["valid"])
+
+    def test_audit_event_offset_pagination_has_no_gaps(self):
+        for visit_id in ("visit-1", "visit-2", "visit-3"):
+            response = self.client.post(
+                "/api/v1/reviews/opened",
+                json={
+                    "claim_id": "CG-TEST",
+                    "actor": "reviewer-1",
+                    "visit_id": visit_id,
+                    "opened_at": "2026-10-01T12:00:00Z",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        newest = self.client.get("/api/v1/audit/events?limit=2&offset=0").json()
+        older = self.client.get("/api/v1/audit/events?limit=2&offset=2").json()
+        self.assertEqual(newest["total_count"], 3)
+        self.assertEqual([event["index"] for event in newest["events"]], [2, 1])
+        self.assertEqual([event["index"] for event in older["events"]], [0])
+        self.assertEqual(newest["events"][1]["prev_hash"], older["events"][0]["entry_hash"])
+
+    def test_full_audit_export_includes_chain_and_keeps_reason_hashed(self):
+        reason = "private reviewer note"
+        self.client.post(
+            "/api/v1/reviews",
+            json={
+                "claim_id": "CG-TEST",
+                "rule_id": "R001",
+                "action": "confirm_issue",
+                "actor": "reviewer-1",
+                "reason": reason,
+                "created_at": "2026-10-01T12:00:00Z",
+                "original_status": "FAIL",
+            },
+        )
+
+        response = self.client.get("/api/v1/audit/export")
+        exported = response.json()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(exported["format"], "claimguard-audit-chain-v1")
+        self.assertEqual(exported["entry_count"], 1)
+        self.assertTrue(exported["integrity"]["valid"])
+        self.assertNotIn(reason, json.dumps(exported))
+        self.assertIn("reason_hash", exported["entries"][0]["payload"])
+        self.assertIn("prev_hash", exported["entries"][0])
+        self.assertIn("entry_hash", exported["entries"][0])
+
+    def test_dataset_run_is_persisted_and_correlated_to_rule_events(self):
+        response = self.client.post("/api/v1/runs", json={"split": "development"})
+        self.assertEqual(response.status_code, 201)
+        run = response.json()
+        self.assertEqual(run["source"], {"type": "dataset", "split": "development", "synthetic": True})
+        self.assertEqual(run["claim_count"], 400)
+        self.assertEqual(run["result_count"], 6000)
+        self.assertEqual(run["benchmark_skipped_claims"], 0)
+        self.assertIsNotNone(run["benchmark"])
+
+        listed = self.client.get("/api/v1/runs").json()
+        self.assertEqual(listed["total_count"], 1)
+        self.assertEqual(listed["runs"][0]["run_id"], run["run_id"])
+        self.assertEqual(self.client.get(f"/api/v1/runs/{run['run_id']}").json(), run)
+        recent_audit = self.client.get("/api/v1/audit/events?limit=1").json()["events"][0]
+        self.assertEqual(recent_audit["payload"]["run_id"], run["run_id"])
+
+        restarted_client = TestClient(create_app(audit_log_path=self.audit_path, run_log_path=self.run_path))
+        with restarted_client:
+            self.assertEqual(restarted_client.get("/api/v1/runs").json()["runs"][0]["run_id"], run["run_id"])
+            self.assertTrue(restarted_client.get("/api/v1/audit/verify").json()["valid"])
+
+    def test_stress_run_scores_only_available_labels(self):
+        response = self.client.post("/api/v1/runs", json={"split": "stress"})
+        self.assertEqual(response.status_code, 201)
+        run = response.json()
+        self.assertEqual(run["claim_count"], 52)
+        self.assertEqual(run["result_count"], 780)
+        self.assertEqual(run["benchmark_skipped_claims"], 2)
+        self.assertEqual(run["benchmark"]["count"], 750)
 
     def test_audit_history_survives_app_restart(self):
         response = self.client.post("/api/v1/claims/evaluate", json={"claim": self.claim})

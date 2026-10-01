@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Sentinel from '../components/Sentinel';
 import type { SentinelState } from '../components/Sentinel';
 import {
@@ -14,6 +14,7 @@ import {
   type ReviewEvidence,
   getIngestedClaim,
 } from '../api/claims';
+import { recordReviewOpened } from '../api/audit';
 
 interface ClaimReviewProps {
   claimId: string;
@@ -130,6 +131,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
+  const recordedReviewOpens = useRef(new Set<string>());
   const [rules, setRules] = useState<Rule[]>([]);
   const [claim, setClaim] = useState<BackendClaim | null>(null);
   const [selectedRule, setSelectedRule] = useState<Rule>(RULES[0]);
@@ -168,10 +170,17 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
     getIngestedClaim(claimId, controller.signal)
       .catch((cause: unknown) => {
         if (cause instanceof Error && 'status' in cause && (cause as { status?: number }).status === 404) {
-          return getDataset('development', 500, controller.signal).then((dataset) => ({
-            claim: dataset.claims.find((item) => item.claim_id === claimId),
-            evaluation: dataset.evaluations[claimId] || [],
-          }));
+          return Promise.all([
+            getDataset('development', 500, controller.signal),
+            getDataset('validation', 500, controller.signal),
+            getDataset('stress', 500, controller.signal),
+          ]).then((datasets) => {
+            const dataset = datasets.find((split) => split.claims.some((item) => item.claim_id === claimId));
+            return {
+              claim: dataset?.claims.find((item) => item.claim_id === claimId),
+              evaluation: dataset?.evaluations[claimId] || [],
+            };
+          });
         }
         throw cause;
       })
@@ -185,6 +194,10 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
         }
         setClaim(selectedClaim);
         setRules(result);
+        if (!recordedReviewOpens.current.has(claimId)) {
+          recordedReviewOpens.current.add(claimId);
+          void recordReviewOpened(claimId, crypto.randomUUID()).catch(() => {});
+        }
         setSelectedRule(
           result.find((rule) => rule.status === 'FAIL')
           || result.find((rule) => rule.status === 'UNABLE_TO_ASSESS')

@@ -16,6 +16,10 @@ class ClaimsBatchRequest(StrictModel):
     claims: list[dict[str, Any]] = Field(min_length=1, max_length=100)
 
 
+class DatasetRunRequest(StrictModel):
+    split: Literal["development", "validation", "stress"]
+
+
 class TextIngestRequest(StrictModel):
     text: str = Field(min_length=1)
 
@@ -62,6 +66,21 @@ class ReviewDecisionRequest(StrictModel):
     ]
 
     @field_validator("actor", "reason")
+    @classmethod
+    def reject_whitespace_only(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class ReviewOpenedRequest(StrictModel):
+    claim_id: str = Field(min_length=1, max_length=128)
+    actor: str = Field(min_length=1, max_length=128)
+    visit_id: str = Field(min_length=1, max_length=128)
+    opened_at: datetime
+
+    @field_validator("actor", "visit_id")
     @classmethod
     def reject_whitespace_only(cls, value: str) -> str:
         value = value.strip()

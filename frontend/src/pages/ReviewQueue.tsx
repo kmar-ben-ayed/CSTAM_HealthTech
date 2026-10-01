@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import Sentinel from '../components/Sentinel';
+import { useOperationalData } from '../hooks/useOperationalData';
+import type { DataSource } from '../hooks/useOperationalData';
 
 interface ReviewQueueProps {
   onNavigate: (page: string, claimId?: string) => void;
@@ -210,15 +212,13 @@ const REVIEW_STATUS_STYLE: Record<ReviewStatus, { color: string; dot: string }> 
   Completed: { color: '#64748b', dot: '#64748b' },
 };
 
-type FilterTab = 'all' | 'mine' | 'unassigned' | 'high' | 'waiting' | 'recheck';
+type FilterTab = 'all' | 'high' | 'fail' | 'uncertain';
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'mine', label: 'My Queue' },
-  { key: 'unassigned', label: 'Unassigned' },
   { key: 'high', label: 'High Priority' },
-  { key: 'waiting', label: 'Waiting for Info' },
-  { key: 'recheck', label: 'Ready for Re-check' },
+  { key: 'fail', label: 'Failed' },
+  { key: 'uncertain', label: 'Unable to Assess' },
 ];
 
 const WORKLOAD = [
@@ -259,27 +259,51 @@ function Badge({
 }
 
 export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
+  const data = useOperationalData();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
-  const [sortBy, setSortBy] = useState<'age' | 'priority' | 'status'>('priority');
-  const [reviewerFilter, setReviewerFilter] = useState('All reviewers');
+  const [sortBy, setSortBy] = useState<'priority' | 'date' | 'amount'>('priority');
   const [sessionIndex, setSessionIndex] = useState<number | null>(null);
-
-  const currentUser = 'Aya Gaha';
-
-  const filtered = QUEUE_ITEMS.filter((item) => {
-    if (activeFilter === 'mine') return item.assignedTo === currentUser;
-    if (activeFilter === 'unassigned') return item.assignedTo === null;
+  const queueItems: QueueItem[] = data.records.flatMap(({ claim, results, row }) => {
+    const findings = results.filter((result) => result.status === 'FAIL' || result.status === 'UNABLE_TO_ASSESS');
+    if (!findings.length) return [];
+    const severity = findings.some((result) => result.severity === 'high')
+      ? 'High'
+      : findings.some((result) => result.severity === 'medium') ? 'Medium' : 'Low';
+    const topFinding = typeof findings[0].explanation === 'string'
+      ? findings[0].explanation
+      : `Rule ${findings[0].rule_id} needs review`;
+    return [{
+      claimId: claim.claim_id,
+      provider: row.provider,
+      priority: severity,
+      validationOutcome: row.status === 'fail' ? 'FAIL' : row.status === 'uncertain' ? 'UNABLE TO ASSESS' : 'NEEDS REVIEW',
+      reviewStatus: 'Unassigned',
+      topFinding,
+      assignedTo: null,
+      age: '—',
+      lastAction: '—',
+      serviceDate: row.dos,
+      amount: row.amount,
+    } satisfies QueueItem];
+  });
+  const filtered = queueItems.filter((item) => {
     if (activeFilter === 'high') return item.priority === 'High';
-    if (activeFilter === 'waiting') return item.reviewStatus === 'Waiting for Info';
-    if (activeFilter === 'recheck') return item.reviewStatus === 'Ready for Re-check';
+    if (activeFilter === 'fail') return item.validationOutcome === 'FAIL';
+    if (activeFilter === 'uncertain') return item.validationOutcome === 'UNABLE TO ASSESS';
     return true;
-  }).filter((item) => {
-    if (reviewerFilter === 'All reviewers') return true;
-    if (reviewerFilter === 'Unassigned') return item.assignedTo === null;
-    return item.assignedTo === reviewerFilter;
+  }).sort((first, second) => {
+    if (sortBy === 'date') return second.serviceDate.localeCompare(first.serviceDate);
+    if (sortBy === 'amount') return second.amount.localeCompare(first.amount);
+    const ranks: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 };
+    return ranks[first.priority] - ranks[second.priority];
   });
 
   const highPriority = filtered.filter((i) => i.priority === 'High');
+  const workload = [
+    { label: 'High priority', count: queueItems.filter((item) => item.priority === 'High').length, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
+    { label: 'Failed claims', count: queueItems.filter((item) => item.validationOutcome === 'FAIL').length, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
+    { label: 'Unable to assess', count: queueItems.filter((item) => item.validationOutcome === 'UNABLE TO ASSESS').length, color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
+  ];
 
   const handleStartReview = (claimId: string, idx: number) => {
     setSessionIndex(idx);
@@ -304,35 +328,16 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               Review Queue
             </h1>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>42</strong> claims need your attention
+              <strong style={{ color: 'var(--text-primary)' }}>{data.loading ? '…' : queueItems.length}</strong> claims need attention · {data.sourceLabel}
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <select
-              value={reviewerFilter}
-              onChange={(e) => setReviewerFilter(e.target.value)}
-              style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--card-border)',
-                borderRadius: 7,
-                padding: '7px 28px 7px 10px',
-                fontSize: '0.8125rem',
-                color: 'var(--text-primary)',
-                fontFamily: 'inherit',
-                cursor: 'pointer',
-                outline: 'none',
-                appearance: 'none',
-                backgroundImage:
-                  "url(\"data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 10 10' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4l3 3 3-3' stroke='%2394a3b8' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 8px center',
-              }}
-            >
-              <option>All reviewers</option>
-              <option>Aya Gaha</option>
-              <option>Marcus Webb</option>
-              <option>Priya Nair</option>
-              <option>Unassigned</option>
+            <select aria-label="Queue data source" value={data.source} onChange={(event) => data.setSource(event.target.value as DataSource)} style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 7, padding: '7px 10px', color: 'var(--text-primary)', fontFamily: 'inherit' }}>
+              <option value="all">All synthetic splits ({data.counts.all})</option>
+              <option value="development">Development ({data.counts.development})</option>
+              <option value="validation">Validation ({data.counts.validation})</option>
+              <option value="stress">Stress ({data.counts.stress})</option>
+              <option value="ingested" disabled={!data.counts.ingested}>Latest ingested batch ({data.counts.ingested})</option>
             </select>
             <select
               value={sortBy}
@@ -355,8 +360,8 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               }}
             >
               <option value="priority">Sort: Priority</option>
-              <option value="age">Sort: Age</option>
-              <option value="status">Sort: Status</option>
+              <option value="date">Sort: Service date</option>
+              <option value="amount">Sort: Amount</option>
             </select>
           </div>
         </div>
@@ -364,7 +369,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
 
       {/* Workload summary */}
       <div className="review-queue-summary" style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
-        {WORKLOAD.map((w) => (
+        {workload.map((w) => (
           <div
             key={w.label}
             style={{
@@ -496,7 +501,11 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
           boxShadow: 'var(--card-shadow)',
         }}
       >
-        {filtered.length === 0 ? (
+        {data.loading ? (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-secondary)' }}>Loading evaluated claims…</div>
+        ) : data.error ? (
+          <div role="alert" style={{ padding: 48, textAlign: 'center', color: 'var(--status-fail)' }}>{data.error}</div>
+        ) : filtered.length === 0 ? (
           /* Empty state */
           <div style={{ padding: '64px 32px', textAlign: 'center' }}>
             <div style={{ marginBottom: 20 }}>
@@ -531,18 +540,16 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: 1000 }}>
+            <table className="data-table" style={{ minWidth: 760 }}>
               <thead>
                 <tr>
                   <th>Claim ID</th>
                   <th>Provider</th>
                   <th>Priority</th>
                   <th>Validation</th>
-                  <th>Review Status</th>
                   <th style={{ minWidth: 220 }}>Top Finding</th>
-                  <th>Assigned To</th>
-                  <th>Age</th>
-                  <th>Last Action</th>
+                  <th>Service date</th>
+                  <th>Amount</th>
                   <th></th>
                 </tr>
               </thead>
@@ -550,10 +557,6 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                 {filtered.map((item, idx) => {
                   const prStyle = PRIORITY_STYLE[item.priority];
                   const valStyle = VALIDATION_STYLE[item.validationOutcome];
-                  const revStyle = REVIEW_STATUS_STYLE[item.reviewStatus];
-                  const canResume =
-                    item.assignedTo === currentUser &&
-                    (item.reviewStatus === 'In Review' || item.reviewStatus === 'Assigned');
 
                   return (
                     <tr
@@ -604,120 +607,30 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                         />
                       </td>
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <div
-                            style={{
-                              width: 7,
-                              height: 7,
-                              borderRadius: '50%',
-                              background: revStyle.dot,
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span
-                            style={{
-                              fontSize: '0.8125rem',
-                              color: revStyle.color,
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {item.reviewStatus}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
                         <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                           {item.topFinding}
                         </span>
                       </td>
-                      <td>
-                        {item.assignedTo ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                            <div
-                              style={{
-                                width: 24,
-                                height: 24,
-                                borderRadius: '50%',
-                                background:
-                                  item.assignedTo === currentUser
-                                    ? 'var(--accent)'
-                                    : 'linear-gradient(135deg, #94a3b8, #64748b)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.625rem',
-                                fontWeight: 700,
-                                color: '#fff',
-                                flexShrink: 0,
-                              }}
-                            >
-                              {item.assignedTo
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')}
-                            </div>
-                            <span
-                              style={{
-                                fontSize: '0.8125rem',
-                                color: 'var(--text-secondary)',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {item.assignedTo === currentUser ? 'You' : item.assignedTo}
-                            </span>
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>—</span>
-                        )}
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontFamily: "var(--font-sans)",
-                            fontSize: '0.8125rem',
-                            color: '#64748b',
-                            fontWeight: 500,
-                          }}
-                        >
-                          {item.age}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontSize: '0.8125rem',
-                            color: 'var(--text-tertiary)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {item.lastAction}
-                        </span>
-                      </td>
+                      <td><span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{item.serviceDate}</span></td>
+                      <td><span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{item.amount}</span></td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleStartReview(item.claimId, idx)}
                           style={{
-                            background: canResume ? 'rgba(15,122,130,0.08)' : '#f8fafc',
-                            border: canResume
-                              ? '1px solid rgba(15,122,130,0.25)'
-                              : '1px solid #e2e8f0',
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
                             borderRadius: 6,
                             padding: '5px 12px',
                             fontSize: '0.8125rem',
                             fontWeight: 600,
-                            color: canResume ? 'var(--accent)' : 'var(--text-primary)',
+                            color: 'var(--text-primary)',
                             cursor: 'pointer',
                             fontFamily: 'inherit',
                             whiteSpace: 'nowrap',
                             transition: 'all 0.15s ease',
                           }}
                         >
-                          {canResume
-                            ? 'Resume →'
-                            : item.reviewStatus === 'Unassigned'
-                            ? 'Start review'
-                            : 'Open →'}
+                          Review →
                         </button>
                       </td>
                     </tr>
@@ -740,48 +653,8 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
             }}
           >
             <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-              Showing {filtered.length} of 42 claims
+              {filtered.length} flagged claims · {data.sourceLabel}
             </span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button
-                style={{
-                  background: 'none',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 6,
-                  padding: '5px 12px',
-                  fontSize: '0.8125rem',
-                  color: '#334155',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                ← Prev
-              </button>
-              <span
-                style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: '0.8125rem',
-                  color: '#64748b',
-                  padding: '0 4px',
-                }}
-              >
-                1 / 4
-              </span>
-              <button
-                style={{
-                  background: 'none',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 6,
-                  padding: '5px 12px',
-                  fontSize: '0.8125rem',
-                  color: '#334155',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Next →
-              </button>
-            </div>
           </div>
         )}
       </div>

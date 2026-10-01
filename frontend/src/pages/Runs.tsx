@@ -1,52 +1,81 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sentinel from '../components/Sentinel';
-import type { SentinelState } from '../components/Sentinel';
-
-const RUNS = [
-  { id: 'RUN-4821', dataset: 'Meridian Q3 Batch', ruleset: 'v2.4.1', model: 'CGM-3.1', status: 'completed', claims: 24, duration: '18.4s', precision: 97.8, recall: 96.2, f1: 97.0, accuracy: 98.2, far: 1.2, fabr: 0.8, started: 'Today 10:31', sentinel: 'pass' as SentinelState },
-  { id: 'RUN-4820', dataset: 'Pacific Medical Batch', ruleset: 'v2.4.1', model: 'CGM-3.1', status: 'completed', claims: 18, duration: '14.1s', precision: 95.5, recall: 94.1, f1: 94.8, accuracy: 96.7, far: 2.1, fabr: 1.4, started: 'Today 09:44', sentinel: 'pass' as SentinelState },
-  { id: 'RUN-4819', dataset: 'Eastern Group Audit', ruleset: 'v2.4.0', model: 'CGM-3.1', status: 'completed', claims: 52, duration: '41.8s', precision: 98.4, recall: 97.9, f1: 98.1, accuracy: 99.1, far: 0.8, fabr: 0.5, started: 'Yesterday 16:22', sentinel: 'pass' as SentinelState },
-  { id: 'RUN-4818', dataset: 'Emergency Review Dataset', ruleset: 'v2.4.0', model: 'CGM-3.1', status: 'failed', claims: 8, duration: '–', precision: 0, recall: 0, f1: 0, accuracy: 0, far: 0, fabr: 0, started: 'Yesterday 14:05', sentinel: 'fail' as SentinelState },
-  { id: 'RUN-4817', dataset: 'Monthly Audit Sample', ruleset: 'v2.3.9', model: 'CGM-3.0', status: 'completed', claims: 100, duration: '82.3s', precision: 94.2, recall: 93.8, f1: 94.0, accuracy: 95.6, far: 3.1, fabr: 2.2, started: 'Sep 24, 17:00', sentinel: 'pass' as SentinelState },
-];
-
-const RULE_BREAKDOWN = [
-  { id: 'R001', name: 'Member eligibility', pass: 22, fail: 2, uta: 0, na: 0 },
-  { id: 'R002', name: 'Provider enrollment', pass: 24, fail: 0, uta: 0, na: 0 },
-  { id: 'R003', name: 'Service date validity', pass: 23, fail: 1, uta: 0, na: 0 },
-  { id: 'R005', name: 'Duplicate claim check', pass: 24, fail: 0, uta: 0, na: 0 },
-  { id: 'R008', name: 'Authorization reference', pass: 18, fail: 4, uta: 0, na: 2 },
-  { id: 'R009', name: 'Authorization validity', pass: 16, fail: 2, uta: 4, na: 2 },
-  { id: 'R013', name: 'Diagnosis-procedure', pass: 22, fail: 2, uta: 0, na: 0 },
-  { id: 'R015', name: 'Coordination of benefits', pass: 12, fail: 0, uta: 0, na: 12 },
-];
-
-const STATUS_DIST = [
-  { status: 'PASS', count: 14, pct: 58.3, color: 'var(--status-pass)', bg: 'var(--status-pass-bg)', border: 'var(--status-pass-border)' },
-  { status: 'NEEDS REVIEW', count: 6, pct: 25.0, color: 'var(--status-review)', bg: 'var(--status-review-bg)', border: 'var(--status-review-border)' },
-  { status: 'FAIL', count: 3, pct: 12.5, color: 'var(--status-fail)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
-  { status: 'UNABLE TO ASSESS', count: 1, pct: 4.2, color: 'var(--status-uta)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
-];
+import { createDatasetRun, getRuns, type DatasetRun } from '../api/runs';
+import { DATASET_SPLITS, type DatasetSplit } from '../hooks/useOperationalData';
 
 export default function Runs() {
-  const [selectedRun, setSelectedRun] = useState(RUNS[0]);
+  const [runs, setRuns] = useState<DatasetRun[]>([]);
+  const [selectedRun, setSelectedRun] = useState<DatasetRun | null>(null);
+  const [split, setSplit] = useState<DatasetSplit>('development');
   const [view, setView] = useState<'table' | 'detail'>('table');
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const openRun = (run: typeof RUNS[0]) => {
+  useEffect(() => {
+    const controller = new AbortController();
+    getRuns(500, controller.signal)
+      .then((response) => setRuns(response.runs))
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError(cause instanceof Error ? cause.message : 'Run history could not be loaded.');
+      })
+      .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, []);
+
+  const openRun = (run: DatasetRun) => {
     setSelectedRun(run);
     setView('detail');
   };
 
-  if (view === 'detail') {
+  const startRun = async () => {
+    setCreating(true);
+    setError(null);
+    try {
+      const run = await createDatasetRun(split);
+      setRuns((current) => [run, ...current]);
+      setSelectedRun(run);
+      setView('detail');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The dataset run could not be created.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const benchmarkRuns = runs.filter((run) => run.benchmark);
+  const averagePrecision = benchmarkRuns.length
+    ? benchmarkRuns.reduce((sum, run) => sum + (run.benchmark?.issue_precision || 0), 0) / benchmarkRuns.length
+    : null;
+  const processedClaims = runs.reduce((sum, run) => sum + run.claim_count, 0);
+
+  if (view === 'detail' && selectedRun) {
     const run = selectedRun;
-    const metrics = [
-      { label: 'Issue precision', value: `${run.precision}%`, desc: 'True positives / (TP + FP)', color: '#1f7a5c' },
-      { label: 'Issue recall', value: `${run.recall}%`, desc: 'True positives / (TP + FN)', color: 'var(--accent)' },
-      { label: 'Issue F1', value: `${run.f1}%`, desc: 'Harmonic mean of precision & recall', color: 'var(--status-review)' },
-      { label: 'Status accuracy', value: `${run.accuracy}%`, desc: 'Correct status across all claims', color: '#0f172a' },
-      { label: 'False alarm rate', value: `${run.far}%`, desc: 'False positives / (FP + TN)', color: '#b4403f' },
-      { label: 'False abstention', value: `${run.fabr}%`, desc: 'Unable to assess when assessable', color: '#96650f' },
-    ];
+    const benchmark = run.benchmark;
+    const metric = (value: number | null | undefined) => value == null ? 'Not available' : `${(value * 100).toFixed(1)}%`;
+    const metrics = benchmark ? [
+      { label: 'Issue precision', value: metric(benchmark.issue_precision), desc: 'True positives / (TP + FP)', color: '#1f7a5c' },
+      { label: 'Issue recall', value: metric(benchmark.issue_recall), desc: 'True positives / (TP + FN)', color: 'var(--accent)' },
+      { label: 'Issue F1', value: metric(benchmark.issue_f1), desc: 'Harmonic mean of precision & recall', color: 'var(--status-review)' },
+      { label: 'Status accuracy', value: metric(benchmark.status_accuracy), desc: 'Exact status matches on labeled results', color: '#0f172a' },
+      { label: 'False alarm rate', value: metric(benchmark.false_alarm_rate), desc: 'False positives / (FP + TN)', color: '#b4403f' },
+      { label: 'False abstentions', value: String(benchmark.false_abstentions), desc: 'Unable-to-assess where a label exists', color: '#96650f' },
+    ] : [];
+    const statusColors: Record<string, { color: string; bg: string; border: string }> = {
+      PASS: { color: 'var(--status-pass)', bg: 'var(--status-pass-bg)', border: 'var(--status-pass-border)' },
+      FAIL: { color: 'var(--status-fail)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
+      UNABLE_TO_ASSESS: { color: 'var(--status-uta)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
+      NOT_APPLICABLE: { color: 'var(--status-na)', bg: 'var(--status-na-bg)', border: 'var(--status-na-border)' },
+      NOT_IMPLEMENTED: { color: 'var(--text-tertiary)', bg: 'var(--canvas-bg)', border: 'var(--border)' },
+    };
+    const statusDistribution = Object.entries(run.status_counts).map(([status, count]) => ({
+      status,
+      count,
+      pct: run.result_count ? count / run.result_count * 100 : 0,
+      ...statusColors[status],
+    }));
+    const ruleBreakdown = Object.entries(run.rule_status_counts).map(([id, counts]) => ({ id, counts }));
 
     return (
       <div className="page-shell">
@@ -62,18 +91,17 @@ export default function Runs() {
         {/* Run header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <Sentinel state={run.sentinel} size={52} />
+            <Sentinel state="pass" size={52} />
             <div>
               <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', letterSpacing: '0.02em', marginBottom: 4 }}>
-                {run.id}
+                {run.run_id}
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {[
-                  { label: 'Dataset', value: run.dataset },
-                  { label: 'Ruleset', value: run.ruleset },
-                  { label: 'AI model', value: run.model },
-                  { label: 'Claims', value: String(run.claims) },
-                  { label: 'Duration', value: run.duration },
+                  { label: 'Source', value: `${run.source.split} synthetic dataset` },
+                  { label: 'Claims', value: String(run.claim_count) },
+                  { label: 'Rule results', value: String(run.result_count) },
+                  { label: 'Started', value: new Date(run.started_at).toLocaleString() },
                 ].map(f => (
                   <span key={f.label} style={{ fontSize: '0.8125rem', color: '#64748b' }}>
                     <span style={{ color: '#94a3b8' }}>{f.label}: </span>
@@ -84,7 +112,7 @@ export default function Runs() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{run.started}</span>
+            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{new Date(run.finished_at).toLocaleString()}</span>
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 5,
               background: run.status === 'completed' ? '#e9f5ef' : '#fbefee',
@@ -133,11 +161,11 @@ export default function Runs() {
             <div style={{ padding: '16px 20px' }}>
               {/* Stacked bar */}
               <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}>
-                {STATUS_DIST.map(s => (
+                {statusDistribution.map(s => (
                   <div key={s.status} style={{ width: `${s.pct}%`, background: s.color, transition: 'width 0.3s ease' }} />
                 ))}
               </div>
-              {STATUS_DIST.map(s => (
+              {statusDistribution.map(s => (
                 <div key={s.status} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color }} />
@@ -171,22 +199,26 @@ export default function Runs() {
               </tr>
             </thead>
             <tbody>
-              {RULE_BREAKDOWN.map(r => {
-                const total = r.pass + r.fail + r.uta + r.na;
+              {ruleBreakdown.map(r => {
+                const pass = r.counts.PASS || 0;
+                const fail = r.counts.FAIL || 0;
+                const uta = r.counts.UNABLE_TO_ASSESS || 0;
+                const na = r.counts.NOT_APPLICABLE || 0;
+                const total = Object.values(r.counts).reduce((sum, count) => sum + count, 0);
                 return (
                   <tr key={r.id}>
                     <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)' }}>{r.id}</span></td>
-                    <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{r.name}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: '#1f7a5c' }}>{r.pass}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: r.fail > 0 ? '#b4403f' : '#94a3b8' }}>{r.fail}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: r.uta > 0 ? '#96650f' : '#94a3b8' }}>{r.uta}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: '#94a3b8' }}>{r.na}</span></td>
+                    <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{r.id}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: '#1f7a5c' }}>{pass}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: fail > 0 ? '#b4403f' : '#94a3b8' }}>{fail}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: uta > 0 ? '#96650f' : '#94a3b8' }}>{uta}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: '#94a3b8' }}>{na}</span></td>
                     <td>
                       <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', width: 120 }}>
-                        <div style={{ width: `${(r.pass / total) * 100}%`, background: '#1f7a5c' }} />
-                        <div style={{ width: `${(r.fail / total) * 100}%`, background: '#b4403f' }} />
-                        <div style={{ width: `${(r.uta / total) * 100}%`, background: '#96650f' }} />
-                        <div style={{ width: `${(r.na / total) * 100}%`, background: '#e2e8f0' }} />
+                        <div style={{ width: `${total ? pass / total * 100 : 0}%`, background: '#1f7a5c' }} />
+                        <div style={{ width: `${total ? fail / total * 100 : 0}%`, background: '#b4403f' }} />
+                        <div style={{ width: `${total ? uta / total * 100 : 0}%`, background: '#96650f' }} />
+                        <div style={{ width: `${total ? na / total * 100 : 0}%`, background: '#e2e8f0' }} />
                       </div>
                     </td>
                   </tr>
@@ -210,14 +242,18 @@ export default function Runs() {
             Track batch processing runs and performance metrics
           </p>
         </div>
-        <button style={{
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <select aria-label="Dataset split for new run" value={split} onChange={(event) => setSplit(event.target.value as DatasetSplit)} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px', color: 'var(--text-primary)', fontFamily: 'inherit' }}>
+          {DATASET_SPLITS.map((datasetSplit) => <option key={datasetSplit} value={datasetSplit}>{datasetSplit[0].toUpperCase() + datasetSplit.slice(1)}</option>)}
+        </select>
+        <button onClick={startRun} disabled={creating} style={{
           background: 'var(--accent)',
           border: 'none',
           borderRadius: 7,
           padding: '8px 16px',
           color: '#fff',
           fontSize: '0.875rem',
-          cursor: 'pointer',
+          cursor: creating ? 'wait' : 'pointer',
           fontFamily: 'inherit',
           fontWeight: 600,
           display: 'flex',
@@ -227,17 +263,20 @@ export default function Runs() {
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
-          New run
+          {creating ? 'Running…' : 'Run dataset'}
         </button>
+        </div>
       </div>
+
+      {error && <div role="alert" style={{ color: 'var(--status-fail)', marginBottom: 16 }}>{error}</div>}
 
       {/* Summary metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
         {[
-          { label: 'Total runs', value: '4,821', sub: 'All time', color: 'var(--accent)' },
-          { label: 'Avg precision', value: '96.5%', sub: 'Last 30 days', color: '#1f7a5c' },
-          { label: 'Claims processed', value: '28,441', sub: 'Last 30 days', color: 'var(--status-review)' },
-          { label: 'Avg latency', value: '1.2s', sub: 'Per claim', color: '#96650f' },
+          { label: 'Total runs', value: String(runs.length), sub: 'Persisted dataset evaluations', color: 'var(--accent)' },
+          { label: 'Avg issue precision', value: averagePrecision == null ? '—' : `${(averagePrecision * 100).toFixed(1)}%`, sub: `${benchmarkRuns.length} labeled runs`, color: '#1f7a5c' },
+          { label: 'Claims evaluated', value: String(processedClaims), sub: 'Across saved runs', color: 'var(--status-review)' },
+          { label: 'Duration', value: '—', sub: 'Not measured by the API', color: '#96650f' },
         ].map(m => (
           <div key={m.label} className="kpi-card">
             <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.5rem', fontWeight: 700, color: m.color, letterSpacing: '-0.04em', marginBottom: 4 }}>
@@ -256,31 +295,26 @@ export default function Runs() {
             <tr>
               <th>Run ID</th>
               <th>Dataset</th>
-              <th>Ruleset</th>
-              <th>AI model</th>
               <th>Claims</th>
+              <th>Results</th>
               <th>Status</th>
-              <th>Precision</th>
-              <th>Recall</th>
-              <th>F1</th>
-              <th>Duration</th>
+              <th>Issue F1</th>
+              <th>Status accuracy</th>
               <th>Started</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
-            {RUNS.map(run => (
-              <tr key={run.id} onClick={() => openRun(run)} style={{ cursor: 'pointer' }}>
+            {loading ? <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center' }}>Loading run history…</td></tr> : runs.length === 0 ? <tr><td colSpan={8} style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>No dataset runs yet. Choose a split and run it to create the first record.</td></tr> : runs.map(run => (
+              <tr key={run.run_id} onClick={() => openRun(run)} style={{ cursor: 'pointer' }}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Sentinel state={run.sentinel} size={18} />
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: '#0f172a' }}>{run.id}</span>
+                    <Sentinel state="pass" size={18} />
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: '#0f172a' }}>{run.run_id.slice(0, 12)}</span>
                   </div>
                 </td>
-                <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{run.dataset}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: '#64748b' }}>{run.ruleset}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: '#64748b' }}>{run.model}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{run.claims}</span></td>
+                <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{run.source.split} · synthetic</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{run.claim_count}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{run.result_count}</span></td>
                 <td>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -294,20 +328,9 @@ export default function Runs() {
                     {run.status}
                   </span>
                 </td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: '#1f7a5c' }}>{run.precision > 0 ? `${run.precision}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: 'var(--accent)' }}>{run.recall > 0 ? `${run.recall}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: 'var(--status-review)' }}>{run.f1 > 0 ? `${run.f1}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#64748b' }}>{run.duration}</span></td>
-                <td><span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{run.started}</span></td>
-                <td>
-                  <button
-                    onClick={e => { e.stopPropagation(); openRun(run); }}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 4 }}
-                  >
-                    View
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  </button>
-                </td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: 'var(--status-review)' }}>{run.benchmark?.issue_f1 == null ? '—' : `${(run.benchmark.issue_f1 * 100).toFixed(1)}%`}</span></td>
+                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: '#334155' }}>{run.benchmark ? `${(run.benchmark.status_accuracy * 100).toFixed(1)}%` : '—'}</span></td>
+                <td><span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{new Date(run.started_at).toLocaleString()}</span></td>
               </tr>
             ))}
           </tbody>

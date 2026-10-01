@@ -3,6 +3,7 @@ import json
 import os
 import threading
 from copy import deepcopy
+from datetime import datetime, timezone
 from json import JSONDecoder, JSONDecodeError
 from pathlib import Path
 from typing import Any
@@ -29,7 +30,7 @@ from normalisation.fhir_adapter import (
     parse_bundles_text,
 )
 from normalisation.schema_subset import validate as validate_claim_schema
-from rule_engine.engine_core import baseline, validate_transport
+from rule_engine.engine_core import baseline, load_jsonl, validate_transport
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -141,6 +142,7 @@ class ClaimService:
         claims: list[dict[str, Any]],
         *,
         record_audit: bool = True,
+        run_id: str | None = None,
     ) -> list[dict[str, Any]]:
         for claim in claims:
             self.validate_claim(claim)
@@ -168,6 +170,8 @@ class ClaimService:
                         "confidence_kind": result.get("confidence_kind"),
                         "method": result.get("method"),
                     }
+                    if run_id is not None:
+                        payload["run_id"] = run_id
                     events.append(("rule_execution", evaluation["claim_id"], "system", payload))
             try:
                 self.audit_logger.log_batch(events)
@@ -445,18 +449,36 @@ class AuditService:
             raise ApiProblem(503, "audit_unavailable", "Could not safely record the review decision") from error
         return {"audit_index": entry.index, "entry_hash": entry.entry_hash}
 
-    def recent_events(self, limit: int) -> dict[str, Any]:
+    def record_review_open(self, visit: dict[str, Any]) -> dict[str, Any]:
+        try:
+            entry = self.logger.log(
+                "review_opened",
+                visit["claim_id"],
+                visit["actor"],
+                {
+                    "visit_id": visit["visit_id"],
+                    "opened_at": visit["opened_at"].isoformat(),
+                },
+            )
+        except AuditWriteError as error:
+            raise ApiProblem(503, "audit_unavailable", "Could not safely record the review visit") from error
+        return {"audit_index": entry.index, "entry_hash": entry.entry_hash}
+
+    def recent_events(self, limit: int, offset: int = 0) -> dict[str, Any]:
         try:
             entries = self.store.all_entries()
         except (OSError, ValueError, TypeError, KeyError) as error:
             raise ApiProblem(503, "audit_integrity_error", "Audit history could not be read") from error
         allowed_fields = {
-            "rule_execution": ("evaluation_id", "rule_id", "rule_version", "status", "severity", "requires_human_review", "confidence", "confidence_kind", "method"),
+            "rule_execution": ("evaluation_id", "run_id", "rule_id", "rule_version", "status", "severity", "requires_human_review", "confidence", "confidence_kind", "method"),
             "ai_decision": ("rule_id", "provider", "fallback_used", "finding_hash", "explanation", "assessment"),
             "human_decision": ("rule_id", "action", "original_status", "decision_timestamp"),
+            "review_opened": ("visit_id", "opened_at"),
         }
         recent = []
-        for entry in reversed(entries[-limit:]):
+        page_end = max(len(entries) - offset, 0)
+        page_start = max(page_end - limit, 0)
+        for entry in reversed(entries[page_start:page_end]):
             fields = allowed_fields.get(entry.event_type, ())
             payload = {key: entry.payload[key] for key in fields if key in entry.payload}
             if entry.event_type == "human_decision":
@@ -468,6 +490,117 @@ class AuditService:
                 "claim_id": entry.claim_id,
                 "actor": entry.actor,
                 "payload": payload,
+                "prev_hash": entry.prev_hash,
                 "entry_hash": entry.entry_hash,  
             })
-        return {"total_count": len(entries), "events": recent}
+        return {"total_count": len(entries), "offset": offset, "events": recent}
+
+    def export_chain(self) -> dict[str, Any]:
+        try:
+            entries = self.store.all_entries()
+            valid, first_broken_index = verify_chain(entries)
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            raise ApiProblem(503, "audit_integrity_error", "Audit history could not be read") from error
+        return {
+            "format": "claimguard-audit-chain-v1",
+            "entry_count": len(entries),
+            "integrity": {"valid": valid, "first_broken_index": first_broken_index},
+            "entries": [entry.as_dict() for entry in entries],
+        }
+
+
+class RunService:
+    def __init__(self, run_path: Path, claims_service: ClaimService, backend_root: Path = BACKEND_ROOT):
+        self.run_path = Path(run_path)
+        self.run_path.parent.mkdir(parents=True, exist_ok=True)
+        self.run_path.touch(exist_ok=True)
+        self.claims_service = claims_service
+        self.backend_root = Path(backend_root)
+        self._lock = threading.Lock()
+
+    def _read_runs(self) -> list[dict[str, Any]]:
+        runs = []
+        for line in self.run_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                runs.append(json.loads(line))
+        return runs
+
+    def list_runs(self, limit: int = 100) -> dict[str, Any]:
+        try:
+            runs = self._read_runs()
+        except (OSError, ValueError, TypeError) as error:
+            raise ApiProblem(503, "run_history_unavailable", "Run history could not be read") from error
+        return {"total_count": len(runs), "runs": list(reversed(runs[-limit:]))}
+
+    def get_run(self, run_id: str) -> dict[str, Any]:
+        try:
+            runs = self._read_runs()
+        except (OSError, ValueError, TypeError) as error:
+            raise ApiProblem(503, "run_history_unavailable", "Run history could not be read") from error
+        for run in reversed(runs):
+            if run["run_id"] == run_id:
+                return run
+        raise ApiProblem(404, "run_not_found", "Run not found")
+
+    def create_dataset_run(self, split: str) -> dict[str, Any]:
+        if split not in DATASET_SPLITS:
+            raise ApiProblem(404, "dataset_not_found", "Unknown dataset")
+        _, claims_path = DATASET_SPLITS[split]
+        claims_path = self.backend_root / "data" / split / "claims.jsonl"
+        try:
+            claims = load_claim_file(claims_path)
+        except (OSError, ValueError, TypeError) as error:
+            raise ApiProblem(503, "dataset_unavailable", "Dataset could not be loaded") from error
+
+        run_id = uuid4().hex
+        started_at = datetime.now(timezone.utc)
+        evaluations = self.claims_service.evaluate_many(claims, run_id=run_id)
+        finished_at = datetime.now(timezone.utc)
+        result_rows = [result for evaluation in evaluations for result in evaluation["results"]]
+        status_counts: dict[str, int] = {}
+        rule_status_counts: dict[str, dict[str, int]] = {}
+        for result in result_rows:
+            status = result["status"]
+            rule_id = result["rule_id"]
+            status_counts[status] = status_counts.get(status, 0) + 1
+            rule_counts = rule_status_counts.setdefault(rule_id, {})
+            rule_counts[status] = rule_counts.get(status, 0) + 1
+
+        expected_path = self.backend_root / "data" / split / "expected_results.jsonl"
+        benchmark = None
+        skipped_unlabeled = 0
+        if expected_path.exists():
+            try:
+                expected = load_jsonl(expected_path)
+                labeled_claim_ids = {result["claim_id"] for result in expected}
+                labeled_claims = {claim["claim_id"]: claim for claim in claims if claim["claim_id"] in labeled_claim_ids}
+                labeled_results = [result for result in result_rows if result["claim_id"] in labeled_claim_ids]
+                skipped_unlabeled = len(claims) - len(labeled_claims)
+                if labeled_claims:
+                    from evaluate import score
+
+                    benchmark = score(expected, labeled_results, labeled_claims)["overall"]
+            except (OSError, ValueError, TypeError, KeyError) as error:
+                raise ApiProblem(503, "benchmark_unavailable", "Dataset benchmark labels are invalid") from error
+
+        run = {
+            "run_id": run_id,
+            "source": {"type": "dataset", "split": split, "synthetic": True},
+            "status": "completed",
+            "started_at": started_at.isoformat(),
+            "finished_at": finished_at.isoformat(),
+            "claim_count": len(claims),
+            "result_count": len(result_rows),
+            "status_counts": status_counts,
+            "rule_status_counts": rule_status_counts,
+            "benchmark": benchmark,
+            "benchmark_skipped_claims": skipped_unlabeled,
+        }
+        try:
+            with self._lock, self.run_path.open("a", encoding="utf-8") as stream:
+                stream.write(json.dumps(run, sort_keys=True, separators=(",", ":")) + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+        except OSError as error:
+            raise ApiProblem(503, "run_history_unavailable", "Run could not be persisted") from error
+        return run

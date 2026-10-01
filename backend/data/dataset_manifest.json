@@ -180,7 +180,9 @@
       }
     },
     "stress": {
-      "claims": 50,
+      "claims": 52,
+      "labeled_claims": 50,
+      "unlabeled_claims": 2,
       "rule_results": 750,
       "statuses": {
         "PASS": 599,

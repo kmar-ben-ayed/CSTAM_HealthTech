@@ -377,19 +377,62 @@ Allowed `original_status` values: `PASS`, `FAIL`, `UNABLE_TO_ASSESS`, `NOT_APPLI
 
 Expected: `201` with the new `audit_index` and `entry_hash`. The reason is hashed and is not returned in audit event listings.
 
-### 12. List Audit Events
+### 12. Record a Claim Review Visit
+
+`POST /api/v1/reviews/opened`
+
+The frontend records a visit after the claim and evaluation load successfully. Visit events are distinct from decisions and include no claim fields beyond the claim ID.
+
+```json
+{
+  "claim_id": "API-TEST-001",
+  "actor": "reviewer-demo",
+  "visit_id": "visit-api-test-001",
+  "opened_at": "2026-10-01T16:00:00Z"
+}
+```
+
+Expected: `201` with `audit_index` and `entry_hash`. `X-Actor`, when supplied, is used as the event actor, consistent with review-decision requests.
+
+### 13. List Audit Events
 
 `GET /api/v1/audit/events`
 
-Optional `limit`: integer from `1` through `500`, default `100`.
+Optional `limit`: integer from `1` through `500`, default `100`. Optional `offset`: integer `0` or greater, default `0`.
 
 ```text
-/api/v1/audit/events?limit=20
+/api/v1/audit/events?limit=20&offset=0
 ```
 
-Expected: `200` with `total_count` and newest-first minimized `events`. Call evaluation or record a review first if the audit log is empty.
+Expected: `200` with `total_count`, `offset`, and newest-first minimized `events`, including `prev_hash` and `entry_hash`. Increase `offset` by the page size to load older events. Review reasons remain hashed.
 
-### 13. Verify Audit Integrity
+### 14. Export the Full Audit Chain
+
+`GET /api/v1/audit/export`
+
+No parameters or request body. Expected: `200` with `format`, `entry_count`, an `integrity` result, and every canonical entry in oldest-first order, including `prev_hash` and `entry_hash`. Human-review payloads contain only `reason_hash`; plaintext reasons are never stored or exported.
+
+The frontend Audit Trail's **Export JSON** downloads this response in full, regardless of the current event filters or loaded page.
+
+### 15. Create and Inspect a Dataset Run
+
+`POST /api/v1/runs`
+
+Create a persisted evaluation run for a bundled synthetic dataset split:
+
+```json
+{
+  "split": "development"
+}
+```
+
+Allowed values are `development`, `validation`, and `stress`. Expected: `201` with a `run_id`, source split, claim/result counts, status breakdown, and benchmark metrics where labels exist. Rule audit events include the corresponding `run_id`.
+
+The stress source contains 52 claims, of which 50 have expected labels. All 52 are evaluated; benchmark metrics cover only the 50 labeled claims, and `benchmark_skipped_claims` is `2`.
+
+Use `GET /api/v1/runs?limit=100` to list persisted runs and `GET /api/v1/runs/{run_id}` to inspect one run. Run history is stored in `backend/outputs/run_log.jsonl` and survives backend restarts.
+
+### 16. Verify Audit Integrity
 
 `GET /api/v1/audit/verify`
 
@@ -410,5 +453,5 @@ The endpoint reports a broken chain if an event was edited. It does not protect 
 - `413`: request body exceeds 5 MB.
 - `404`: unknown route, dataset, or rule.
 - `503`: audit storage is unavailable/corrupt, or the requested OpenAI provider is not configured.
-- Batch evaluation accepts 1–100 claims; dataset and audit `limit` values are 1–500.
+- Batch evaluation accepts 1–100 claims; dataset, run-list, and audit `limit` values are 1–500. Audit `offset` must be non-negative.
 - Use synthetic data only. Do not send real patient information or expose this local demo publicly.

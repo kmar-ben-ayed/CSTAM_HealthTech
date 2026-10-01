@@ -16,24 +16,20 @@ The current backend supports:
 - Grounded explanations through a deterministic mock provider or OpenAI.
 - Structured review decisions with hashed review reasons.
 - A persistent, hash-chained audit log with integrity verification.
+- Persistent dataset evaluation runs with benchmark metrics where labels are available.
 - Development, validation, and stress datasets containing synthetic claims.
 
-The current frontend is a React/Vite workspace. These areas are connected to backend APIs:
+The React/Vite frontend is connected to backend APIs for:
 
-- Claims list and deterministic evaluations.
+- Claims and deterministic evaluations across all synthetic splits or the latest ingested batch.
 - Claim Review, including rule findings, evidence paths, AI explanations, and review decisions.
 - Data ingestion for JSON, CSV, and FHIR flows.
-- Audit Trail loading and audit-chain verification.
+- Audit Trail events, review visits, chain verification, pagination, and full-chain JSON export.
+- Dashboard, Review Queue, Runs, Analytics, and search results based on claims, audit events, and persisted runs.
 
-The following screens are currently product-surface prototypes and still contain static sample data rather than complete backend read models:
+Rules and policy catalog metadata remain static presentation data. The notification drawer has no backend notification source and therefore shows an empty state rather than sample alerts.
 
-- Dashboard metrics and activity feed.
-- Review Queue assignments and workload state.
-- Runs and performance history.
-- Analytics trends and aggregates.
-- Rules and policy catalog metadata.
-
-This distinction is intentional. The repository demonstrates the core validation and review vertical slice while the broader operations workspace is being integrated.
+All bundled claims are synthetic: 400 development, 150 validation, and 52 stress claims (602 total). Stress benchmark labels cover 50 claims; the other two stress records are evaluated but excluded from benchmark metrics.
 
 ## Implemented Phase 1 workflow
 
@@ -43,13 +39,13 @@ The connected workflow is now:
 Ingest -> persist latest batch -> list claims -> open claim -> explain finding -> record review -> audit
 ```
 
-Ingestion responses are stored in a process-local read model keyed by a request fingerprint. `GET /api/v1/claims` returns the latest accepted batch and `GET /api/v1/claims/{claim_id}` returns the claim plus its deterministic evaluation. The Claims and Claim Review screens use these routes first and fall back to the development fixture only when the API has no ingested batch, so a newly imported claim remains available to the rest of the workflow. The store is intentionally in memory for this phase: restarting the backend clears it, so it is suitable for a local demo rather than production persistence.
+Ingestion responses are stored in a process-local read model keyed by a request fingerprint. The shared frontend source selector can show all three synthetic splits, any one split, or the latest ingested batch. The ingestion store is intentionally in memory: restarting the backend clears it. Dataset runs are persisted to `backend/outputs/run_log.jsonl` by default and can be redirected with `CLAIMGUARD_RUNS_LOG`.
 
 Identical JSONL, CSV, or FHIR uploads are idempotent for the lifetime of the process. The fingerprint is checked before evaluation, which prevents a repeated upload from creating another set of rule-execution audit events. A batch ID is returned with every successful import.
 
 FHIR authorization registry fields are carried in the namespaced ClaimGuard extension `https://claimguard.example/StructureDefinition/authorization-details`. Older or external bundles without that extension remain lossy. The Ingest screen therefore shows a warning that R009 may be `UNABLE_TO_ASSESS` when authorization details are absent.
 
-Audit writes verify the existing chain once when the application starts, then keep the last index and hash in memory while appending. Full verification is reserved for `GET /api/v1/audit/verify`; ordinary event listing no longer re-reads and verifies the complete history on every request. AI audit events include the finding hash, explanation text, provider, fallback status, and assessment. Review reasons remain represented by a hash in the audit chain and are not treated as an authenticated identity or durable feedback store yet.
+Audit writes verify the existing chain once when the application starts, then keep the last index and hash in memory while appending. Full verification is reserved for `GET /api/v1/audit/verify`; ordinary event listing is paginated. Claim review visits, evaluations, explanations, and submitted decisions are distinct events. `GET /api/v1/audit/export` returns the complete canonical chain with hash links and verification status; review reasons remain hashes and are never exported as plaintext.
 
 The login is still a browser-only demo, but review requests now send the signed-in demo email as `X-Actor` and the backend uses that header for the human-decision audit actor. It is not authentication, authorization, or an identity provider.
 
@@ -224,13 +220,14 @@ corepack pnpm preview
 
 1. Start the backend and confirm `/api/v1/health` returns `status: "ok"`.
 2. Start the frontend and open the Claims screen.
-3. Confirm synthetic claims and rule results load from the development dataset.
+3. Confirm the source selector reports all three synthetic splits and can switch to each split or the latest ingested batch.
 4. Open a claim with a finding and inspect its evidence paths.
 5. Request an explanation with the mock provider for a no-key local test.
 6. Submit a review decision.
-7. Open Audit Trail and verify that the rule execution, AI decision, and human decision are present.
-8. Use Verify chain and confirm the audit chain is valid.
-9. Test ingestion through the Ingest Data screen or the examples in [backend/API_TESTING.md](backend/API_TESTING.md).
+7. Open Audit Trail and verify review-open, rule-execution, AI, and human-decision events.
+8. Use Verify chain and export the full JSON chain; confirm integrity and hashed-only reasons.
+9. Create a dataset run and confirm it persists after restarting the backend.
+10. Test ingestion through the Ingest Data screen or the examples in [backend/API_TESTING.md](backend/API_TESTING.md).
 
 For an ingestion smoke test, upload a JSONL, CSV pack, or FHIR bundle, select **Start processing**, choose **View claims**, and open one of the imported claim IDs. The review page should show the same claim and rule results returned by the ingestion response. Repeating the exact upload should keep the audit event count unchanged because the import is idempotent in the running backend process.
 
@@ -253,7 +250,12 @@ The versioned API is rooted at `/api/v1`.
 | `POST` | `/api/v1/fhir/export` | Export a claim as a FHIR Bundle |
 | `POST` | `/api/v1/explanations` | Request a grounded explanation |
 | `POST` | `/api/v1/reviews` | Record a human review decision |
-| `GET` | `/api/v1/audit/events` | List minimized audit events |
+| `POST` | `/api/v1/reviews/opened` | Record a claim review visit |
+| `POST` | `/api/v1/runs` | Evaluate a dataset and persist a run |
+| `GET` | `/api/v1/runs` | List persisted dataset runs |
+| `GET` | `/api/v1/runs/{run_id}` | Read one persisted dataset run |
+| `GET` | `/api/v1/audit/events` | Page through minimized audit events |
+| `GET` | `/api/v1/audit/export` | Export the full audit chain and integrity result |
 | `GET` | `/api/v1/audit/verify` | Verify audit-chain integrity |
 
 Use the interactive Swagger documentation and [backend/API_TESTING.md](backend/API_TESTING.md) for request bodies, expected responses, limits, negative tests, and FHIR examples.
@@ -266,6 +268,7 @@ Use the interactive Swagger documentation and [backend/API_TESTING.md](backend/A
 | `PORT` | Frontend Vite port | `8443` |
 | `CLAIMGUARD_CORS_ORIGINS` | Allowed browser origins | Local development origins |
 | `CLAIMGUARD_AUDIT_LOG` | Audit JSONL path | `backend/outputs/audit_log.jsonl` |
+| `CLAIMGUARD_RUNS_LOG` | Persisted run JSONL path | `backend/outputs/run_log.jsonl` |
 | `OPENAI_API_KEY` | Enables LLM explanations | Not set |
 | `OPENAI_MODEL` | Explanation model name | `gpt-4o-mini` |
 | `OPENAI_BASE_URL` | OpenAI-compatible API endpoint | OpenAI's default |

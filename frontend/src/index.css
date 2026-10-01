@@ -913,8 +913,8 @@ div:has(> div > .data-table) {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: var(--color-navy-950);
-  color: #d7e6f4;
+  background: var(--canvas-bg);
+  color: var(--text-primary);
   font-family: var(--font-mono);
   font-size: 0.75rem;
   line-height: 1.65;

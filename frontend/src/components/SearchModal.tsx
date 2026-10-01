@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getDataset, getIngestedClaims } from '../api/claims';
+import { getAuditEvents } from '../api/audit';
+import { getRuns } from '../api/runs';
 
 interface SearchModalProps {
   open: boolean;
@@ -7,7 +9,7 @@ interface SearchModalProps {
   onNavigate: (page: string, id?: string) => void;
 }
 
-type ResultCategory = 'Claims' | 'Rules' | 'Runs' | 'Audit Events';
+type ResultCategory = 'Claims' | 'Runs' | 'Audit Events';
 
 interface SearchResult {
   id: string;
@@ -18,45 +20,11 @@ interface SearchResult {
   navId?: string;
 }
 
-const ALL_RESULTS: SearchResult[] = [
-  // Rules
-  { id: 'R001', label: 'R001 — Enrollment Verification', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
-  { id: 'R002', label: 'R002 — Coverage Window', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
-  { id: 'R003', label: 'R003 — Session Count Limits', subtitle: 'Active · MEDIUM severity', category: 'Rules', page: 'rules' },
-  { id: 'R004', label: 'R004 — Diagnosis Code Validation', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
-  { id: 'R005', label: 'R005 — Provider NPI Enrollment', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
-  { id: 'R006', label: 'R006 — Rendering vs. Billing Provider', subtitle: 'Active · MEDIUM severity', category: 'Rules', page: 'rules' },
-  { id: 'R007', label: 'R007 — Place of Service Validation', subtitle: 'Active · MEDIUM severity', category: 'Rules', page: 'rules' },
-  { id: 'R008', label: 'R008 — Authorization Reference', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
-  { id: 'R009', label: 'R009 — Modifier Applicability', subtitle: 'Active · MEDIUM severity', category: 'Rules', page: 'rules' },
-  { id: 'R010', label: 'R010 — Duplicate Claim Detection', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
-  { id: 'R011', label: 'R011 — Units per Session', subtitle: 'Active · LOW severity', category: 'Rules', page: 'rules' },
-  { id: 'R012', label: 'R012 — Service Line Consistency', subtitle: 'Active · MEDIUM severity', category: 'Rules', page: 'rules' },
-  { id: 'R013', label: 'R013 — Timely Filing Compliance', subtitle: 'Active · HIGH severity', category: 'Rules', page: 'rules' },
-  { id: 'R014', label: 'R014 — Coordination of Benefits', subtitle: 'Active · MEDIUM severity', category: 'Rules', page: 'rules' },
-  { id: 'R015', label: 'R015 — Telehealth Eligibility', subtitle: 'Active · LOW severity', category: 'Rules', page: 'rules' },
-  // Runs
-  { id: 'RUN-4817', label: 'RUN-4817', subtitle: 'Completed · Sep 15, 2026 · 41 claims', category: 'Runs', page: 'runs' },
-  { id: 'RUN-4818', label: 'RUN-4818', subtitle: 'Completed · Sep 17, 2026 · 38 claims', category: 'Runs', page: 'runs' },
-  { id: 'RUN-4819', label: 'RUN-4819', subtitle: 'Completed · Sep 20, 2026 · 52 claims', category: 'Runs', page: 'runs' },
-  { id: 'RUN-4820', label: 'RUN-4820', subtitle: 'Completed · Sep 24, 2026 · 47 claims', category: 'Runs', page: 'runs' },
-  { id: 'RUN-4821', label: 'RUN-4821', subtitle: 'Completed · Sep 28, 2026 · 63 claims', category: 'Runs', page: 'runs' },
-  // Audit
-  { id: 'EVT-001', label: 'Claim validated — CLM-10482', subtitle: 'Sep 28, 2026 · System', category: 'Audit Events', page: 'audit' },
-  { id: 'EVT-002', label: 'Human review completed — CLM-10479', subtitle: 'Sep 27, 2026 · Aya Gaha', category: 'Audit Events', page: 'audit' },
-  { id: 'EVT-003', label: 'Ingestion completed — 10 claims', subtitle: 'Sep 27, 2026 · System', category: 'Audit Events', page: 'audit' },
-];
-
 const CATEGORY_ICONS: Record<ResultCategory, React.ReactNode> = {
   Claims: (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.2" />
       <path d="M4 5h6M4 8h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  ),
-  Rules: (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <path d="M2 4h10M2 7h7M2 10h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   ),
   Runs: (
@@ -74,7 +42,6 @@ const CATEGORY_ICONS: Record<ResultCategory, React.ReactNode> = {
 
 const CATEGORY_COLOR: Record<ResultCategory, string> = {
   Claims: '#1d5c8a',
-  Rules: '#96650f',
   Runs: '#1f7a5c',
   'Audit Events': '#96650f',
 };
@@ -82,7 +49,7 @@ const CATEGORY_COLOR: Record<ResultCategory, string> = {
 export default function SearchModal({ open, onClose, onNavigate }: SearchModalProps) {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
-  const [claimResults, setClaimResults] = useState<SearchResult[]>([]);
+  const [dataResults, setDataResults] = useState<SearchResult[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -92,29 +59,55 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
       setSelected(0);
       setTimeout(() => inputRef.current?.focus(), 50);
       const controller = new AbortController();
-      getIngestedClaims(500, controller.signal)
-        .catch((error: unknown) => {
-          if (error instanceof Error && 'status' in error && (error as { status?: number }).status === 404) {
-            return getDataset('development', 500, controller.signal);
-          }
+      Promise.all([
+        Promise.all([
+          getDataset('development', 500, controller.signal),
+          getDataset('validation', 500, controller.signal),
+          getDataset('stress', 500, controller.signal),
+        ]),
+        getIngestedClaims(500, controller.signal).catch((error: unknown) => {
+          if (error instanceof Error && 'status' in error && (error as { status?: number }).status === 404) return null;
           throw error;
-        })
-        .then((dataset) => {
-          setClaimResults(dataset.claims.map((claim) => ({
+        }),
+        getRuns(100, controller.signal).catch(() => ({ total_count: 0, runs: [] })),
+        getAuditEvents(100, 0, controller.signal).catch(() => ({ total_count: 0, offset: 0, events: [] })),
+      ])
+        .then(([datasets, ingested, runs, audit]) => {
+          const claims = [
+            ...datasets.flatMap((dataset) => dataset.claims.map((claim) => ({ claim, source: `${dataset.dataset} synthetic` }))),
+            ...(ingested?.claims || []).map((claim) => ({ claim, source: 'latest ingested batch' })),
+          ];
+          const uniqueClaims = new Map(claims.map((item) => [item.claim.claim_id, item]));
+          const claimResults: SearchResult[] = Array.from(uniqueClaims.values()).map(({ claim, source }) => ({
             id: claim.claim_id,
             label: claim.claim_id,
-            subtitle: `${claim.provider_id || 'Unknown provider'} · ${claim.currency || ''} ${claim.total_amount ?? 'amount unavailable'}`,
+            subtitle: `${claim.provider_id || 'Unknown provider'} · ${source}`,
             category: 'Claims',
             page: 'claim-review',
             navId: claim.claim_id,
-          })));
+          }));
+          const runResults: SearchResult[] = runs.runs.map((run) => ({
+            id: run.run_id,
+            label: `Run ${run.run_id.slice(0, 12)}`,
+            subtitle: `${run.source.split} synthetic · ${run.claim_count} claims · ${run.status}`,
+            category: 'Runs',
+            page: 'runs',
+          }));
+          const auditResults: SearchResult[] = audit.events.map((event) => ({
+            id: `AUD-${event.index}`,
+            label: `${event.event_type.replaceAll('_', ' ')}${event.claim_id ? ` · ${event.claim_id}` : ''}`,
+            subtitle: `${new Date(event.timestamp).toLocaleString()} · ${event.actor}`,
+            category: 'Audit Events',
+            page: 'audit',
+          }));
+          setDataResults([...claimResults, ...runResults, ...auditResults]);
         })
-        .catch(() => setClaimResults([]));
+        .catch(() => setDataResults([]));
       return () => controller.abort();
     }
   }, [open]);
 
-  const searchableResults = [...claimResults, ...ALL_RESULTS];
+  const searchableResults = dataResults;
   const results = query.trim().length < 1
     ? []
     : searchableResults.filter((r) => {
@@ -213,7 +206,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSelected(0); }}
             onKeyDown={handleKey}
-            placeholder="Quick search — claims, rules, runs, audit events..."
+            placeholder="Search claims, runs, and audit events..."
             style={{
               flex: 1,
               border: 'none',

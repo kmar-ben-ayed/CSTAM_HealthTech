@@ -6,11 +6,13 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from api_app.schemas import (
     ClaimRequest,
     ClaimsBatchRequest,
+    DatasetRunRequest,
     CsvIngestRequest,
     ExplanationRequest,
     FhirIngestRequest,
     FhirValidateRequest,
     ReviewDecisionRequest,
+    ReviewOpenedRequest,
     TextIngestRequest,
 )
 from api_app.services import DATASET_SPLITS, load_claim_file
@@ -52,6 +54,21 @@ def evaluate_claim(payload: ClaimRequest, request: Request):
 @v1_router.post("/claims/evaluate/batch", tags=["claims"])
 def evaluate_claims(payload: ClaimsBatchRequest, request: Request):
     return {"evaluations": _service(request, "claim_service").evaluate_many(payload.claims)}
+
+
+@v1_router.post("/runs", status_code=201, tags=["runs"])
+def create_dataset_run(payload: DatasetRunRequest, request: Request):
+    return _service(request, "run_service").create_dataset_run(payload.split)
+
+
+@v1_router.get("/runs", tags=["runs"])
+def list_runs(request: Request, limit: int = Query(default=100, ge=1, le=500)):
+    return _service(request, "run_service").list_runs(limit)
+
+
+@v1_router.get("/runs/{run_id}", tags=["runs"])
+def get_run(run_id: str, request: Request):
+    return _service(request, "run_service").get_run(run_id)
 
 
 @v1_router.post("/ingest/jsonl", tags=["ingestion"])
@@ -96,9 +113,27 @@ def record_review(payload: ReviewDecisionRequest, request: Request):
     return _service(request, "audit_service").record_review(decision)
 
 
+@v1_router.post("/reviews/opened", status_code=201, tags=["reviews"])
+def record_review_opened(payload: ReviewOpenedRequest, request: Request):
+    visit = payload.model_dump(mode="python")
+    actor = request.headers.get("X-Actor")
+    if actor:
+        visit["actor"] = actor
+    return _service(request, "audit_service").record_review_open(visit)
+
+
 @v1_router.get("/audit/events", tags=["audit"])
-def audit_events(request: Request, limit: int = Query(default=100, ge=1, le=500)):
-    return _service(request, "audit_service").recent_events(limit)
+def audit_events(
+    request: Request,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    return _service(request, "audit_service").recent_events(limit, offset)
+
+
+@v1_router.get("/audit/export", tags=["audit"])
+def export_audit(request: Request):
+    return _service(request, "audit_service").export_chain()
 
 
 @v1_router.get("/audit/verify", tags=["audit"])

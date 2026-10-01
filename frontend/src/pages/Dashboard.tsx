@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sentinel from '../components/Sentinel';
 import type { SentinelState } from '../components/Sentinel';
+import { getAuditEvents, type BackendAuditEvent } from '../api/audit';
+import { getRuns, type DatasetRun } from '../api/runs';
+import { useOperationalData } from '../hooks/useOperationalData';
+import type { DataSource } from '../hooks/useOperationalData';
 
 interface DashboardProps {
   onNavigate: (page: string, claimId?: string) => void;
@@ -82,65 +86,62 @@ const ACTIVITY_COLORS: Record<string, string> = {
 };
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
+  const data = useOperationalData();
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
+  const [auditEvents, setAuditEvents] = useState<BackendAuditEvent[]>([]);
+  const [latestRun, setLatestRun] = useState<DatasetRun | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([getAuditEvents(6, 0, controller.signal), getRuns(1, controller.signal)])
+      .then(([audit, runs]) => {
+        setAuditEvents(audit.events);
+        setLatestRun(runs.runs[0] || null);
+      })
+      .catch(() => {
+        setAuditEvents([]);
+        setLatestRun(null);
+      });
+    return () => controller.abort();
+  }, []);
+
+  const flaggedClaims = data.records.filter((record) => record.row.status !== 'pass');
+  const failedClaims = data.records.filter((record) => record.row.status === 'fail').length;
+  const unableClaims = data.records.filter((record) => record.row.status === 'uncertain').length;
+  const ruleFindings = data.records.reduce((sum, record) => sum + record.results.filter((result) => result.status === 'FAIL' || result.status === 'UNABLE_TO_ASSESS').length, 0);
+  const priorityRows = flaggedClaims.slice().sort((first, second) => second.row.findings - first.row.findings).slice(0, 5);
+  const dashboardRows = priorityRows.map(({ row }) => ({
+    id: row.id,
+    provider: row.provider,
+    service: row.dos,
+    findings: row.findings,
+    status: row.status,
+    statusLabel: row.status === 'fail' ? 'Failed' : row.status === 'uncertain' ? 'Unable to assess' : 'Needs review',
+    updated: row.updated,
+    sentinel: row.sentinel,
+  }));
+  const activity = auditEvents.map((event) => {
+    const type = event.event_type === 'rule_execution' ? 'RULE_EVALUATED'
+      : event.event_type === 'human_decision' ? 'REVIEW_ACTION'
+        : event.event_type === 'review_opened' ? 'REVIEW_OPENED' : 'AI_EXPLANATION';
+    const ruleId = typeof event.payload.rule_id === 'string' ? event.payload.rule_id : null;
+    const status = typeof event.payload.status === 'string' ? event.payload.status.replaceAll('_', ' ') : '';
+    return {
+      event: type,
+      time: new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      actor: event.actor,
+      detail: event.event_type === 'rule_execution'
+        ? `${event.claim_id || 'Claim'} · ${ruleId || 'Rule'} ${status}`
+        : `${event.claim_id || 'Claim'} · ${String(event.payload.action || 'activity').replaceAll('_', ' ')}`,
+      type: event.event_type === 'rule_execution' ? 'rule' : event.actor === 'system' || event.actor === 'ai' ? 'system' : 'human',
+    };
+  });
 
   const kpis = [
-    {
-      label: 'Claims processed',
-      value: '1,284',
-      change: '+12% this week',
-      changePos: true,
-      sub: '24 today',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <rect x="2" y="3" width="14" height="12" rx="2" stroke="#1d5c8a" strokeWidth="1.5"/>
-          <path d="M5 7h8M5 10h5" stroke="#1d5c8a" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      accent: '#1d5c8a',
-    },
-    {
-      label: 'Needs review',
-      value: '23',
-      change: '+5 since yesterday',
-      changePos: false,
-      sub: '3 urgent',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <circle cx="9" cy="7" r="3" stroke="#96650f" strokeWidth="1.5"/>
-          <path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#96650f" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      accent: '#96650f',
-    },
-    {
-      label: 'Unable to assess',
-      value: '8',
-      change: 'Awaiting evidence',
-      changePos: null,
-      sub: '3 pending info',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <circle cx="9" cy="9" r="7" stroke="#96650f" strokeWidth="1.5"/>
-          <path d="M9 6v4M9 13v.5" stroke="#96650f" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      accent: '#96650f',
-    },
-    {
-      label: 'Issues detected',
-      value: '41',
-      change: 'Across 18 claims',
-      changePos: null,
-      sub: 'R008 most frequent',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <path d="M9 2l7 13H2L9 2z" stroke="#b4403f" strokeWidth="1.5" strokeLinejoin="round"/>
-          <path d="M9 7v4M9 13v.5" stroke="#b4403f" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      accent: '#b4403f',
-    },
+    { label: 'Claims in source', value: data.loading ? '…' : String(data.records.length), sub: data.sourceLabel, change: 'Backend records', changePos: null },
+    { label: 'Need attention', value: data.loading ? '…' : String(flaggedClaims.length), sub: 'Failed or unable to assess', change: data.sourceLabel, changePos: null },
+    { label: 'Failed claims', value: data.loading ? '…' : String(failedClaims), sub: 'At least one failed rule', change: 'Rule evaluation', changePos: null },
+    { label: 'Rule findings', value: data.loading ? '…' : String(ruleFindings), sub: `${unableClaims} claims unable to assess`, change: 'FAIL + UNABLE_TO_ASSESS', changePos: null },
   ];
 
   return (
@@ -152,21 +153,17 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             Claims operations
           </h1>
           <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-            23 claims await review. Three are marked urgent.
+            {data.loading ? 'Loading claims…' : `${flaggedClaims.length} claims need attention · ${data.sourceLabel}`}
           </p>
         </div>
         <div className="dashboard-header-actions">
-          <div style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: '0.6875rem',
-            color: 'var(--text-secondary)',
-            background: 'var(--card-bg)',
-            border: '1px solid var(--border)',
-            borderRadius: 4,
-            padding: '6px 12px',
-          }}>
-            Fri, Sep 25, 2026
-          </div>
+          <select aria-label="Dashboard data source" value={data.source} onChange={(event) => data.setSource(event.target.value as DataSource)} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '6px 10px', color: 'var(--text-primary)', fontFamily: 'inherit' }}>
+            <option value="all">All synthetic splits</option>
+            <option value="development">Development</option>
+            <option value="validation">Validation</option>
+            <option value="stress">Stress</option>
+            <option value="ingested" disabled={!data.counts.ingested}>Latest ingested batch</option>
+          </select>
           <button
             onClick={() => onNavigate('review-queue')}
             style={{
@@ -185,6 +182,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </button>
         </div>
       </div>
+
+      {data.error && <div role="alert" style={{ margin: '0 0 16px', color: 'var(--status-fail)' }}>{data.error}</div>}
 
       {/* KPI Cards */}
       <div className="dashboard-metrics">
@@ -252,7 +251,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               </tr>
             </thead>
             <tbody>
-              {QUEUE_ITEMS.map(item => {
+              {dashboardRows.map(item => {
                 const sc = STATUS_COLORS[item.status] || STATUS_COLORS['review'];
                 return (
                   <tr
@@ -351,12 +350,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <button onClick={() => onNavigate('runs')} className="text-action">Run details</button>
             </div>
             <dl className="run-context">
-              <div><dt>Run</dt><dd>RUN-4821</dd></div>
-              <div><dt>Claims evaluated</dt><dd>24</dd></div>
-              <div><dt>Ruleset</dt><dd>v2.4.1</dd></div>
-              <div><dt>Completed</dt><dd>10:31</dd></div>
+              <div><dt>Run</dt><dd>{latestRun?.run_id.slice(0, 12) || 'No runs yet'}</dd></div>
+              <div><dt>Claims evaluated</dt><dd>{latestRun?.claim_count ?? '—'}</dd></div>
+              <div><dt>Source</dt><dd>{latestRun?.source.split || '—'}</dd></div>
+              <div><dt>Completed</dt><dd>{latestRun ? new Date(latestRun.finished_at).toLocaleString() : '—'}</dd></div>
             </dl>
-            <p className="context-note">Rule outcomes are deterministic. AI explanations are linked to the recorded evidence.</p>
+            <p className="context-note">{latestRun ? 'Rule results and benchmark metrics are available in the persisted run record.' : 'No dataset evaluation runs have been created yet.'}</p>
           </section>
 
           <section className="dashboard-panel activity-panel">
@@ -368,10 +367,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               <button onClick={() => onNavigate('audit')} className="text-action">Audit trail</button>
             </div>
             <div className="activity-list">
-              {ACTIVITY.map((a, i) => (
+              {activity.map((a, i) => (
                 <div key={i} style={{ display: 'flex', gap: 10, position: 'relative' }}>
                   {/* Timeline line */}
-                  {i < ACTIVITY.length - 1 && (
+                  {i < activity.length - 1 && (
                     <div style={{
                       position: 'absolute',
                       left: 5,

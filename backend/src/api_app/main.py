@@ -20,6 +20,7 @@ from api_app.services import (
     ExplanationService,
     IngestionStore,
     IngestionService,
+    RunService,
 )
 from audit.logger import AuditLogger
 from audit.store import AuditStore
@@ -86,6 +87,7 @@ class MaxBodySizeMiddleware:
 def create_app(
     backend_root: Path = BACKEND_ROOT,
     audit_log_path: Path | None = None,
+    run_log_path: Path | None = None,
 ) -> FastAPI:
     backend_root = Path(backend_root)
     load_dotenv(backend_root / ".env.local", override=False)
@@ -94,6 +96,10 @@ def create_app(
         os.getenv("CLAIMGUARD_AUDIT_LOG", str(backend_root / "outputs" / "audit_log.jsonl"))
     )
     resolved_audit_path = Path(configured_audit_path)
+    configured_run_path = run_log_path or Path(
+        os.getenv("CLAIMGUARD_RUNS_LOG", str(backend_root / "outputs" / "run_log.jsonl"))
+    )
+    resolved_run_path = Path(configured_run_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -105,6 +111,7 @@ def create_app(
         app.state.audit_service = AuditService(resolved_audit_path, audit_logger)
         app.state.claim_service = claim_service
         app.state.dataset_service = DatasetService(claim_service, backend_root)
+        app.state.run_service = RunService(resolved_run_path, claim_service, backend_root)
         app.state.ingestion_service = IngestionService(claim_service, backend_root, IngestionStore())
         app.state.explanation_service = ExplanationService(rules_config, claim_service, audit_logger)
         yield

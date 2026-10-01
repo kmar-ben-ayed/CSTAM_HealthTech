@@ -1,4 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getAuditEvents, type BackendAuditEvent } from '../api/audit';
+import { getRuns, type DatasetRun } from '../api/runs';
+import { useOperationalData } from '../hooks/useOperationalData';
+import type { DataSource } from '../hooks/useOperationalData';
 
 interface AnalyticsProps {
   onNavigate: (page: string) => void;
@@ -163,18 +167,77 @@ const DATASETS = ['All datasets', 'Development Suite (10 claims)', 'Meridian Q3 
 const POLICY_OPTIONS = ['All policies', 'EDU-BASIC', 'EDU-PLUS'];
 
 export default function Analytics({ onNavigate }: AnalyticsProps) {
-  const [dateRange, setDateRange] = useState('Last 30 days');
-  const [dataset, setDataset] = useState('All datasets');
+  const data = useOperationalData();
   const [policyFilter, setPolicyFilter] = useState('All policies');
+  const [auditEvents, setAuditEvents] = useState<BackendAuditEvent[]>([]);
+  const [runs, setRuns] = useState<DatasetRun[]>([]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    Promise.all([getAuditEvents(500, 0, controller.signal), getRuns(100, controller.signal)])
+      .then(([audit, runHistory]) => {
+        setAuditEvents(audit.events);
+        setRuns(runHistory.runs);
+      })
+      .catch(() => {
+        setAuditEvents([]);
+        setRuns([]);
+      });
+    return () => controller.abort();
+  }, []);
+
+  const policies = Array.from(new Set(data.records.map(({ claim }) => claim.policy_id).filter((value): value is string => typeof value === 'string')));
+  const records = data.records.filter(({ claim }) => policyFilter === 'All policies' || claim.policy_id === policyFilter);
+  const results = records.flatMap((record) => record.results);
+  const statusCounts = results.reduce<Record<string, number>>((counts, result) => {
+    counts[result.status] = (counts[result.status] || 0) + 1;
+    return counts;
+  }, {});
+  const ruleCounts = results.reduce<Record<string, number>>((counts, result) => {
+    if (result.status === 'FAIL' || result.status === 'UNABLE_TO_ASSESS') counts[result.rule_id] = (counts[result.rule_id] || 0) + 1;
+    return counts;
+  }, {});
+  const maxFindings = Math.max(1, ...Object.values(ruleCounts));
+  const statusColors: Record<string, string> = {
+    PASS: '#1f7a5c',
+    FAIL: 'var(--status-fail)',
+    UNABLE_TO_ASSESS: 'var(--status-uta)',
+    NOT_APPLICABLE: 'var(--status-na)',
+    NOT_IMPLEMENTED: 'var(--text-tertiary)',
+  };
+  const outcomes = Object.entries(statusCounts).map(([label, count]) => ({
+    label: label.replaceAll('_', ' '),
+    count,
+    pct: results.length ? count / results.length * 100 : 0,
+    color: statusColors[label] || 'var(--text-tertiary)',
+  }));
+  const reviewActions = auditEvents.filter((event) => event.event_type === 'human_decision');
+  const actionCounts = reviewActions.reduce<Record<string, number>>((counts, event) => {
+    const action = typeof event.payload.action === 'string' ? event.payload.action : 'unknown';
+    counts[action] = (counts[action] || 0) + 1;
+    return counts;
+  }, {});
+  const utaEvidencePaths = results
+    .filter((result) => result.status === 'UNABLE_TO_ASSESS')
+    .flatMap((result) => Array.isArray(result.evidence) ? result.evidence : [])
+    .reduce<Record<string, number>>((counts, item) => {
+      if (typeof item === 'object' && item && 'path' in item && typeof item.path === 'string') counts[item.path] = (counts[item.path] || 0) + 1;
+      return counts;
+    }, {});
+  const topMissingEvidence = Object.entries(utaEvidencePaths).sort((first, second) => second[1] - first[1]).slice(0, 4);
+  const serviceDates = records.flatMap(({ claim }) => (claim.lines || []).map((line) => line.service_date).filter((value): value is string => typeof value === 'string'));
+  const serviceDateSpan = serviceDates.length
+    ? `${serviceDates.slice().sort()[0]} – ${serviceDates.slice().sort().at(-1)}`
+    : 'No service dates available';
+  const benchmarkRuns = runs.filter((run) => run.benchmark);
+  const latestRun = runs[0];
+  const latestBenchmark = latestRun?.benchmark || null;
   const kpis = [
-    { label: 'Claims processed', value: '1,284', sub: '+12% vs prior period', subPos: true, color: 'var(--accent)', onClick: () => onNavigate('claims') },
-    { label: 'Validation pass rate', value: '78.4%', sub: 'Of all evaluated claims', subPos: null, color: '#1f7a5c', onClick: null },
-    { label: 'Unable to assess', value: '4.8%', sub: 'Missing evidence', subPos: null, color: '#96650f', onClick: null },
-    { label: 'Review rate', value: '16.8%', sub: 'Human review required', subPos: null, color: 'var(--status-review)', onClick: () => onNavigate('review-queue') },
+    { label: 'Claims in source', value: String(records.length), sub: data.sourceLabel, subPos: null, color: 'var(--accent)', onClick: () => onNavigate('claims') },
+    { label: 'Passing rule results', value: results.length ? `${((statusCounts.PASS || 0) / results.length * 100).toFixed(1)}%` : '—', sub: `${statusCounts.PASS || 0} of ${results.length} rule results`, subPos: null, color: '#1f7a5c', onClick: null },
+    { label: 'Unable to assess', value: String(statusCounts.UNABLE_TO_ASSESS || 0), sub: 'Rule results', subPos: null, color: '#96650f', onClick: null },
+    { label: 'Needs review', value: String(records.filter(({ row }) => row.status !== 'pass').length), sub: 'Claims with findings', subPos: null, color: 'var(--status-review)', onClick: () => onNavigate('review-queue') },
   ];
-
-  const maxFindings = Math.max(...FINDINGS_BY_RULE.map(r => r.count));
 
   const handleRuleClick = (ruleId: string) => {
     onNavigate('rules');
@@ -186,25 +249,21 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', color: '#0f172a', marginBottom: 4 }}>Analytics</h1>
-          <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Understand claim validation trends, rule performance, and review workload over time.</p>
+          <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Rule outcomes from the selected synthetic dataset or latest ingested batch.</p>
         </div>
       </div>
 
       {/* Scope / filter bar */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, padding: '10px 16px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, boxShadow: 'var(--card-shadow)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#94a3b8" strokeWidth="1.2"/><path d="M7 4v3.5l2 1.5" stroke="#94a3b8" strokeWidth="1.2" strokeLinecap="round"/></svg>
-          <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 500 }}>Period</span>
-          <select value={dateRange} onChange={e => setDateRange(e.target.value)} style={{ background: 'transparent', border: 'none', fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
-            {DATE_RANGES.map(r => <option key={r}>{r}</option>)}
-          </select>
-        </div>
-        <div style={{ width: 1, height: 18, background: '#e2e8f0' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2" width="11" height="10" rx="2" stroke="#94a3b8" strokeWidth="1.2"/><path d="M4 6h6M4 8.5h4" stroke="#94a3b8" strokeWidth="1.2" strokeLinecap="round"/></svg>
-          <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 500 }}>Dataset</span>
-          <select value={dataset} onChange={e => setDataset(e.target.value)} style={{ background: 'transparent', border: 'none', fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
-            {DATASETS.map(r => <option key={r}>{r}</option>)}
+          <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 500 }}>Source</span>
+          <select aria-label="Analytics data source" value={data.source} onChange={(event) => data.setSource(event.target.value as DataSource)} style={{ background: 'transparent', border: 'none', fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
+            <option value="all">All synthetic splits</option>
+            <option value="development">Development</option>
+            <option value="validation">Validation</option>
+            <option value="stress">Stress</option>
+            <option value="ingested" disabled={!data.counts.ingested}>Latest ingested batch</option>
           </select>
         </div>
         <div style={{ width: 1, height: 18, background: '#e2e8f0' }} />
@@ -212,13 +271,16 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1l6 2.5v4.5C13 11 10 13.5 7 14 4 13.5 1 11 1 8V3.5L7 1z" stroke="#94a3b8" strokeWidth="1.2" strokeLinejoin="round"/></svg>
           <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 500 }}>Policy</span>
           <select value={policyFilter} onChange={e => setPolicyFilter(e.target.value)} style={{ background: 'transparent', border: 'none', fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
-            {POLICY_OPTIONS.map(r => <option key={r}>{r}</option>)}
+            <option>All policies</option>
+            {policies.map((policy) => <option key={policy}>{policy}</option>)}
           </select>
         </div>
         <div style={{ marginLeft: 'auto', fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#94a3b8' }}>
-          Showing: <strong style={{ color: '#334155' }}>1,284</strong> claims
+          Showing: <strong style={{ color: '#334155' }}>{records.length}</strong> claims · {data.sourceLabel}
         </div>
       </div>
+
+      {data.error && <div role="alert" style={{ marginBottom: 16, color: 'var(--status-fail)' }}>{data.error}</div>}
 
       {/* KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
@@ -247,15 +309,14 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '20px 24px', marginBottom: 16, boxShadow: 'var(--card-shadow)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Claims processed over time</h3>
-            <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Daily volume · {dateRange}</p>
+            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Service-date coverage</h3>
+            <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{data.sourceLabel} · {serviceDates.length} line dates</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--accent)' }} />
-            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Claims processed</span>
+            <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Date range: {serviceDateSpan}</span>
           </div>
         </div>
-        <AreaChart data={VOLUME_DATA} color="var(--accent)" fillColor="var(--accent-subtle)" />
+        <p style={{ fontSize: '0.875rem', color: '#64748b', margin: 0 }}>The API provides service dates, not processing timestamps, so this view reports the records’ date coverage instead of inventing a volume trend.</p>
       </div>
 
       {/* Two-col row: Outcome distribution + Review workload */}
@@ -264,14 +325,14 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
         <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
             <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Validation outcomes</h3>
-            <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Distribution across {(1007 + 216 + 62 + 47).toLocaleString()} evaluated claims</p>
+            <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Distribution across {results.length.toLocaleString()} rule results</p>
           </div>
           <div style={{ padding: '16px 20px' }}>
             {/* Stacked bar */}
             <div style={{ display: 'flex', height: 10, borderRadius: 6, overflow: 'hidden', marginBottom: 18 }}>
-              {OUTCOME_DATA.map(o => <div key={o.label} style={{ width: `${o.pct}%`, background: o.color, transition: 'width 0.3s ease' }} />)}
+              {outcomes.map(o => <div key={o.label} style={{ width: `${o.pct}%`, background: o.color, transition: 'width 0.3s ease' }} />)}
             </div>
-            {OUTCOME_DATA.map(o => (
+            {outcomes.map(o => (
               <div key={o.label} style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: o.color, flexShrink: 0 }} />
@@ -291,34 +352,27 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Human review workload</h3>
-              <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Reviewer actions · {dateRange}</p>
+              <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{auditEvents.length} recent audit events loaded</p>
             </div>
             <button onClick={() => onNavigate('review-queue')} style={{ background: 'transparent', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 10px', fontSize: '0.75rem', color: '#475569', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>View queue</button>
           </div>
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { label: 'Claims requiring review', value: 216, color: 'var(--status-review)', sub: '16.8% of total' },
-              { label: 'Confirmed findings', value: 148, color: '#b4403f', sub: '68.5% of reviewed' },
-              { label: 'Dismissed findings', value: 42, color: '#1f7a5c', sub: '19.4% of reviewed' },
-              { label: 'Requests for information', value: 26, color: '#96650f', sub: '12.0% of reviewed' },
-              { label: 'Re-checks completed', value: 19, color: 'var(--accent)', sub: 'After correction' },
-            ].map(m => (
-              <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {Object.entries(actionCounts).map(([action, count]) => {
+                const label = action.replaceAll('_', ' ');
+                const color = action === 'confirm_issue' ? '#b4403f' : action === 'dismiss_with_reason' ? '#1f7a5c' : '#96650f';
+                return (
+              <div key={action} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: m.color, flexShrink: 0 }} />
-                  <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{m.label}</span>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{label}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '1rem', fontWeight: 700, color: m.color }}>{m.value}</span>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{m.sub}</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '1rem', fontWeight: 700, color }}>{count}</span>
                 </div>
               </div>
-            ))}
-            <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Avg. time to review</span>
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: '#334155' }}>4m 12s</span>
-            </div>
+                );
+              })}
+              {reviewActions.length === 0 && <p style={{ color: '#94a3b8', fontSize: '0.8125rem' }}>No human decisions in the latest audit events.</p>}
           </div>
         </div>
       </div>
@@ -336,14 +390,14 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
           </button>
         </div>
         <div style={{ padding: '16px 24px' }}>
-          {FINDINGS_BY_RULE.map(r => (
-            <div key={r.ruleId} style={{ borderBottom: '1px solid #f8fafc' }}>
+          {Object.entries(ruleCounts).sort((first, second) => second[1] - first[1]).map(([ruleId, count]) => (
+            <div key={ruleId} style={{ borderBottom: '1px solid #f8fafc' }}>
               <HorizontalBar
-                ruleId={r.ruleId}
-                label={r.label}
-                count={r.count}
+                ruleId={ruleId}
+                label={`Rule ${ruleId}`}
+                count={count}
                 maxCount={maxFindings}
-                color={r.color}
+                color="var(--status-fail)"
                 onRuleClick={handleRuleClick}
               />
             </div>
@@ -359,29 +413,27 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Unable to assess</h3>
-                <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>4.8% rate · 62 claims this period</p>
+                <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{statusCounts.UNABLE_TO_ASSESS || 0} rule results lack enough evidence</p>
               </div>
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: '#96650f', background: '#f8f1e3', border: '1px solid #e8d6ac', borderRadius: 4, padding: '2px 8px' }}>4.8%</span>
+              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: '#96650f', background: '#f8f1e3', border: '1px solid #e8d6ac', borderRadius: 4, padding: '2px 8px' }}>
+                {results.length ? `${((statusCounts.UNABLE_TO_ASSESS || 0) / results.length * 100).toFixed(1)}%` : '—'}
+              </span>
             </div>
           </div>
           <div style={{ padding: '14px 20px 6px' }}>
-            <div style={{ marginBottom: 16 }}>
-              <LineChart data={UTA_TREND_DATA} color="#96650f" />
-              <div style={{ fontSize: '0.6875rem', color: '#94a3b8', textAlign: 'center', marginTop: 4, fontFamily: "var(--font-sans)" }}>Rate trend · Sep 1 – Sep 29</div>
-            </div>
-            <div style={{ height: 1, background: '#f1f5f9', marginBottom: 14 }} />
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Top missing evidence</div>
-            {MISSING_EVIDENCE.map(m => (
-              <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{m.label}</span>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Evidence paths in UTA findings</div>
+            {topMissingEvidence.map(([path, count]) => (
+              <div key={path} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{path}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 60, height: 5, background: '#f1f5f9', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${m.pct}%`, background: '#96650f', borderRadius: 3 }} />
+                    <div style={{ height: '100%', width: `${count / Math.max(1, topMissingEvidence[0]?.[1] || 1) * 100}%`, background: '#96650f', borderRadius: 3 }} />
                   </div>
-                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: '#96650f', minWidth: 32, textAlign: 'right' }}>{m.pct}%</span>
+                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: '#96650f', minWidth: 32, textAlign: 'right' }}>{count}</span>
                 </div>
               </div>
             ))}
+            {topMissingEvidence.length === 0 && <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>No UTA evidence paths in the selected source.</p>}
           </div>
         </div>
 
@@ -390,7 +442,7 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
           <div style={{ padding: '16px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Validation quality</h3>
-              <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Based on evaluation runs with ground truth</p>
+              <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{latestRun ? `Latest labeled run · ${latestRun.source.split}` : 'No persisted labeled run is available'}</p>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#f8f1e3', border: '1px solid #e8d6ac', borderRadius: 4, padding: '3px 8px' }}>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1l4 7H1L5 1z" stroke="#96650f" strokeWidth="1"/><path d="M5 3.5v2.5M5 7.5v.3" stroke="#96650f" strokeWidth="1" strokeLinecap="round"/></svg>
@@ -400,10 +452,10 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
           <div style={{ padding: '16px 20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
               {[
-                { label: 'Status accuracy', value: '98.2%', color: '#0f172a', desc: 'Correct across all claims' },
-                { label: 'Issue precision', value: '97.8%', color: '#1f7a5c', desc: 'True positive rate' },
-                { label: 'Issue recall', value: '96.2%', color: 'var(--accent)', desc: 'Sensitivity' },
-                { label: 'Issue F1', value: '97.0%', color: 'var(--status-review)', desc: 'Harmonic mean' },
+                { label: 'Status accuracy', value: latestBenchmark ? `${(latestBenchmark.status_accuracy * 100).toFixed(1)}%` : '—', color: '#0f172a', desc: `${latestBenchmark?.count || 0} labeled rule results` },
+                { label: 'Issue precision', value: latestBenchmark?.issue_precision == null ? '—' : `${(latestBenchmark.issue_precision * 100).toFixed(1)}%`, color: '#1f7a5c', desc: 'True positives / predicted issues' },
+                { label: 'Issue recall', value: latestBenchmark?.issue_recall == null ? '—' : `${(latestBenchmark.issue_recall * 100).toFixed(1)}%`, color: 'var(--accent)', desc: 'True positives / expected issues' },
+                { label: 'Issue F1', value: latestBenchmark?.issue_f1 == null ? '—' : `${(latestBenchmark.issue_f1 * 100).toFixed(1)}%`, color: 'var(--status-review)', desc: 'Harmonic mean of precision and recall' },
               ].map(m => (
                 <div key={m.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 7, padding: '12px 14px' }}>
                   <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.125rem', fontWeight: 700, color: m.color, letterSpacing: '-0.02em', marginBottom: 3 }}>{m.value}</div>
@@ -415,8 +467,8 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
             <div style={{ height: 1, background: '#f1f5f9', marginBottom: 14 }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { label: 'False alarm rate', value: '1.2%', color: '#b4403f', desc: 'False positives / (FP + TN)' },
-                { label: 'False abstention rate', value: '0.8%', color: '#96650f', desc: 'UTA when assessable' },
+                { label: 'False alarm rate', value: latestBenchmark?.false_alarm_rate == null ? '—' : `${(latestBenchmark.false_alarm_rate * 100).toFixed(1)}%`, color: '#b4403f', desc: 'False positives / (FP + TN)' },
+                { label: 'False abstentions', value: latestBenchmark ? String(latestBenchmark.false_abstentions) : '—', color: '#96650f', desc: 'Unable to assess despite an available label' },
               ].map(m => (
                 <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
@@ -429,7 +481,9 @@ export default function Analytics({ onNavigate }: AnalyticsProps) {
             </div>
             <div style={{ marginTop: 14, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px' }}>
               <div style={{ fontSize: '0.6875rem', color: '#94a3b8', lineHeight: 1.5 }}>
-                Metrics based on <strong style={{ color: '#334155' }}>RUN-4817 – RUN-4821</strong> · Ground truth from annotated sample. Numbers are evaluation estimates, not production claims.
+                {latestRun && latestBenchmark
+                  ? <>Metrics from persisted run <strong style={{ color: '#334155' }}>{latestRun.run_id.slice(0, 12)}</strong>; {latestRun.benchmark_skipped_claims} unlabeled claims excluded. Bundled data is synthetic.</>
+                  : 'Create a dataset run to calculate metrics against the bundled synthetic labels.'}
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAuditEvents, verifyAudit, type BackendAuditEvent } from '../api/audit';
+import { getAuditEvents, getAuditExport, verifyAudit, type BackendAuditEvent } from '../api/audit';
 
 const AUDIT_EVENTS = [
   {
@@ -169,28 +169,33 @@ function toAuditEvent(event: BackendAuditEvent): AuditEvent {
       ? 'REVIEW_ACTION'
       : event.event_type === 'ai_decision'
         ? 'AI_EXPLANATION'
+        : event.event_type === 'review_opened'
+          ? 'REVIEW_OPENED'
         : event.event_type.toUpperCase();
   const detail = event.event_type === 'rule_execution'
     ? `Rule ${ruleId || 'unknown'} evaluated → ${status.replaceAll('_', ' ')}`
     : event.event_type === 'human_decision'
       ? `Review action: ${String(payload.action || 'decision recorded').replaceAll('_', ' ')}`
+      : event.event_type === 'review_opened'
+        ? 'Claim review opened'
       : `${String(payload.provider || 'AI')} explanation recorded`;
+  const actor = event.actor === 'ai' ? 'AI' : event.actor;
 
   return {
     id: `AUD-${event.index}`,
     time: Number.isNaN(timestamp.getTime()) ? '—' : timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     date: Number.isNaN(timestamp.getTime()) ? '—' : timestamp.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
     event: eventName,
-    actor: event.actor,
-    actorType: event.actor === 'system' ? 'system' : 'human',
+    actor,
+    actorType: event.actor === 'system' || event.actor === 'ai' ? 'system' : 'human',
     claimId: event.claim_id || null,
-    runId: null,
+    runId: typeof payload.run_id === 'string' ? payload.run_id : null,
     ruleId,
     ruleVersion,
     detail,
     reason: null,
     note: null,
-    prevHash: 'Unavailable from minimized audit response',
+    prevHash: event.prev_hash,
     eventHash: event.entry_hash,
   };
 }
@@ -205,14 +210,18 @@ export default function AuditTrail() {
   const [filterEvent, setFilterEvent] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState<boolean | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setLoadError(null);
-    Promise.all([getAuditEvents(500, controller.signal), verifyAudit(controller.signal)])
+    Promise.all([getAuditEvents(100, 0, controller.signal), verifyAudit(controller.signal)])
       .then(([audit, verification]) => {
         setEvents(audit.events.map(toAuditEvent));
+        setTotalCount(audit.total_count);
         setVerified(verification.valid);
         setLoading(false);
       })
@@ -234,6 +243,37 @@ export default function AuditTrail() {
       setVerified(false);
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const handleLoadOlder = async () => {
+    setLoadingMore(true);
+    try {
+      const page = await getAuditEvents(100, events.length);
+      setEvents((current) => [...current, ...page.events.map(toAuditEvent)]);
+      setTotalCount(page.total_count);
+    } catch {
+      setLoadError('Older audit events could not be loaded.');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const chain = await getAuditExport();
+      const file = new Blob([JSON.stringify(chain, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(file);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'claimguard-audit-chain.json';
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch {
+      setLoadError('The full audit chain could not be exported.');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -302,14 +342,14 @@ export default function AuditTrail() {
               </>
             )}
           </button>
-          <button style={{
+          <button onClick={handleExport} disabled={exporting} style={{
             background: '#f8fafc',
             border: '1px solid #e2e8f0',
             borderRadius: 7,
             padding: '7px 14px',
             fontSize: '0.8125rem',
             color: '#475569',
-            cursor: 'pointer',
+            cursor: exporting ? 'wait' : 'pointer',
             fontFamily: 'inherit',
             fontWeight: 500,
             display: 'flex',
@@ -320,10 +360,12 @@ export default function AuditTrail() {
               <path d="M7 2v7M4 6l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M2 11h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
-            Export
+            {exporting ? 'Exporting…' : 'Export JSON'}
           </button>
         </div>
       </div>
+
+      {loadError && <div role="alert" style={{ marginBottom: 16, padding: '10px 14px', border: '1px solid var(--status-fail-border)', borderRadius: 6, background: 'var(--status-fail-bg)', color: 'var(--status-fail)', fontSize: '0.8125rem' }}>{loadError}</div>}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center' }}>
@@ -589,7 +631,9 @@ export default function AuditTrail() {
                           <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#1d5c8a', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Hash chain</span>
                           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1f7a5c' }} />
-                            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#1a6a4f' }}>Verified</span>
+                            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: verified ? '#1a6a4f' : '#9a3433' }}>
+                              {verified ? 'Chain verified' : 'Chain unverified'}
+                            </span>
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -612,6 +656,14 @@ export default function AuditTrail() {
           );
         })}
       </div>
+
+      {events.length < totalCount && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+          <button type="button" onClick={handleLoadOlder} disabled={loadingMore}>
+            {loadingMore ? 'Loading…' : 'Load older events'}
+          </button>
+        </div>
+      )}
 
       {filtered.length === 0 && (
         <div style={{ textAlign: 'center', padding: '64px 24px' }}>

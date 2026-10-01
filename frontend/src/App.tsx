@@ -68,7 +68,6 @@ const NAV_SECTIONS: NavSection[] = [
       {
         key: 'review-queue',
         label: 'Review Queue',
-        badge: '42',
         icon: (
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="6.5" r="2.5" stroke="currentColor" strokeWidth="1.3" />
@@ -152,48 +151,7 @@ const BREADCRUMB_LABELS: Partial<Record<Page, string>> = {
 };
 
 // ── Notifications ──────────────────────────────────────────────────────────
-const NOTIFICATIONS = [
-  {
-    id: 1,
-    title: 'New high-priority claim assigned to you',
-    body: 'CLM-10480 — Valley Behavioral Sciences',
-    time: '2 min ago',
-    read: false,
-    icon: 'alert',
-  },
-  {
-    id: 2,
-    title: 'Claim requires review',
-    body: 'CLM-10479 — Summit Psychiatry Clinic flagged by RUN-4821',
-    time: '8 min ago',
-    read: false,
-    icon: 'review',
-  },
-  {
-    id: 3,
-    title: 'Re-check completed',
-    body: 'CLM-10475 — records corrected, ready for re-check',
-    time: '14 min ago',
-    read: false,
-    icon: 'recheck',
-  },
-  {
-    id: 4,
-    title: 'Ingestion completed — 10 claims processed',
-    body: 'Run RUN-4821 created · 8 passed · 2 need review',
-    time: '21 min ago',
-    read: true,
-    icon: 'ingest',
-  },
-  {
-    id: 5,
-    title: 'Validation run completed',
-    body: 'RUN-4820 — 47 claims processed, pass rate 74.5%',
-    time: '1h ago',
-    read: true,
-    icon: 'run',
-  },
-];
+const NOTIFICATIONS: Array<{ id: number; title: string; body: string; time: string; read: boolean; icon: string }> = [];
 
 function NotifIcon({ type }: { type: string }) {
   const MAP: Record<string, [React.ReactNode, string]> = {
@@ -715,38 +673,10 @@ function TopBar({
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px' }}>
                 <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>Notifications</div>
-                <button
-                  onClick={() => setReadIds(NOTIFICATIONS.map((n) => n.id))}
-                  style={{ background: 'none', border: 'none', fontSize: '0.8125rem', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
-                >
-                  Mark all as read
-                </button>
-              </div>
-              <div style={{ display: 'flex', gap: 2, padding: '0 16px 10px' }}>
-                {(['all', 'unread'] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setNotifTab(t)}
-                    style={{
-                      background: notifTab === t ? 'var(--canvas-bg)' : 'transparent',
-                      border: notifTab === t ? '1px solid var(--card-border)' : '1px solid transparent',
-                      borderRadius: 6,
-                      padding: '4px 10px',
-                      fontSize: '0.8125rem',
-                      fontWeight: notifTab === t ? 600 : 400,
-                      color: notifTab === t ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    {t}
-                  </button>
-                ))}
               </div>
               <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                {NOTIFICATIONS.length === 0 && <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>No notifications are available.</div>}
                 {NOTIFICATIONS
-                  .filter((n) => notifTab === 'all' ? true : (!n.read && !readIds.includes(n.id)))
                   .map((n) => {
                     const isRead = n.read || readIds.includes(n.id);
                     return (
