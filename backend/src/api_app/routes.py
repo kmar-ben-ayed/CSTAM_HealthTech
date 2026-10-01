@@ -35,7 +35,7 @@ def get_dataset(split: str, request: Request, limit: int | None = Query(default=
 
 
 @v1_router.get("/claims", tags=["claims"])
-def get_ingested_claims(request: Request, limit: int | None = Query(default=None, ge=1, le=500)):
+def get_ingested_claims(request: Request, limit: int | None = Query(default=None, ge=1)):
     return _service(request, "ingestion_service").store.latest(limit)
 
 

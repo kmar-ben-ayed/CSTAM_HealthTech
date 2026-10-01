@@ -40,10 +40,10 @@ This distinction is intentional. The repository demonstrates the core validation
 The connected workflow is now:
 
 ```text
-Ingest -> persist latest batch -> list claims -> open claim -> explain finding -> record review -> audit
+Ingest -> accumulate claims -> list claims -> open claim -> explain finding -> record review -> audit
 ```
 
-Ingestion responses are stored in a process-local read model keyed by a request fingerprint. `GET /api/v1/claims` returns the latest accepted batch and `GET /api/v1/claims/{claim_id}` returns the claim plus its deterministic evaluation. The Claims and Claim Review screens use these routes first and fall back to the development fixture only when the API has no ingested batch, so a newly imported claim remains available to the rest of the workflow. The store is intentionally in memory for this phase: restarting the backend clears it, so it is suitable for a local demo rather than production persistence.
+Ingestion responses are stored in a SQLite-backed accumulated read model keyed by a request fingerprint. `GET /api/v1/claims` returns all distinct accepted claims imported into the local store and `GET /api/v1/claims/{claim_id}` returns any accumulated claim plus its deterministic evaluation. The Claims and Claim Review screens use these routes first and fall back to the development fixture only when the API has no ingested claims, so newly imported claims remain available to the rest of the workflow. The database is written to `backend/outputs/ingestion.sqlite3`; it is local demo persistence rather than a production database.
 
 Identical JSONL, CSV, or FHIR uploads are idempotent for the lifetime of the process. The fingerprint is checked before evaluation, which prevents a repeated upload from creating another set of rule-execution audit events. A batch ID is returned with every successful import.
 

@@ -105,7 +105,14 @@ def create_app(
         app.state.audit_service = AuditService(resolved_audit_path, audit_logger)
         app.state.claim_service = claim_service
         app.state.dataset_service = DatasetService(claim_service, backend_root)
-        app.state.ingestion_service = IngestionService(claim_service, backend_root, IngestionStore())
+        ingestion_path = (
+            backend_root / "outputs" / "ingestion.sqlite3"
+            if audit_log_path is None
+            else Path(audit_log_path).with_name("ingestion.sqlite3")
+        )
+        app.state.ingestion_service = IngestionService(
+            claim_service, backend_root, IngestionStore(ingestion_path)
+        )
         app.state.explanation_service = ExplanationService(rules_config, claim_service, audit_logger)
         yield
 

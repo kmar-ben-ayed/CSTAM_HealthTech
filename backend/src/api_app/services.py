@@ -1,7 +1,9 @@
 import hashlib
 import json
 import os
+import sqlite3
 import threading
+from contextlib import closing
 from copy import deepcopy
 from json import JSONDecoder, JSONDecodeError
 from pathlib import Path
@@ -49,31 +51,93 @@ class ApiProblem(Exception):
 
 
 class IngestionStore:
-    """Process-local read model for the most recent imported batch."""
+    """SQLite-backed accumulated read model for imported claims."""
 
-    def __init__(self):
+    def __init__(self, storage_path: Path | None = None):
         self._lock = threading.Lock()
-        self._latest: dict[str, Any] | None = None
-        self._by_fingerprint: dict[str, dict[str, Any]] = {}
+        self.storage_path = Path(storage_path or BACKEND_ROOT / "outputs" / "ingestion.sqlite3")
+        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        with closing(sqlite3.connect(self.storage_path)) as connection:
+            with connection:
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS ingestion_state "
+                    "(id INTEGER PRIMARY KEY CHECK (id = 1), response TEXT NOT NULL)"
+                )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS ingestion_fingerprints "
+                    "(fingerprint TEXT PRIMARY KEY, response TEXT NOT NULL)"
+                )
+
+    def _read_response(self, value: str) -> dict[str, Any]:
+        return json.loads(value)
+
+    def _write_state(self, connection: sqlite3.Connection, response: dict[str, Any]) -> None:
+        connection.execute(
+            "INSERT INTO ingestion_state (id, response) VALUES (1, ?) "
+            "ON CONFLICT(id) DO UPDATE SET response = excluded.response",
+            (json.dumps(response, ensure_ascii=False),),
+        )
+
+    def _load_latest(self, connection: sqlite3.Connection) -> dict[str, Any] | None:
+        row = connection.execute("SELECT response FROM ingestion_state WHERE id = 1").fetchone()
+        return self._read_response(row[0]) if row else None
 
     def get_cached(self, fingerprint: str) -> dict[str, Any] | None:
         with self._lock:
-            result = self._by_fingerprint.get(fingerprint)
-            return deepcopy(result) if result else None
+            with closing(sqlite3.connect(self.storage_path)) as connection:
+                row = connection.execute(
+                    "SELECT response FROM ingestion_fingerprints WHERE fingerprint = ?",
+                    (fingerprint,),
+                ).fetchone()
+            return deepcopy(self._read_response(row[0])) if row else None
 
     def save(self, fingerprint: str, response: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            stored = deepcopy(response)
-            stored["batch_id"] = uuid4().hex
-            self._by_fingerprint[fingerprint] = stored
-            self._latest = stored
-            return deepcopy(stored)
+            with closing(sqlite3.connect(self.storage_path)) as connection:
+                with connection:
+                    cached = connection.execute(
+                        "SELECT response FROM ingestion_fingerprints WHERE fingerprint = ?",
+                        (fingerprint,),
+                    ).fetchone()
+                    if cached:
+                        return deepcopy(self._read_response(cached[0]))
+
+                    stored = deepcopy(response)
+                    stored["batch_id"] = uuid4().hex
+                    latest = self._load_latest(connection)
+                    if latest is None:
+                        accumulated = stored
+                    else:
+                        existing_ids = {claim["claim_id"] for claim in latest["claims"]}
+                        new_claims = [claim for claim in stored["claims"] if claim["claim_id"] not in existing_ids]
+                        latest["claims"].extend(new_claims)
+                        latest["evaluations"].update({
+                            claim_id: results
+                            for claim_id, results in stored["evaluations"].items()
+                            if claim_id not in existing_ids
+                        })
+                        latest["rejected"].extend(stored.get("rejected", []))
+                        if "fhir_findings" in stored:
+                            latest.setdefault("fhir_findings", []).extend(stored["fhir_findings"])
+                        if stored.get("authorization_warning"):
+                            latest["authorization_warning"] = stored["authorization_warning"]
+                        latest["batch_id"] = stored["batch_id"]
+                        accumulated = latest
+
+                    self._write_state(connection, accumulated)
+                    connection.execute(
+                        "INSERT INTO ingestion_fingerprints (fingerprint, response) VALUES (?, ?)",
+                        (fingerprint, json.dumps(stored, ensure_ascii=False)),
+                    )
+                    return deepcopy(stored)
 
     def latest(self, limit: int | None = None) -> dict[str, Any]:
         with self._lock:
-            if self._latest is None:
+            with closing(sqlite3.connect(self.storage_path)) as connection:
+                latest = self._load_latest(connection)
+            if latest is None:
                 raise ApiProblem(404, "claims_not_found", "No ingested claims are available")
-            result = deepcopy(self._latest)
+            result = deepcopy(latest)
         if limit is not None:
             result["claims"] = result["claims"][:limit]
             result["evaluations"] = {
@@ -91,7 +155,7 @@ class IngestionStore:
                     "claim": claim,
                     "evaluation": result["evaluations"].get(claim_id, []),
                 }
-        raise ApiProblem(404, "claim_not_found", "Claim not found in the latest ingested batch")
+        raise ApiProblem(404, "claim_not_found", "Claim not found in accumulated ingested claims")
 
 
 def load_claim_file(path: Path) -> list[dict[str, Any]]:

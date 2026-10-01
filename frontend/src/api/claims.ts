@@ -126,8 +126,9 @@ export async function getDataset(split = 'development', limit = 500, signal?: Ab
   return apiFetch<DatasetResponse>(`/api/v1/datasets/${split}?limit=${limit}`, { signal });
 }
 
-export async function getIngestedClaims(limit = 500, signal?: AbortSignal): Promise<IngestedClaimsResponse> {
-  return apiFetch<IngestedClaimsResponse>(`/api/v1/claims?limit=${limit}`, { signal });
+export async function getIngestedClaims(limit?: number, signal?: AbortSignal): Promise<IngestedClaimsResponse> {
+  const query = limit === undefined ? '' : `?limit=${limit}`;
+  return apiFetch<IngestedClaimsResponse>(`/api/v1/claims${query}`, { signal });
 }
 
 export async function getIngestedClaim(claimId: string, signal?: AbortSignal): Promise<IngestedClaimResponse> {

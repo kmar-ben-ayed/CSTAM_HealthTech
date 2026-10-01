@@ -88,6 +88,47 @@ class ApiRouteTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(second.json()["batch_id"], first.json()["batch_id"])
         self.assertEqual(self.client.get("/api/v1/audit/events").json()["total_count"], 15)
+
+    def test_distinct_uploads_accumulate_in_ingested_claims(self):
+        second_claim = json.loads(json.dumps(self.claim))
+        second_claim["claim_id"] = "CG-SECOND-UPLOAD"
+        second_claim["invoice_number"] = "INV-SECOND-UPLOAD"
+
+        first = self.client.post("/api/v1/ingest/jsonl", json={"text": json.dumps(self.claim)})
+        second = self.client.post("/api/v1/ingest/jsonl", json={"text": json.dumps(second_claim)})
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        accumulated = self.client.get("/api/v1/claims").json()
+        self.assertEqual(
+            {claim["claim_id"] for claim in accumulated["claims"]},
+            {self.claim["claim_id"], second_claim["claim_id"]},
+        )
+        self.assertEqual(
+            self.client.get(f"/api/v1/claims/{second_claim['claim_id']}").json()["claim"]["claim_id"],
+            second_claim["claim_id"],
+        )
+
+    def test_ingested_claims_endpoint_accepts_limits_above_500(self):
+        response = self.client.get("/api/v1/claims?limit=501")
+        self.assertEqual(response.status_code, 404)
+
+        self.client.post("/api/v1/ingest/jsonl", json={"text": json.dumps(self.claim)})
+        response = self.client.get("/api/v1/claims?limit=501")
+        self.assertEqual(response.status_code, 200)
+
+    def test_ingested_claims_survive_app_restart(self):
+        text = json.dumps(self.claim)
+        first = self.client.post("/api/v1/ingest/jsonl", json={"text": text})
+        self.assertEqual(first.status_code, 200)
+        self.client.__exit__(None, None, None)
+
+        restarted_client = TestClient(create_app(audit_log_path=self.audit_path))
+        with restarted_client:
+            response = restarted_client.get("/api/v1/claims")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["claims"][0]["claim_id"], self.claim["claim_id"])
     def test_csv_ingestion_rejects_claims_file_without_related_pack(self):
         response = self.client.post(
             "/api/v1/ingest/csv",

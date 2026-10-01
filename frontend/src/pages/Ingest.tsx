@@ -74,7 +74,7 @@ const FORMAT_CARDS = [
   {
     label: 'JSON',
     desc: 'Structured claim data',
-    ext: '.json',
+    ext: '.json, .jsonl',
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
         <path d="M6 4C4.5 4 4 4.5 4 6v3c0 1-1 2-1 2s1 1 1 2v3c0 1.5.5 2 2 2" stroke="#1d5c8a" strokeWidth="1.4" strokeLinecap="round"/>
@@ -232,7 +232,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginRight: 4 }}>Supported formats:</span>
-          {['CSV', 'JSON', 'FHIR'].map(f => (
+          {['CSV', 'JSONL', 'JSON'].map(f => (
             <span key={f} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '3px 9px' }}>{f}</span>
           ))}
         </div>
@@ -568,7 +568,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                   gap: 16,
                 }}
               >
-                <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} accept=".csv,.json" onChange={e => selectFiles(e.target.files)} />
+                <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} accept=".csv,.json,.jsonl" onChange={e => selectFiles(e.target.files)} />
                 <div style={{ width: 56, height: 56, borderRadius: 12, background: dragging ? 'rgba(15,122,130,0.1)' : '#f8fafc', border: `1.5px solid ${dragging ? 'rgba(15,122,130,0.3)' : '#e2e8f0'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s ease' }}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                     <path d="M12 3v12M8 9l4-6 4 6" stroke={dragging ? 'var(--accent)' : '#74847c'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -579,7 +579,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                   <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 4 }}>
                     Drop your claim file(s) here
                   </div>
-                  <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: 16 }}>a single .json file, or all five .csv pack files at once</div>
+                  <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: 16 }}>a single .json or .jsonl file, or all five .csv pack files at once</div>
                   <button
                     onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
                     style={{ background: 'var(--accent)', border: 'none', borderRadius: 5, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
@@ -589,7 +589,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
                   <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Supported:</span>
-                  {['.csv', '.json', 'FHIR Claim data'].map(f => (
+                  {['.csv', '.json', '.jsonl'].map(f => (
                     <span key={f} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#94a3b8', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '1px 7px' }}>{f}</span>
                   ))}
                 </div>

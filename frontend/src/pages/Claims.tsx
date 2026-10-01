@@ -37,7 +37,7 @@ export default function Claims({ onNavigate }: ClaimsProps) {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    getIngestedClaims(500, controller.signal)
+    getIngestedClaims(undefined, controller.signal)
       .catch((cause: unknown) => {
         if (cause instanceof ApiError && cause.status === 404) return getDataset('development', 500, controller.signal);
         throw cause;

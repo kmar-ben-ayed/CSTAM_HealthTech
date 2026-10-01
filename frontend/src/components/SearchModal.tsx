@@ -92,7 +92,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
       setSelected(0);
       setTimeout(() => inputRef.current?.focus(), 50);
       const controller = new AbortController();
-      getIngestedClaims(500, controller.signal)
+      getIngestedClaims(undefined, controller.signal)
         .catch((error: unknown) => {
           if (error instanceof Error && 'status' in error && (error as { status?: number }).status === 404) {
             return getDataset('development', 500, controller.signal);
