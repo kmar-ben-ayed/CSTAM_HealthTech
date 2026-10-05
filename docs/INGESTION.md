@@ -10,6 +10,8 @@
 | FHIR structural check only | `POST /api/v1/fhir/validate` `{bundle | text}` | Returns findings, never raises |
 | Export claim to FHIR | `POST /api/v1/fhir/export` `{claim}` | `claim_to_bundle` |
 
+The ingestion screen detects FHIR `Bundle` resources in `.json` and `.jsonl` uploads and routes them through the FHIR adapter. Other JSON/JSONL uploads are treated as normalized claims.
+
 ## FHIR mapping principles (`normalisation/fhir_adapter.py`)
 
 1. Nothing is invented: absent field -> `None` -> rule engine yields `UNABLE_TO_ASSESS` / `FAIL`.
