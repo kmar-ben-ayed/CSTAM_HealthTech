@@ -37,6 +37,30 @@ function toPreviewRow(claim: BackendClaim): PreviewRow {
   };
 }
 
+function isFhirBundle(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(isFhirBundle);
+  return typeof value === 'object' && value !== null && 'resourceType' in value
+    && value.resourceType === 'Bundle';
+}
+
+function isFhirBundlePayload(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  try {
+    return isFhirBundle(JSON.parse(trimmed));
+  } catch {
+    return trimmed.split(/\r?\n/).some((line) => {
+      if (!line.trim()) return false;
+      try {
+        return isFhirBundle(JSON.parse(line));
+      } catch {
+        return false;
+      }
+    });
+  }
+}
+
 function toValidationIssues(rejected: RejectedRecord[], fhirFindings: IngestionResponse['fhir_findings'] = []): ValidationIssue[] {
   const rejectedIssues = rejected.flatMap((record) => record.findings.length
     ? record.findings.map((finding) => ({
@@ -86,7 +110,7 @@ const FORMAT_CARDS = [
   {
     label: 'FHIR',
     desc: 'FHIR Claim resource',
-    ext: '.json',
+    ext: '.json, .jsonl',
     icon: (
       <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
         <path d="M11 2l8 4v5c0 4.5-3.5 8-8 9-4.5-1-8-4.5-8-9V6l8-4z" stroke="var(--status-pass-ink)" strokeWidth="1.4" strokeLinejoin="round"/>
@@ -179,7 +203,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
 
       const result = isCsvMode
         ? await ingestCsv(csvFiles)
-        : selectedFormat === 'fhir'
+        : isFhirImport
           ? await ingestFhir(fileContent)
           : await ingestJsonl(fileContent);
       setIngestionResult(result);
@@ -220,7 +244,8 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
   const reviewCount = ingestionResult
     ? Object.values(ingestionResult.evaluations).filter((results) => results.some((result) => result.requires_human_review)).length
     : 0;
-  const formatLabel = isCsvMode ? 'CSV' : selectedFormat === 'fhir' ? 'FHIR' : 'JSON';
+  const isFhirImport = selectedFormat === 'fhir' || (!isCsvMode && isFhirBundlePayload(fileContent));
+  const formatLabel = isCsvMode ? 'CSV' : isFhirImport ? 'FHIR' : 'JSON';
 
   return (
     <div className="page-shell">
@@ -232,8 +257,13 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
           <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Import claim data into ClaimGuard for validation and review.</p>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+<<<<<<< HEAD
           <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginRight: 4 }}>Supported formats:</span>
           {['CSV', 'JSONL', 'JSON'].map(f => (
+=======
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginRight: 4 }}>Supported formats:</span>
+          {['CSV', 'JSONL', 'JSON', 'FHIR'].map(f => (
+>>>>>>> ef656a9410bac61ceed755934c8c524091f4204e
             <span key={f} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '3px 9px' }}>{f}</span>
           ))}
         </div>
@@ -582,7 +612,11 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                   <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
                     Drop your claim file(s) here
                   </div>
+<<<<<<< HEAD
                   <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)', marginBottom: 16 }}>a single .json or .jsonl file, or all five .csv pack files at once</div>
+=======
+                  <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: 16 }}>a JSON/JSONL claim or FHIR Bundle file, or all five .csv pack files at once</div>
+>>>>>>> ef656a9410bac61ceed755934c8c524091f4204e
                   <button
                     onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
                     style={{ background: 'var(--accent)', border: 'none', borderRadius: 5, padding: '9px 24px', color: 'var(--card-bg)', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
