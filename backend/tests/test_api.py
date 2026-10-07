@@ -1,4 +1,5 @@
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -19,6 +20,7 @@ class ApiRouteTests(unittest.TestCase):
     def setUpClass(cls):
         cls.claim = load_jsonl(BACKEND_ROOT / "data" / "development" / "claims.jsonl")[0]
         cls.bundle = load_jsonl(BACKEND_ROOT / "data" / "development" / "fhir_bundles.jsonl")[0]
+        cls.rule_count = len(json.loads((BACKEND_ROOT / "rules" / "rules.json").read_text(encoding="utf-8")))
 
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -40,12 +42,61 @@ class ApiRouteTests(unittest.TestCase):
     def test_claim_evaluation_records_minimized_audit_events(self):
         response = self.client.post("/api/v1/claims/evaluate", json={"claim": self.claim})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.json()["results"]), 15)
+        self.assertEqual(len(response.json()["results"]), self.rule_count)
 
         events = self.client.get("/api/v1/audit/events").json()
-        self.assertEqual(events["total_count"], 15)
+        self.assertEqual(events["total_count"], self.rule_count)
         self.assertNotIn("invoice_number", json.dumps(events))
         self.assertNotIn("patient_id", json.dumps(events))
+
+    def test_deleted_rule_is_removed_from_live_claim_evaluation(self):
+        isolated_root = Path(self.temp_dir.name) / "backend"
+        shutil.copytree(BACKEND_ROOT / "rules", isolated_root / "rules")
+        shutil.copytree(BACKEND_ROOT / "schemas", isolated_root / "schemas")
+        isolated_audit_path = isolated_root / "audit.jsonl"
+        original_rules = json.loads(
+            (isolated_root / "rules" / "rules.json").read_text(encoding="utf-8")
+        )
+        original_rules = [
+            rule for rule in original_rules if rule["rule_id"] != "R016"
+        ]
+        deleted_rule = {
+            "rule_id": "R016",
+            "title": "Temporary rule",
+            "severity": "medium",
+            "logic": "If provider is EDU-PROV-02 pass, missing and other prov is fail",
+            "corrective_action": "Reject the claim.",
+            "version": "1.0.0",
+            "source": "fictional-rulebook/R016@1.0.0",
+        }
+        with TestClient(
+            create_app(backend_root=isolated_root, audit_log_path=isolated_audit_path)
+        ) as client:
+            self.assertEqual(
+                client.post(
+                    "/api/v1/config/rules.json",
+                    json=original_rules + [deleted_rule],
+                ).status_code,
+                200,
+            )
+            with_rule = client.post(
+                "/api/v1/claims/evaluate",
+                json={"claim": self.claim},
+            ).json()["results"]
+            self.assertIn("R016", [result["rule_id"] for result in with_rule])
+
+            self.assertEqual(
+                client.post(
+                    "/api/v1/config/rules.json",
+                    json=original_rules,
+                ).status_code,
+                200,
+            )
+            without_rule = client.post(
+                "/api/v1/claims/evaluate",
+                json={"claim": self.claim},
+            ).json()["results"]
+            self.assertNotIn("R016", [result["rule_id"] for result in without_rule])
 
     def test_invalid_claim_returns_structured_422(self):
         response = self.client.post("/api/v1/claims/evaluate", json={"claim": {"claim_id": "bad"}})
@@ -64,7 +115,10 @@ class ApiRouteTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["evaluations"]), 1)
-        self.assertEqual(len(response.json()["evaluations"][0]["results"]), 15)
+        self.assertEqual(
+            len(response.json()["evaluations"][0]["results"]),
+            self.rule_count,
+        )
 
     def test_jsonl_ingestion_accepts_good_record_and_reports_bad_line(self):
         text = "\n".join([json.dumps(self.claim), "{broken"])
@@ -87,7 +141,10 @@ class ApiRouteTests(unittest.TestCase):
         second = self.client.post("/api/v1/ingest/jsonl", json={"text": text})
         self.assertEqual(second.status_code, 200)
         self.assertEqual(second.json()["batch_id"], first.json()["batch_id"])
-        self.assertEqual(self.client.get("/api/v1/audit/events").json()["total_count"], 15)
+        self.assertEqual(
+            self.client.get("/api/v1/audit/events").json()["total_count"],
+            self.rule_count,
+        )
 
     def test_distinct_uploads_accumulate_in_ingested_claims(self):
         second_claim = json.loads(json.dumps(self.claim))
@@ -224,7 +281,10 @@ class ApiRouteTests(unittest.TestCase):
         with restarted_client:
             events = restarted_client.get("/api/v1/audit/events")
             self.assertEqual(events.status_code, 200)
-            self.assertEqual(events.json()["total_count"], 15)
+            self.assertEqual(
+                events.json()["total_count"],
+                self.rule_count,
+            )
             self.assertTrue(restarted_client.get("/api/v1/audit/verify").json()["valid"])
 
     def test_audit_endpoint_detects_tampered_history(self):

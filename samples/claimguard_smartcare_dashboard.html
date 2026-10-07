@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClaimGuard AI - SmartCare Design Workspace</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                        syne: ['Syne', 'sans-serif'],
+                    },
+                    animation: {
+                        'spin-slow': 'spin 15s linear infinite',
+                        'float-slow': 'float 6s ease-in-out infinite',
+                        'float-medium': 'float 4s ease-in-out infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .animate-float-slow { animation: float 6s ease-in-out infinite; }
+        .animate-float-medium { animation: float 4s ease-in-out infinite; }
+        
+        .glass {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .text-glow {
+            text-shadow: 0 0 40px rgba(0, 242, 254, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-[#F3F4F6] text-[#0F172A] font-sans antialiased h-full overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-900">
+
+    <!-- Global Viewport Border Frame -->
+    <div class="fixed inset-4 border border-white/60 rounded-[32px] pointer-events-none z-50 shadow-inner"></div>
+
+    <!-- BACKGROUND EFFECTS -->
+    <div class="fixed inset-0 overflow-hidden -z-10 pointer-events-none">
+        <!-- Giant Watermark Background Text -->
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center select-none pointer-events-none opacity-[0.03]">
+            <h1 class="font-syne text-[10vw] font-extrabold tracking-[0.2em] uppercase leading-none text-slate-800">
+                FUTURE MEDICINE
+            </h1>
+        </div>
+
+        <!-- 3D Fluid Gradient Ribbon -->
+        <svg class="absolute bottom-[-10%] left-[-10%] w-[120%] h-[120%] opacity-20 filter blur-[80px]" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="M0,80 Q30,40 50,70 T100,30 L100,100 L0,100 Z" fill="url(#ribbon-gradient)"></path>
+            <defs>
+                <linearGradient id="ribbon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00F2FE" />
+                    <stop offset="50%" stop-color="#4FACFE" />
+                    <stop offset="100%" stop-color="#10B981" />
+                </linearGradient>
+            </defs>
+        </svg>
+
+        <!-- Subtle Ambient Grid -->
+        <div class="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.02)_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
+    </div>
+
+    <!-- MAIN VIEW CONTAINER -->
+    <div class="relative min-h-full flex flex-col p-8 md:p-12 z-10">
+
+        <!-- NAVIGATION BAR (Top Header) -->
+        <header class="flex justify-between items-center w-full mb-10 md:mb-16">
+            <!-- Logo (Left) -->
+            <div class="flex items-center gap-3">
+                <div class="grid grid-cols-2 gap-1 w-7 h-7 bg-slate-900 p-1.5 rounded-lg shadow-sm">
+                    <div class="bg-cyan-400 rounded-sm"></div>
+                    <div class="bg-blue-400 rounded-sm"></div>
+                    <div class="bg-emerald-400 rounded-sm"></div>
+                    <div class="bg-white rounded-sm"></div>
+                </div>
+                <div class="leading-none">
+                    <span class="font-display font-bold text-lg tracking-tight block">ClaimGuard</span>
+                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-[0.2em]">AI Analytics</span>
+                </div>
+            </div>
+
+            <!-- Floating Pill Navigation (Center) -->
+            <nav class="hidden md:flex items-center gap-1 p-1.5 rounded-full glass shadow-sm">
+                <a href="#" class="flex items-center gap-2 px-4 py-2 rounded-full text-slate-800 bg-white font-medium shadow-sm transition">
+                    <i data-lucide="home" class="w-4 h-4 text-cyan-500"></i> Dashboard
+                </a>
+                <a href="#" class="flex items-center gap-2 px-4 py-2 rounded-full text-slate-600 hover:text-slate-900 font-medium transition hover:bg-white/50">
+                    <i data-lucide="file-text" class="w-4 h-4 text-slate-400"></i> Claims
+                </a>
+                <a href="#" class="flex items-center gap-2 px-4 py-2 rounded-full text-slate-600 hover:text-slate-900 font-medium transition hover:bg-white/50">
+                    <i data-lucide="activity" class="w-4 h-4 text-slate-400"></i> Runs
+                </a>
+                <a href="#" class="flex items-center gap-2 px-4 py-2 rounded-full text-slate-600 hover:text-slate-900 font-medium transition hover:bg-white/50">
+                    <i data-lucide="shield-check" class="w-4 h-4 text-slate-400"></i> Audit Trail
+                </a>
+            </nav>
+
+            <!-- CTA Pill Button (Right) -->
+            <button class="group flex items-center gap-3 bg-slate-950 hover:bg-slate-850 text-white pl-1.5 pr-5 py-1.5 rounded-full shadow-lg transition-all transform hover:-translate-y-0.5">
+                <span class="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-400 text-slate-950 font-bold group-hover:rotate-45 transition-transform duration-300">
+                    <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                </span>
+                <span class="font-semibold text-sm">New Run</span>
+                <span class="text-xs text-cyan-400 font-bold tracking-widest group-hover:translate-x-1 transition-transform">&gt;&gt;&gt;</span>
+            </button>
+        </header>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start flex-1 w-full max-w-7xl mx-auto">
+            
+            <!-- Left Hero & Overview -->
+            <div class="lg:col-span-7 flex flex-col items-start space-y-6">
+                <!-- Pre-Header Tag -->
+                <span class="inline-flex items-center gap-2 px-4.5 py-1.5 rounded-full bg-white/80 border border-white/50 text-slate-800 font-semibold text-xs uppercase tracking-widest shadow-sm">
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                    Automated Claim Validation
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                </span>
+
+                <!-- Main Headline -->
+                <h2 class="font-display font-extrabold text-4xl sm:text-5xl xl:text-6xl text-slate-900 tracking-tight leading-[1.1] uppercase max-w-2xl text-glow">
+                    Claim Validation:<br>
+                    <span class="inline-flex items-center align-middle gap-1.5 px-3 py-1.5 bg-white border border-white/60 rounded-full shadow-md animate-float-medium mx-1 sm:mx-2">
+                        <!-- Avatars (Reviewer Team) -->
+                        <span class="flex -space-x-2">
+                            <img class="inline-block h-6 w-6 sm:h-8 sm:w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120" alt="Auditor 1">
+                            <img class="inline-block h-6 w-6 sm:h-8 sm:w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120" alt="Auditor 2">
+                            <img class="inline-block h-6 w-6 sm:h-8 sm:w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=120" alt="Auditor 3">
+                        </span>
+                        <!-- Helix/Rule Icon -->
+                        <span class="flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 text-white shadow-sm">
+                            <i data-lucide="shield" class="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5"></i>
+                        </span>
+                    </span>
+                    Securing Healthcare
+                </h2>
+
+                <!-- Description & Circular Badge -->
+                <div class="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full pt-4">
+                    <p class="text-slate-500 text-sm md:text-base leading-relaxed max-w-sm">
+                        With deterministic rule engines and AI-powered explanations, we ensure every healthcare claim is validated with precision and full explainability.
+                    </p>
+
+                    <!-- Circular Badge -->
+                    <div class="relative flex items-center justify-center w-28 h-28 shrink-0 bg-white border border-white/50 rounded-full shadow-lg hover:scale-105 transition-transform duration-300 group cursor-pointer">
+                        <svg class="absolute w-full h-full animate-spin-slow" viewBox="0 0 100 100">
+                            <defs>
+                                <path id="textPath" d="M 50,50 m -35,0 a 35,35 0 1,1 70,0 a 35,35 0 1,1 -70,0"></path>
+                            </defs>
+                            <text class="text-[7.5px] font-bold fill-slate-700 tracking-[0.25em] uppercase">
+                                <textPath href="#textPath">Functional • Dynamic • Responsive • </textPath>
+                            </text>
+                        </svg>
+                        <span class="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center group-hover:rotate-45 transition-transform">
+                            <i data-lucide="arrow-up-left" class="w-4 h-4"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Sub-CTA Tag -->
+                <div class="flex items-center gap-3 bg-cyan-500/10 border border-cyan-500/20 px-4 py-2.5 rounded-full text-cyan-800 text-xs md:text-sm font-semibold shadow-sm">
+                    <span class="flex items-center justify-center w-5 h-5 rounded-full bg-cyan-500 text-white">
+                        <i data-lucide="info" class="w-3.5 h-3.5"></i>
+                    </span>
+                    <span>23 claims await review. Three are marked urgent.</span>
+                </div>
+
+                <!-- KPI SECTION (Adapted to Glassmorphic Style) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full pt-6">
+                    <div class="glass rounded-3xl p-6 shadow-xl flex items-start gap-4 animate-float-slow">
+                        <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                            <i data-lucide="file-text" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-sm text-slate-900">24 Claims Processed</h4>
+                            <p class="text-[11px] text-slate-500 mt-1">Accumulated locally from the latest ingestion runs.</p>
+                            <div class="mt-2 flex gap-1.5">
+                                <span class="px-2 py-0.5 rounded bg-slate-900 text-white text-[9px] font-bold">BATCH-4821</span>
+                                <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px] font-bold">98.2% Accuracy</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass rounded-3xl p-6 shadow-xl flex items-start gap-4 animate-float-medium">
+                        <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                            <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-sm text-slate-900">12 Issues Detected</h4>
+                            <p class="text-[11px] text-slate-500 mt-1">Requiring immediate human auditor verification.</p>
+                            <div class="mt-2 flex gap-1.5">
+                                <span class="px-2 py-0.5 rounded bg-rose-500 text-white text-[9px] font-bold">3 URGENT</span>
+                                <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-700 text-[9px] font-bold">R008 FREQUENT</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column (Stacked Cards / Features) -->
+            <div class="lg:col-span-5 flex flex-col space-y-6 w-full">
+                
+                <!-- Priority Review Queue Card -->
+                <div class="glass rounded-3xl p-6 shadow-xl border border-white/40">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="font-display font-bold text-slate-950 text-base leading-none">Priority Review</h3>
+                            <p class="text-[11px] text-slate-500 mt-1 font-medium">Sorted by findings and wait time</p>
+                        </div>
+                        <button class="w-9 h-9 rounded-full bg-white flex items-center justify-center border border-white/50 text-slate-700 hover:bg-slate-900 hover:text-white transition">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <ul class="space-y-3">
+                        <li class="flex items-center justify-between p-3 rounded-2xl bg-white/40 border border-white/30 hover:bg-white/60 transition cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full bg-rose-500"></div>
+                                <div>
+                                    <span class="block text-[11px] font-bold text-slate-900">CLM-10482</span>
+                                    <span class="block text-[10px] text-slate-500">Meridian Health Group</span>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-400">12 min ago</span>
+                        </li>
+                        <li class="flex items-center justify-between p-3 rounded-2xl bg-white/40 border border-white/30 hover:bg-white/60 transition cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full bg-amber-500"></div>
+                                <div>
+                                    <span class="block text-[11px] font-bold text-slate-900">CLM-10479</span>
+                                    <span class="block text-[10px] text-slate-500">Northside Clinic</span>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-400">1h ago</span>
+                        </li>
+                        <li class="flex items-center justify-between p-3 rounded-2xl bg-white/40 border border-white/30 hover:bg-white/60 transition cursor-pointer">
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full bg-rose-500"></div>
+                                <div>
+                                    <span class="block text-[11px] font-bold text-slate-900">CLM-10477</span>
+                                    <span class="block text-[10px] text-slate-500">Metro Health Partners</span>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-bold text-slate-400">2h ago</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Middle-Right Stacked Navigation (Articles/Resources) -->
+                <div class="glass rounded-3xl p-5 shadow-lg border border-white/40">
+                    <ul class="space-y-1">
+                        <li class="flex justify-between items-center p-3.5 rounded-2xl text-slate-500 hover:text-slate-800 transition hover:bg-white/40 cursor-pointer">
+                            <span class="font-display font-semibold text-sm">Review Policy <span class="text-xs opacity-50 font-normal ml-1">/ 01</span></span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs font-mono tracking-widest text-slate-400">• • •</span>
+                                <span class="flex items-center justify-center w-7 h-7 rounded-full bg-white border border-white text-slate-800 shadow-sm"><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></span>
+                            </div>
+                        </li>
+                        <li class="flex justify-between items-center p-3.5 rounded-2xl text-slate-950 bg-white border border-white/60 shadow-sm cursor-pointer">
+                            <span class="font-display font-bold text-sm">Active Runs <span class="text-xs text-slate-500 font-normal ml-1">/ 02</span></span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs font-mono tracking-widest text-cyan-500">● ● •</span>
+                                <span class="flex items-center justify-center w-7 h-7 rounded-full bg-slate-950 text-white shadow"><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></span>
+                            </div>
+                        </li>
+                        <li class="flex justify-between items-center p-3.5 rounded-2xl text-slate-500 hover:text-slate-800 transition hover:bg-white/40 cursor-pointer">
+                            <span class="font-display font-semibold text-sm">Analytics <span class="text-xs opacity-50 font-normal ml-1">/ 03</span></span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs font-mono tracking-widest text-slate-400">• • •</span>
+                                <span class="flex items-center justify-center w-7 h-7 rounded-full bg-white border border-white text-slate-800 shadow-sm"><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Recent Activity (Activity Feed) -->
+                <div class="glass rounded-3xl p-6 shadow-xl border border-white/40">
+                    <h3 class="font-display font-bold text-slate-950 text-sm mb-4">Recent Activity</h3>
+                    <div class="space-y-4">
+                        <div class="flex gap-3">
+                            <div class="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center shrink-0">
+                                <i data-lucide="user" class="w-4 h-4 text-cyan-600"></i>
+                            </div>
+                            <div>
+                                <p class="text-[11px] font-bold text-slate-900">Marwen Agrebi <span class="font-normal text-slate-400 ml-1">10:33:02</span></p>
+                                <p class="text-[10px] text-slate-500">CLM-10481 · Request information submitted</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <div class="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center shrink-0">
+                                <i data-lucide="zap" class="w-4 h-4 text-white"></i>
+                            </div>
+                            <div>
+                                <p class="text-[11px] font-bold text-slate-900">System <span class="font-normal text-slate-400 ml-1">10:31:03</span></p>
+                                <p class="text-[10px] text-slate-500">Run RUN-4821 · 24 claims · 98.2% accuracy</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- FOOTER -->
+        <footer class="flex justify-between items-center w-full mt-10 md:mt-16 pt-6 border-t border-slate-900/5">
+            <div class="flex items-center gap-2">
+                <a href="#" class="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-white/60 text-slate-600 hover:bg-slate-950 hover:text-white transition shadow-sm">
+                    <i data-lucide="twitter" class="w-4 h-4"></i>
+                </a>
+                <a href="#" class="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-white/60 text-slate-600 hover:bg-slate-950 hover:text-white transition shadow-sm">
+                    <i data-lucide="facebook" class="w-4 h-4"></i>
+                </a>
+                <a href="#" class="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-white/60 text-slate-600 hover:bg-slate-950 hover:text-white transition shadow-sm">
+                    <i data-lucide="instagram" class="w-4 h-4"></i>
+                </a>
+            </div>
+
+            <div class="flex flex-col items-center gap-1.5 cursor-pointer hover:translate-y-0.5 transition duration-300">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Scroll to Explore</span>
+                <span class="flex items-center justify-center w-6 h-6 rounded-full bg-white border border-white/50 shadow-sm text-slate-500">
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 animate-bounce"></i>
+                </span>
+            </div>
+
+            <span class="text-xs text-slate-400 font-medium">ClaimGuard AI • v1.0.2</span>
+        </footer>
+
+    </div>
+
+    <!-- Initialize Lucide Icons -->
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

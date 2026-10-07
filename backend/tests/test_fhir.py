@@ -169,7 +169,10 @@ class MalformedInputTests(unittest.TestCase):
         cfg = config(ROOT)
         claim = bundle_to_claim(bundle)
         self.assertEqual(claim["attachments"][0]["text"], evil)
-        self.assertEqual(len(baseline(claim, cfg)), 15)  # rules are unaffected by attachment text
+        self.assertEqual(
+            len(baseline(claim, cfg)),
+            len(cfg["rules"]),
+        )  # rules are unaffected by attachment text
 
     def test_sidecar_claim_id_mismatch_rejected(self):
         claims, bundles = load("development")

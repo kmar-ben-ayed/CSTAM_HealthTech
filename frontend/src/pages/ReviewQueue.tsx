@@ -8,8 +8,6 @@ interface ReviewQueueProps {
 
 type Priority = 'High' | 'Medium' | 'Low';
 type ReviewStatus =
-  | 'Unassigned'
-  | 'Assigned'
   | 'In Review'
   | 'Waiting for Info'
   | 'Ready for Re-check'
@@ -23,7 +21,6 @@ interface QueueItem {
   validationOutcome: ValidationOutcome;
   reviewStatus: ReviewStatus;
   topFinding: string;
-  assignedTo: string | null;
   age: string;
   lastAction: string;
   serviceDate: string;
@@ -31,9 +28,9 @@ interface QueueItem {
 }
 
 const PRIORITY_STYLE: Record<Priority, { bg: string; text: string; border: string }> = {
-  High: { bg: '#fbefee', text: '#8c322f', border: '#e9c8c7' },
-  Medium: { bg: '#f8f1e3', text: '#6b4a0f', border: '#e8d6ac' },
-  Low: { bg: '#e9f5ef', text: '#17503c', border: '#c4e1d1' },
+  High: { bg: 'var(--status-fail-bg)', text: 'var(--status-fail-ink)', border: 'var(--status-fail-border)' },
+  Medium: { bg: 'var(--status-uta-bg)', text: 'var(--status-uta-ink)', border: 'var(--status-uta-border)' },
+  Low: { bg: 'var(--status-pass-bg)', text: 'var(--status-pass-ink)', border: 'var(--status-pass-border)' },
 };
 
 const VALIDATION_STYLE: Record<ValidationOutcome, { bg: string; text: string; border: string }> = {
@@ -44,20 +41,16 @@ const VALIDATION_STYLE: Record<ValidationOutcome, { bg: string; text: string; bo
 };
 
 const REVIEW_STATUS_STYLE: Record<ReviewStatus, { color: string; dot: string }> = {
-  Unassigned: { color: '#94a3b8', dot: '#94a3b8' },
-  Assigned: { color: '#1d5c8a', dot: '#1d5c8a' },
   'In Review': { color: 'var(--accent)', dot: 'var(--accent)' },
-  'Waiting for Info': { color: 'var(--status-uta)', dot: 'var(--status-uta)' },
-  'Ready for Re-check': { color: 'var(--status-pass)', dot: 'var(--status-pass)' },
-  Completed: { color: '#64748b', dot: '#64748b' },
+  'Waiting for Info': { color: 'var(--status-uta-ink)', dot: 'var(--status-uta)' },
+  'Ready for Re-check': { color: 'var(--status-pass-ink)', dot: 'var(--status-pass)' },
+  Completed: { color: 'var(--text-secondary)', dot: 'var(--text-secondary)' },
 };
 
-type FilterTab = 'all' | 'mine' | 'unassigned' | 'high' | 'waiting' | 'recheck';
+type FilterTab = 'all' | 'high' | 'waiting' | 'recheck';
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'mine', label: 'My Queue' },
-  { key: 'unassigned', label: 'Unassigned' },
   { key: 'high', label: 'High Priority' },
   { key: 'waiting', label: 'Waiting for Info' },
   { key: 'recheck', label: 'Ready for Re-check' },
@@ -96,8 +89,6 @@ function Badge({
 export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const [sortBy, setSortBy] = useState<'age' | 'priority' | 'status'>('priority');
-  const [reviewerFilter, setReviewerFilter] = useState('All reviewers');
-  const [sessionIndex, setSessionIndex] = useState<number | null>(null);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
 
   useEffect(() => {
@@ -109,9 +100,8 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
         provider: row.provider,
         priority: row.status === 'fail' ? 'High' : row.status === 'review' ? 'Medium' : 'Low',
         validationOutcome: row.status === 'fail' ? 'FAIL' : row.status === 'review' ? 'NEEDS REVIEW' : 'UNABLE TO ASSESS',
-        reviewStatus: 'Unassigned',
+        reviewStatus: 'In Review',
         topFinding: row.rule === '—' ? 'Evaluation requires review' : row.rule,
-        assignedTo: null,
         age: 'Current batch',
         lastAction: 'Flagged by backend evaluation',
         serviceDate: row.dos,
@@ -121,31 +111,21 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
     return () => controller.abort();
   }, []);
 
-  const currentUser = 'Aya Gaha';
-
   const filtered = queueItems.filter((item) => {
-    if (activeFilter === 'mine') return item.assignedTo === currentUser;
-    if (activeFilter === 'unassigned') return item.assignedTo === null;
     if (activeFilter === 'high') return item.priority === 'High';
     if (activeFilter === 'waiting') return item.reviewStatus === 'Waiting for Info';
     if (activeFilter === 'recheck') return item.reviewStatus === 'Ready for Re-check';
     return true;
-  }).filter((item) => {
-    if (reviewerFilter === 'All reviewers') return true;
-    if (reviewerFilter === 'Unassigned') return item.assignedTo === null;
-    return item.assignedTo === reviewerFilter;
   });
 
   const highPriority = filtered.filter((i) => i.priority === 'High');
   const workload = [
-    { label: 'High priority', count: queueItems.filter((item) => item.priority === 'High').length, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
-    { label: 'Unassigned', count: queueItems.filter((item) => item.assignedTo === null).length, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0' },
-    { label: 'Waiting for info', count: queueItems.filter((item) => item.reviewStatus === 'Waiting for Info').length, color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
+    { label: 'High priority', count: queueItems.filter((item) => item.priority === 'High').length, color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
+    { label: 'Waiting for info', count: queueItems.filter((item) => item.reviewStatus === 'Waiting for Info').length, color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
     { label: 'In review', count: queueItems.filter((item) => item.reviewStatus === 'In Review').length, color: 'var(--accent)', bg: 'var(--accent-subtle)', border: 'var(--status-pass-border)' },
   ];
 
   const handleStartReview = (claimId: string, idx: number) => {
-    setSessionIndex(idx);
     onNavigate('claim-review', claimId);
   };
 
@@ -155,13 +135,14 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
       <div style={{ marginBottom: 24 }}>
         <div className="review-queue-heading" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div>
+            <span className="sc-eyebrow"> Human in the loop</span>
             <h1
               style={{
                 fontSize: '1.375rem',
                 fontWeight: 700,
                 color: 'var(--text-primary)',
                 letterSpacing: '-0.025em',
-                marginBottom: 4,
+                margin: '12px 0 4px',
               }}
             >
               Review Queue
@@ -171,32 +152,6 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <select
-              value={reviewerFilter}
-              onChange={(e) => setReviewerFilter(e.target.value)}
-              style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--card-border)',
-                borderRadius: 7,
-                padding: '7px 28px 7px 10px',
-                fontSize: '0.8125rem',
-                color: 'var(--text-primary)',
-                fontFamily: 'inherit',
-                cursor: 'pointer',
-                outline: 'none',
-                appearance: 'none',
-                backgroundImage:
-                  "url(\"data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 10 10' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4l3 3 3-3' stroke='%2394a3b8' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 8px center',
-              }}
-            >
-              <option>All reviewers</option>
-              <option>Aya Gaha</option>
-              <option>Marcus Webb</option>
-              <option>Priya Nair</option>
-              <option>Unassigned</option>
-            </select>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
@@ -263,7 +218,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               >
                 {w.count}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, marginTop: 2 }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, marginTop: 2 }}>
                 {w.label}
               </div>
             </div>
@@ -291,13 +246,13 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               key={tab.key}
               onClick={() => setActiveFilter(tab.key)}
               style={{
-                background: isActive ? '#f1f5f9' : 'transparent',
-                border: isActive ? '1px solid #e2e8f0' : '1px solid transparent',
+                background: isActive ? 'var(--canvas-bg-secondary)' : 'transparent',
+                border: isActive ? '1px solid var(--border)' : '1px solid transparent',
                 borderRadius: 6,
                 padding: '5px 12px',
                 fontSize: '0.8125rem',
                 fontWeight: isActive ? 600 : 500,
-                color: isActive ? '#0f172a' : '#64748b',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-tertiary)',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 whiteSpace: 'nowrap',
@@ -315,7 +270,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
         <div
           style={{
             background: 'linear-gradient(135deg, rgba(15,122,130,0.06), rgba(150,101,15,0.04))',
-            border: '1px solid rgba(15,122,130,0.2)',
+            border: '1px solid var(--status-review-border)',
             borderRadius: 8,
             padding: '10px 16px',
             marginBottom: 12,
@@ -326,7 +281,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Sentinel state="scanning" size={20} showLabel={false} />
-            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>
+            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
               Review session — {highPriority.length} high-priority claims
             </span>
           </div>
@@ -339,7 +294,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               padding: '6px 14px',
               fontSize: '0.8125rem',
               fontWeight: 600,
-              color: '#fff',
+              color: 'var(--card-bg)',
               cursor: 'pointer',
               fontFamily: 'inherit',
             }}
@@ -365,10 +320,10 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
             <div style={{ marginBottom: 20 }}>
               <Sentinel state="pass" size={56} showLabel={false} />
             </div>
-            <div style={{ fontSize: '1.0625rem', fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>
+            <div style={{ fontSize: '1.0625rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
               You're all caught up
             </div>
-            <div style={{ fontSize: '0.875rem', color: '#64748b' }}>
+            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
               There are no claims waiting for your review.
             </div>
             <div
@@ -377,17 +332,17 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 6,
-                background: '#e9f5ef',
-                border: '1px solid #c4e1d1',
+                background: 'var(--status-pass-bg)',
+                border: '1px solid var(--status-pass-border)',
                 borderRadius: 20,
                 padding: '4px 14px',
                 fontSize: '0.8125rem',
                 fontWeight: 600,
-                color: '#17503c',
+                color: 'var(--status-pass-ink)',
               }}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6l3 3 5-5" stroke="#1f7a5c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 6l3 3 5-5" stroke="var(--status-pass-ink)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Queue clear
             </div>
@@ -403,7 +358,6 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                   <th>Validation</th>
                   <th>Review Status</th>
                   <th style={{ minWidth: 220 }}>Top Finding</th>
-                  <th>Assigned To</th>
                   <th>Age</th>
                   <th>Last Action</th>
                   <th></th>
@@ -414,10 +368,6 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                   const prStyle = PRIORITY_STYLE[item.priority];
                   const valStyle = VALIDATION_STYLE[item.validationOutcome];
                   const revStyle = REVIEW_STATUS_STYLE[item.reviewStatus];
-                  const canResume =
-                    item.assignedTo === currentUser &&
-                    (item.reviewStatus === 'In Review' || item.reviewStatus === 'Assigned');
-
                   return (
                     <tr
                       key={item.claimId}
@@ -495,51 +445,11 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                         </span>
                       </td>
                       <td>
-                        {item.assignedTo ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                            <div
-                              style={{
-                                width: 24,
-                                height: 24,
-                                borderRadius: '50%',
-                                background:
-                                  item.assignedTo === currentUser
-                                    ? 'var(--accent)'
-                                    : 'linear-gradient(135deg, #94a3b8, #64748b)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '0.625rem',
-                                fontWeight: 700,
-                                color: '#fff',
-                                flexShrink: 0,
-                              }}
-                            >
-                              {item.assignedTo
-                                .split(' ')
-                                .map((n) => n[0])
-                                .join('')}
-                            </div>
-                            <span
-                              style={{
-                                fontSize: '0.8125rem',
-                                color: 'var(--text-secondary)',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {item.assignedTo === currentUser ? 'You' : item.assignedTo}
-                            </span>
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>—</span>
-                        )}
-                      </td>
-                      <td>
                         <span
                           style={{
                             fontFamily: "var(--font-sans)",
                             fontSize: '0.8125rem',
-                            color: '#64748b',
+                            color: 'var(--text-secondary)',
                             fontWeight: 500,
                           }}
                         >
@@ -561,26 +471,20 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                         <button
                           onClick={() => handleStartReview(item.claimId, idx)}
                           style={{
-                            background: canResume ? 'rgba(15,122,130,0.08)' : '#f8fafc',
-                            border: canResume
-                              ? '1px solid rgba(15,122,130,0.25)'
-                              : '1px solid #e2e8f0',
+                            background: 'var(--card-bg)',
+                            border: '1px solid var(--border)',
                             borderRadius: 6,
                             padding: '5px 12px',
                             fontSize: '0.8125rem',
                             fontWeight: 600,
-                            color: canResume ? 'var(--accent)' : 'var(--text-primary)',
+                            color: 'var(--text-primary)',
                             cursor: 'pointer',
                             fontFamily: 'inherit',
                             whiteSpace: 'nowrap',
                             transition: 'all 0.15s ease',
                           }}
                         >
-                          {canResume
-                            ? 'Resume →'
-                            : item.reviewStatus === 'Unassigned'
-                            ? 'Start review'
-                            : 'Open →'}
+                          Open →
                         </button>
                       </td>
                     </tr>
@@ -609,11 +513,11 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               <button
                 style={{
                   background: 'none',
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid var(--border)',
                   borderRadius: 6,
                   padding: '5px 12px',
                   fontSize: '0.8125rem',
-                  color: '#334155',
+                  color: 'var(--text-primary)',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                 }}
@@ -624,7 +528,7 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
                 style={{
                   fontFamily: "var(--font-sans)",
                   fontSize: '0.8125rem',
-                  color: '#64748b',
+                  color: 'var(--text-secondary)',
                   padding: '0 4px',
                 }}
               >
@@ -633,11 +537,11 @@ export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
               <button
                 style={{
                   background: 'none',
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid var(--border)',
                   borderRadius: 6,
                   padding: '5px 12px',
                   fontSize: '0.8125rem',
-                  color: '#334155',
+                  color: 'var(--text-primary)',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                 }}

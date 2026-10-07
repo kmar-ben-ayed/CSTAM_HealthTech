@@ -107,7 +107,7 @@ export default function Login({ onLogin }: LoginProps) {
                 marginTop: 32,
                 fontSize: '1.75rem',
                 fontWeight: 700,
-                color: '#f1f5f9',
+                color: 'var(--text-primary)',
                 letterSpacing: '-0.03em',
                 lineHeight: 1.2,
               }}
@@ -189,14 +189,14 @@ export default function Login({ onLogin }: LoginProps) {
                   style={{
                     fontSize: '1.75rem',
                     fontWeight: 700,
-                    color: '#0f172a',
+                    color: 'var(--text-primary)',
                     letterSpacing: '-0.03em',
                     marginBottom: 8,
                   }}
                 >
                   Welcome back
                 </h1>
-                <p style={{ fontSize: '0.9375rem', color: '#64748b' }}>
+                <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
                   Sign in to ClaimGuard AI
                 </p>
               </div>
@@ -221,7 +221,7 @@ export default function Login({ onLogin }: LoginProps) {
                     <circle cx="8" cy="8" r="7" stroke="var(--status-fail)" strokeWidth="1.2" />
                     <path d="M8 5v3.5M8 10.5v.5" stroke="var(--status-fail)" strokeWidth="1.3" strokeLinecap="round" />
                   </svg>
-                  <span style={{ fontSize: '0.875rem', color: 'var(--status-fail)', fontWeight: 500 }}>
+                  <span style={{ fontSize: '0.875rem', color: 'var(--status-fail-ink)', fontWeight: 500 }}>
                     Invalid email or password.
                   </span>
                 </div>
@@ -231,7 +231,7 @@ export default function Login({ onLogin }: LoginProps) {
                 {/* Email */}
                 <div>
                   <label
-                    style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', marginBottom: 6 }}
+                    style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}
                   >
                     Email
                   </label>
@@ -243,25 +243,25 @@ export default function Login({ onLogin }: LoginProps) {
                     required
                     style={{
                       width: '100%',
-                      background: '#f8fafc',
-                      border: `1px solid ${loginState === 'error' ? '#e9c8c7' : '#e2e8f0'}`,
+                      background: 'var(--card-bg)',
+                      border: `1px solid ${loginState === 'error' ? 'var(--status-fail-border)' : 'var(--border)'}`,
                       borderRadius: 8,
                       padding: '10px 14px',
                       fontSize: '0.9375rem',
-                      color: '#0f172a',
+                      color: 'var(--text-primary)',
                       fontFamily: 'inherit',
                       outline: 'none',
                       transition: 'border-color 0.15s ease',
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = '#1d5c8a')}
-                    onBlur={(e) => (e.target.style.borderColor = loginState === 'error' ? '#e9c8c7' : '#e2e8f0')}
+                    onFocus={(e) => (e.target.style.borderColor = 'var(--accent-ink)')}
+                    onBlur={(e) => (e.target.style.borderColor = loginState === 'error' ? 'var(--status-fail-border)' : 'var(--border)')}
                   />
                 </div>
 
                 {/* Password */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <label style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>
+                    <label style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                       Password
                     </label>
                     <button
@@ -289,17 +289,17 @@ export default function Login({ onLogin }: LoginProps) {
                     required
                     style={{
                       width: '100%',
-                      background: '#f8fafc',
-                      border: `1px solid ${loginState === 'error' ? '#e9c8c7' : '#e2e8f0'}`,
+                      background: 'var(--card-bg)',
+                      border: `1px solid ${loginState === 'error' ? 'var(--status-fail-border)' : 'var(--border)'}`,
                       borderRadius: 8,
                       padding: '10px 14px',
                       fontSize: '0.9375rem',
-                      color: '#0f172a',
+                      color: 'var(--text-primary)',
                       fontFamily: 'inherit',
                       outline: 'none',
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = '#1d5c8a')}
-                    onBlur={(e) => (e.target.style.borderColor = loginState === 'error' ? '#e9c8c7' : '#e2e8f0')}
+                    onFocus={(e) => (e.target.style.borderColor = 'var(--accent-ink)')}
+                    onBlur={(e) => (e.target.style.borderColor = loginState === 'error' ? 'var(--status-fail-border)' : 'var(--border)')}
                   />
                 </div>
 
@@ -324,11 +324,11 @@ export default function Login({ onLogin }: LoginProps) {
                   >
                     {remember && (
                       <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M2 5l2 2 4-4" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M2 5l2 2 4-4" stroke="var(--card-bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
                   </div>
-                  <span style={{ fontSize: '0.875rem', color: '#475569' }}>Remember me</span>
+                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Remember me</span>
                 </label>
 
                 {/* Submit */}
@@ -337,13 +337,13 @@ export default function Login({ onLogin }: LoginProps) {
                   disabled={loginState === 'loading'}
                   style={{
                     width: '100%',
-                    background: loginState === 'loading' ? '#164a6e' : '#1d5c8a',
+                    background: loginState === 'loading' ? 'var(--accent-hover)' : 'var(--accent-ink)',
                     border: 'none',
                     borderRadius: 8,
                     padding: '11px 0',
                     fontSize: '0.9375rem',
                     fontWeight: 600,
-                    color: '#fff',
+                    color: 'var(--card-bg)',
                     cursor: loginState === 'loading' ? 'default' : 'pointer',
                     fontFamily: 'inherit',
                     display: 'flex',
@@ -353,10 +353,10 @@ export default function Login({ onLogin }: LoginProps) {
                     transition: 'background 0.15s ease',
                   }}
                   onMouseEnter={(e) => {
-                    if (loginState !== 'loading') (e.currentTarget.style.background = '#164a6e');
+                    if (loginState !== 'loading') (e.currentTarget.style.background = 'var(--accent-hover)');
                   }}
                   onMouseLeave={(e) => {
-                    if (loginState !== 'loading') (e.currentTarget.style.background = '#1d5c8a');
+                    if (loginState !== 'loading') (e.currentTarget.style.background = 'var(--accent-ink)');
                   }}
                 >
                   {loginState === 'loading' ? (
@@ -369,7 +369,7 @@ export default function Login({ onLogin }: LoginProps) {
                         style={{ animation: 'sentinel-orbit 0.7s linear infinite' }}
                       >
                         <circle cx="8" cy="8" r="6" stroke="rgba(255,255,255,0.3)" strokeWidth="2" />
-                        <path d="M8 2a6 6 0 016 6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M8 2a6 6 0 016 6" stroke="var(--card-bg)" strokeWidth="2" strokeLinecap="round" />
                       </svg>
                       Signing in...
                     </>
@@ -380,9 +380,9 @@ export default function Login({ onLogin }: LoginProps) {
 
                 {/* Divider */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0' }}>
-                  <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-                  <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontWeight: 500 }}>or</span>
-                  <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                  <div style={{ flex: 1, height: 1, background: 'var(--canvas-bg-secondary)' }} />
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>or</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--canvas-bg-secondary)' }} />
                 </div>
 
                 {/* SSO */}
@@ -390,13 +390,13 @@ export default function Login({ onLogin }: LoginProps) {
                   type="button"
                   style={{
                     width: '100%',
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--card-bg)',
+                    border: '1px solid var(--border)',
                     borderRadius: 8,
                     padding: '10px 0',
                     fontSize: '0.9375rem',
                     fontWeight: 500,
-                    color: '#334155',
+                    color: 'var(--text-primary)',
                     cursor: 'pointer',
                     fontFamily: 'inherit',
                     display: 'flex',
@@ -406,12 +406,12 @@ export default function Login({ onLogin }: LoginProps) {
                     transition: 'all 0.15s ease',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#f1f5f9';
-                    e.currentTarget.style.borderColor = '#cbd5e1';
+                    e.currentTarget.style.background = 'var(--canvas-bg-secondary)';
+                    e.currentTarget.style.borderColor = 'var(--border)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#f8fafc';
-                    e.currentTarget.style.borderColor = '#e2e8f0';
+                    e.currentTarget.style.background = 'var(--card-bg)';
+                    e.currentTarget.style.borderColor = 'var(--border)';
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -428,7 +428,7 @@ export default function Login({ onLogin }: LoginProps) {
                 style={{
                   marginTop: 32,
                   fontSize: '0.8125rem',
-                  color: '#94a3b8',
+                  color: 'var(--text-tertiary)',
                   textAlign: 'center',
                   lineHeight: 1.5,
                 }}
@@ -450,7 +450,7 @@ export default function Login({ onLogin }: LoginProps) {
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
-                  color: '#64748b',
+                  color: 'var(--text-secondary)',
                   fontSize: '0.875rem',
                   fontFamily: 'inherit',
                   padding: 0,
@@ -464,17 +464,17 @@ export default function Login({ onLogin }: LoginProps) {
               </button>
 
               <div style={{ marginBottom: 28 }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.03em', marginBottom: 8 }}>
+                <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.03em', marginBottom: 8 }}>
                   Reset your password
                 </h1>
-                <p style={{ fontSize: '0.9375rem', color: '#64748b' }}>
+                <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
                   Enter your email and we'll send a reset link.
                 </p>
               </div>
 
               <form onSubmit={handleForgot} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', marginBottom: 6 }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
                     Email
                   </label>
                   <input
@@ -485,17 +485,17 @@ export default function Login({ onLogin }: LoginProps) {
                     required
                     style={{
                       width: '100%',
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--card-bg)',
+                      border: '1px solid var(--border)',
                       borderRadius: 8,
                       padding: '10px 14px',
                       fontSize: '0.9375rem',
-                      color: '#0f172a',
+                      color: 'var(--text-primary)',
                       fontFamily: 'inherit',
                       outline: 'none',
                     }}
-                    onFocus={(e) => (e.target.style.borderColor = '#1d5c8a')}
-                    onBlur={(e) => (e.target.style.borderColor = '#e2e8f0')}
+                    onFocus={(e) => (e.target.style.borderColor = 'var(--accent-ink)')}
+                    onBlur={(e) => (e.target.style.borderColor = 'var(--border)')}
                   />
                 </div>
                 <button
@@ -509,7 +509,7 @@ export default function Login({ onLogin }: LoginProps) {
                     padding: '11px 0',
                     fontSize: '0.9375rem',
                     fontWeight: 600,
-                    color: '#fff',
+                    color: 'var(--card-bg)',
                     cursor: loginState === 'forgot-loading' ? 'wait' : 'pointer',
                     opacity: loginState === 'forgot-loading' ? 0.75 : 1,
                     fontFamily: 'inherit',
@@ -527,8 +527,8 @@ export default function Login({ onLogin }: LoginProps) {
                   width: 60,
                   height: 60,
                   borderRadius: '50%',
-                  background: '#e9f5ef',
-                  border: '1px solid #c4e1d1',
+                  background: 'var(--status-pass-bg)',
+                  border: '1px solid var(--status-pass-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -536,27 +536,27 @@ export default function Login({ onLogin }: LoginProps) {
                 }}
               >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <path d="M5 12l4 4 10-10" stroke="#1f7a5c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 12l4 4 10-10" stroke="var(--status-pass-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <h2 style={{ fontSize: '1.375rem', fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>
+              <h2 style={{ fontSize: '1.375rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
                 Check your email
               </h2>
-              <p style={{ fontSize: '0.9375rem', color: '#64748b', lineHeight: 1.6 }}>
+              <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
                 We sent a password reset link to{' '}
-                <strong style={{ color: '#0f172a' }}>{forgotEmail}</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>{forgotEmail}</strong>
               </p>
               <button
                 onClick={() => { setLoginState('idle'); setForgotSent(false); setForgotEmail(''); }}
                 style={{
                   marginTop: 28,
                   background: 'none',
-                  border: '1px solid #e2e8f0',
+                  border: '1px solid var(--border)',
                   borderRadius: 8,
                   padding: '10px 24px',
                   fontSize: '0.875rem',
                   fontWeight: 600,
-                  color: '#334155',
+                  color: 'var(--text-primary)',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                 }}

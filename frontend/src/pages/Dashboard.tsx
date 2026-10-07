@@ -60,7 +60,7 @@ const QUEUE_ITEMS = [
 ];
 
 const ACTIVITY = [
-  { time: '10:33:02', event: 'REVIEW_ACTION', actor: 'Aya Gaha', detail: 'CLM-10481 · Request information submitted', type: 'human' },
+  { time: '10:33:02', event: 'REVIEW_ACTION', actor: 'Marwen Agrebi', detail: 'CLM-10481 · Request information submitted', type: 'human' },
   { time: '10:31:03', event: 'RUN_COMPLETED', actor: 'System', detail: 'Run RUN-4821 · 24 claims · 98.2% status accuracy', type: 'system' },
   { time: '10:28:44', event: 'CLAIM_RECEIVED', actor: 'System', detail: 'CLM-10482 · Meridian Health Group · $2,840.00', type: 'system' },
   { time: '10:15:21', event: 'REVIEW_ACTION', actor: 'James Park', detail: 'CLM-10480 · Issue confirmed → escalated', type: 'human' },
@@ -133,11 +133,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       sub: `${reviewClaims.length} need review`,
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <rect x="2" y="3" width="14" height="12" rx="2" stroke="#1d5c8a" strokeWidth="1.5"/>
-          <path d="M5 7h8M5 10h5" stroke="#1d5c8a" strokeWidth="1.5" strokeLinecap="round"/>
+          <rect x="2" y="3" width="14" height="12" rx="2" stroke="var(--accent-ink)" strokeWidth="1.5"/>
+          <path d="M5 7h8M5 10h5" stroke="var(--accent-ink)" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: '#1d5c8a',
+      accent: 'var(--accent-ink)',
     },
     {
       label: 'Needs review',
@@ -147,11 +147,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       sub: `${statusCounts.fail || 0} failed`,
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <circle cx="9" cy="7" r="3" stroke="#96650f" strokeWidth="1.5"/>
-          <path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#96650f" strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="9" cy="7" r="3" stroke="var(--status-uta-ink)" strokeWidth="1.5"/>
+          <path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="var(--status-uta-ink)" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: '#96650f',
+      accent: 'var(--status-uta)',
     },
     {
       label: 'Unable to assess',
@@ -161,11 +161,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       sub: '3 pending info',
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <circle cx="9" cy="9" r="7" stroke="#96650f" strokeWidth="1.5"/>
-          <path d="M9 6v4M9 13v.5" stroke="#96650f" strokeWidth="1.5" strokeLinecap="round"/>
+          <circle cx="9" cy="9" r="7" stroke="var(--status-uta-ink)" strokeWidth="1.5"/>
+          <path d="M9 6v4M9 13v.5" stroke="var(--status-uta-ink)" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: '#96650f',
+      accent: 'var(--status-uta)',
     },
     {
       label: 'Issues detected',
@@ -175,11 +175,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       sub: 'R008 most frequent',
       icon: (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <path d="M9 2l7 13H2L9 2z" stroke="#b4403f" strokeWidth="1.5" strokeLinejoin="round"/>
-          <path d="M9 7v4M9 13v.5" stroke="#b4403f" strokeWidth="1.5" strokeLinecap="round"/>
+          <path d="M9 2l7 13H2L9 2z" stroke="var(--status-fail-ink)" strokeWidth="1.5" strokeLinejoin="round"/>
+          <path d="M9 7v4M9 13v.5" stroke="var(--status-fail-ink)" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: '#b4403f',
+      accent: 'var(--status-fail)',
     },
   ];
 
@@ -188,7 +188,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       {/* Header */}
       <div className="dashboard-header">
         <div>
-          <h1 style={{ fontSize: '1.625rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+          <span className="sc-eyebrow"> Operations overview</span>
+          <h1 className="sc-title-caps" style={{ fontSize: 'clamp(1.6rem, 2.4vw, 2.1rem)', margin: '12px 0 4px', lineHeight: 1.05 }}>
             Claims operations
           </h1>
           <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
@@ -196,30 +197,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </p>
         </div>
         <div className="dashboard-header-actions">
-          <div style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: '0.6875rem',
-            color: 'var(--text-secondary)',
-            background: 'var(--card-bg)',
-            border: '1px solid var(--border)',
-            borderRadius: 4,
-            padding: '6px 12px',
-          }}>
+          <div className="sc-badge">
+            <span className="sc-dot" />
             Fri, Sep 25, 2026
           </div>
           <button
             onClick={() => onNavigate('review-queue')}
-            style={{
-              background: 'var(--accent)',
-              border: 'none',
-              borderRadius: 5,
-              padding: '8px 16px',
-              color: '#fff',
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontWeight: 600,
-            }}
+            className="btn btn-primary"
           >
             Open review queue
           </button>
@@ -300,7 +284,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     onClick={() => onNavigate('claim-review', item.id)}
                     onMouseEnter={() => setHoveredRow(item.id)}
                     onMouseLeave={() => setHoveredRow(null)}
-                    style={{ background: hoveredRow === item.id ? '#f8fafc' : undefined }}
+                    style={{ background: hoveredRow === item.id ? 'var(--card-bg)' : undefined }}
                   >
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -356,7 +340,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       </span>
                     </td>
                     <td>
-                      <span style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>{item.updated}</span>
+                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{item.updated}</span>
                     </td>
                     <td>
                       <button

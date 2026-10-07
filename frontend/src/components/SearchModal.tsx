@@ -43,7 +43,7 @@ const ALL_RESULTS: SearchResult[] = [
   { id: 'RUN-4821', label: 'RUN-4821', subtitle: 'Completed · Sep 28, 2026 · 63 claims', category: 'Runs', page: 'runs' },
   // Audit
   { id: 'EVT-001', label: 'Claim validated — CLM-10482', subtitle: 'Sep 28, 2026 · System', category: 'Audit Events', page: 'audit' },
-  { id: 'EVT-002', label: 'Human review completed — CLM-10479', subtitle: 'Sep 27, 2026 · Aya Gaha', category: 'Audit Events', page: 'audit' },
+  { id: 'EVT-002', label: 'Human review completed — CLM-10479', subtitle: 'Sep 27, 2026 · Marwen Agrebi', category: 'Audit Events', page: 'audit' },
   { id: 'EVT-003', label: 'Ingestion completed — 10 claims', subtitle: 'Sep 27, 2026 · System', category: 'Audit Events', page: 'audit' },
 ];
 
@@ -73,10 +73,10 @@ const CATEGORY_ICONS: Record<ResultCategory, React.ReactNode> = {
 };
 
 const CATEGORY_COLOR: Record<ResultCategory, string> = {
-  Claims: '#1d5c8a',
-  Rules: '#96650f',
-  Runs: '#1f7a5c',
-  'Audit Events': '#96650f',
+  Claims: 'var(--accent-ink)',
+  Rules: 'var(--status-uta)',
+  Runs: 'var(--status-pass)',
+  'Audit Events': 'var(--status-uta)',
 };
 
 export default function SearchModal({ open, onClose, onNavigate }: SearchModalProps) {
@@ -184,9 +184,9 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
           position: 'relative',
           width: '100%',
           maxWidth: 580,
-          background: '#fff',
+          background: 'var(--card-bg)',
           borderRadius: 14,
-          border: '1px solid #e2e8f0',
+          border: '1px solid var(--border)',
           boxShadow: '0 20px 60px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.08)',
           overflow: 'hidden',
           animation: 'fade-in-up 0.15s ease-out',
@@ -200,10 +200,10 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
             alignItems: 'center',
             gap: 12,
             padding: '14px 18px',
-            borderBottom: query.trim() ? '1px solid #f1f5f9' : 'none',
+            borderBottom: query.trim() ? '1px solid var(--border)' : 'none',
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ color: '#94a3b8', flexShrink: 0 }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}>
             <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
             <path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
@@ -219,7 +219,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
               border: 'none',
               outline: 'none',
               fontSize: '1rem',
-              color: '#0f172a',
+              color: 'var(--text-primary)',
               fontFamily: 'inherit',
               background: 'transparent',
             }}
@@ -228,12 +228,12 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
             <button
               onClick={() => setQuery('')}
               style={{
-                background: '#f1f5f9',
+                background: 'var(--canvas-bg-secondary)',
                 border: 'none',
                 borderRadius: 4,
                 padding: '2px 8px',
                 fontSize: '0.75rem',
-                color: '#64748b',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 fontWeight: 500,
@@ -244,12 +244,12 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
           )}
           <span
             style={{
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
+              background: 'var(--card-bg)',
+              border: '1px solid var(--border)',
               borderRadius: 4,
               padding: '2px 6px',
               fontSize: '0.6875rem',
-              color: '#94a3b8',
+              color: 'var(--text-tertiary)',
               fontFamily: "var(--font-sans)",
               fontWeight: 500,
               flexShrink: 0,
@@ -263,7 +263,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
         {query.trim() ? (
           <div ref={listRef} style={{ maxHeight: 360, overflowY: 'auto' }}>
             {results.length === 0 ? (
-              <div style={{ padding: '28px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>
+              <div style={{ padding: '28px 20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
                 No results for &ldquo;{query}&rdquo;
               </div>
             ) : (
@@ -275,7 +275,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                       fontSize: '0.6875rem',
                       fontWeight: 700,
                       letterSpacing: '0.08em',
-                      color: '#94a3b8',
+                      color: 'var(--text-tertiary)',
                       textTransform: 'uppercase',
                     }}
                   >
@@ -295,8 +295,8 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                           gap: 12,
                           padding: '9px 18px',
                           cursor: 'pointer',
-                          background: isSelected ? '#e8f1f7' : 'transparent',
-                          borderLeft: isSelected ? '2px solid #1d5c8a' : '2px solid transparent',
+                          background: isSelected ? 'var(--accent-subtle)' : 'transparent',
+                          borderLeft: isSelected ? '2px solid var(--accent-ink)' : '2px solid transparent',
                           transition: 'background 0.1s ease',
                         }}
                       >
@@ -305,8 +305,8 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                             width: 30,
                             height: 30,
                             borderRadius: 7,
-                            background: `${CATEGORY_COLOR[cat]}15`,
-                            border: `1px solid ${CATEGORY_COLOR[cat]}25`,
+                            background: `color-mix(in srgb, ${CATEGORY_COLOR[cat]} 8%, transparent)`,
+                            border: `1px solid color-mix(in srgb, ${CATEGORY_COLOR[cat]} 15%, transparent)`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -321,7 +321,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                             style={{
                               fontSize: '0.875rem',
                               fontWeight: 600,
-                              color: '#0f172a',
+                              color: 'var(--text-primary)',
                               fontFamily:
                                 cat === 'Claims' || cat === 'Runs'
                                   ? "var(--font-sans)"
@@ -333,7 +333,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                           <div
                             style={{
                               fontSize: '0.75rem',
-                              color: '#64748b',
+                              color: 'var(--text-secondary)',
                               marginTop: 1,
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
@@ -344,7 +344,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                           </div>
                         </div>
                         {isSelected && (
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: '#94a3b8' }}>
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: 'var(--text-tertiary)' }}>
                             <path d="M3 7h8M8 4l3 3-3 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                         )}
@@ -362,7 +362,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
               style={{
                 fontSize: '0.75rem',
                 fontWeight: 600,
-                color: '#94a3b8',
+                color: 'var(--text-tertiary)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.08em',
                 marginBottom: 8,
@@ -384,14 +384,14 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
                     display: 'flex',
                     alignItems: 'center',
                     gap: 7,
-                    background: '#f8fafc',
-                    border: '1px solid #e8eaed',
+                    background: 'var(--card-bg)',
+                    border: '1px solid var(--border)',
                     borderRadius: 7,
                     padding: '6px 12px',
                     cursor: 'pointer',
                     fontFamily: 'inherit',
                     fontSize: '0.8125rem',
-                    color: '#334155',
+                    color: 'var(--text-primary)',
                     fontWeight: 500,
                   }}
                 >
@@ -410,7 +410,7 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
           <div
             style={{
               padding: '8px 18px',
-              borderTop: '1px solid #f1f5f9',
+              borderTop: '1px solid var(--border)',
               display: 'flex',
               gap: 16,
               alignItems: 'center',
@@ -424,19 +424,19 @@ export default function SearchModal({ open, onClose, onNavigate }: SearchModalPr
               <div key={action} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <kbd
                   style={{
-                    background: '#f1f5f9',
-                    border: '1px solid #e2e8f0',
+                    background: 'var(--canvas-bg-secondary)',
+                    border: '1px solid var(--border)',
                     borderRadius: 4,
                     padding: '1px 6px',
                     fontSize: '0.6875rem',
-                    color: '#475569',
+                    color: 'var(--text-secondary)',
                     fontFamily: "var(--font-sans)",
                     fontWeight: 600,
                   }}
                 >
                   {key}
                 </kbd>
-                <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{action}</span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{action}</span>
               </div>
             ))}
           </div>

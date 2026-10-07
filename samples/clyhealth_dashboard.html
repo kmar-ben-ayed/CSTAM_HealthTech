@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClyHealth AI Dashboard - Digital Twin & Epigenetic Risk</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                        outfit: ['Outfit', 'sans-serif'],
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'spin-slow': 'spin 12s linear infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        .text-gradient-cyan {
+            background: linear-gradient(135deg, #06B6D4 0%, #2563EB 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .text-gradient-coral {
+            background: linear-gradient(135deg, #EF4444 0%, #F59E0B 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .body-glow {
+            filter: drop-shadow(0 0 15px rgba(6, 182, 212, 0.15));
+        }
+        /* Custom Tooltip Styling */
+        .tooltip {
+            position: relative;
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 160px;
+            background-color: #0F172A;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 50;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -80px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-size: 11px;
+            line-height: 1.3;
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-[#EBF0F5] text-[#0F172A] font-sans antialiased h-full overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-900">
+
+    <!-- Global Viewport Border Frame (Design Spec Style) -->
+    <div class="fixed inset-4 border border-white/60 rounded-[32px] pointer-events-none z-50 shadow-inner"></div>
+
+    <!-- BACKGROUND AMBIENT GLOWS -->
+    <div class="fixed inset-0 overflow-hidden -z-10 pointer-events-none">
+        <div class="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] rounded-full bg-cyan-300/10 blur-[120px]"></div>
+        <div class="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-300/10 blur-[120px]"></div>
+        <div class="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.01)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.01)_1px,transparent_1px)] bg-[size:3rem_3rem]"></div>
+    </div>
+
+    <!-- MAIN DASHBOARD WRAPPER -->
+    <div class="relative min-h-full flex flex-col p-8 md:p-10 z-10">
+
+        <!-- 1. TOP HEADER & BREADCRUMBS -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full mb-8 pb-4 border-b border-white/40">
+            <!-- Left Header -->
+            <div class="flex items-center gap-4">
+                <!-- ClyHealth Logo -->
+                <div class="flex items-center gap-2.5 bg-slate-950 text-white px-4 py-2.5 rounded-2xl shadow-sm">
+                    <span class="relative flex h-3 w-3">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-400"></span>
+                    </span>
+                    <span class="font-outfit font-extrabold text-base tracking-tight">ClyHealth</span>
+                    <span class="px-1.5 py-0.5 rounded-md bg-cyan-400 text-slate-950 text-[8px] font-bold uppercase tracking-wider">AI</span>
+                </div>
+
+                <!-- Breadcrumbs -->
+                <div class="flex items-center gap-2 text-xs text-slate-500 font-medium font-outfit">
+                    <i data-lucide="home" class="w-3.5 h-3.5"></i>
+                    <span>/</span>
+                    <span class="hover:text-slate-800 cursor-pointer">System Reports</span>
+                    <span>/</span>
+                    <span class="text-slate-800 font-bold">Methylation risk score</span>
+                </div>
+            </div>
+
+            <!-- Interactive Tab Selector (Switch between mock Landing & Dashboard views) -->
+            <div class="flex items-center p-1 bg-white/60 border border-white/50 rounded-full shadow-sm">
+                <button onclick="alert('This triggers the SmartCare landing page preview')" class="px-4 py-1.5 rounded-full text-xs text-slate-500 font-semibold hover:text-slate-800 transition">
+                    Landing Page
+                </button>
+                <button class="px-4 py-1.5 rounded-full text-xs text-slate-950 bg-white font-bold shadow-sm">
+                    Health Analytics
+                </button>
+            </div>
+        </header>
+
+        <!-- 2. TOP VITALS OVERLAY BANNER -->
+        <section class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-center w-full mb-8">
+            <!-- Vitals metrics card (Cols 7) -->
+            <div class="xl:col-span-7 glass rounded-3xl p-6 shadow-sm flex flex-wrap gap-6 justify-between items-center">
+                <!-- Biological Age -->
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <i data-lucide="dna" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider font-outfit">Biological Age</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="font-outfit font-extrabold text-2xl text-blue-600">47</span>
+                            <span class="text-xs text-slate-500 font-medium">yrs</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chronological Age -->
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center">
+                        <i data-lucide="calendar" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider font-outfit">Chronological</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="font-outfit font-extrabold text-2xl text-slate-800">42</span>
+                            <span class="text-xs text-slate-500 font-medium">yrs</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sex -->
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                        <i data-lucide="venus-mars" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider font-outfit">Sex</span>
+                        <div class="flex items-baseline gap-1 mt-0.5">
+                            <span class="font-outfit font-extrabold text-xl text-purple-800">Male ♂</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weight -->
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-cyan-100 text-cyan-600 flex items-center justify-center">
+                        <i data-lucide="weight" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider font-outfit">Weight</span>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <span class="font-outfit font-extrabold text-2xl text-slate-800">97.5</span>
+                            <span class="text-xs text-slate-500 font-medium">kg</span>
+                            <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-800 rounded">
+                                ▲ +1.5kg
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insight Alert Banner (Cols 5) -->
+            <div class="xl:col-span-5 bg-gradient-to-r from-red-500/10 to-amber-500/10 border border-red-500/20 rounded-3xl p-6 shadow-sm flex items-center gap-4 animate-pulse-slow">
+                <span class="flex items-center justify-center w-12 h-12 rounded-2xl bg-red-500 text-white shadow shrink-0">
+                    <i data-lucide="alert-triangle" class="w-5.5 h-5.5"></i>
+                </span>
+                <div>
+                    <h4 class="font-outfit font-extrabold text-sm text-red-600">Aging Acceleration Advisory</h4>
+                    <p class="text-xs text-slate-600 leading-normal mt-1">
+                        Your biological twin calculation suggests your body is aging <span class="font-bold text-red-600">5 years faster</span> than your chronological age. Focus on cardiovascular triggers below.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. MAIN DASHBOARD CONTENT SECTION -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start flex-1 w-full max-w-7xl mx-auto">
+            
+            <!-- LEFT COLUMN (Cols 7): Methylation & Epigenetic Profiles -->
+            <div class="lg:col-span-7 flex flex-col gap-6">
+
+                <!-- Row 1: Methylation Score & "Why the Risk?" -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Methylation Risk Score -->
+                    <div class="glass rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-start mb-4">
+                                <h3 class="font-outfit font-extrabold text-slate-900 text-sm uppercase tracking-wide">Methylation Risk Score</h3>
+                                <span class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-bold flex items-center gap-1">
+                                    <span class="w-1 h-1 rounded-full bg-amber-500"></span> Moderate Risk
+                                </span>
+                            </div>
+                            
+                            <!-- Score Details -->
+                            <div class="flex items-baseline gap-2 mb-3">
+                                <span class="font-outfit font-extrabold text-3xl text-slate-950">0.76</span>
+                                <span class="text-sm text-slate-500 font-medium">% / 45 yrs Actual age</span>
+                            </div>
+
+                            <!-- Gradient Risk Meter Bar -->
+                            <div class="relative w-full h-4 bg-slate-200 rounded-full overflow-visible mb-4">
+                                <div class="absolute inset-0 rounded-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500"></div>
+                                <!-- Current Value Marker Pin -->
+                                <div class="absolute top-1/2 -translate-y-1/2 left-[55%] -ml-1 w-2.5 h-6 bg-slate-950 border border-white rounded shadow-md z-10"></div>
+                            </div>
+
+                            <!-- Subtext Description -->
+                            <p class="text-[11px] text-slate-500 leading-relaxed mb-4">
+                                You have an <span class="font-bold text-slate-800">18.4% risk</span> of a cardiovascular event in the next 10 years, placing you in the moderate category for your demographic group.
+                            </p>
+                        </div>
+
+                        <!-- Areas of Concern Badges -->
+                        <div class="pt-3 border-t border-slate-900/5">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-2 font-outfit">Detected Predispositions</span>
+                            <div class="flex flex-wrap gap-1.5">
+                                <span class="px-2 py-0.5 text-[9px] font-bold rounded-md bg-amber-50 text-amber-800 border border-amber-200">● Atrial Fibrillation</span>
+                                <span class="px-2 py-0.5 text-[9px] font-bold rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">● Pulmonary Embolism</span>
+                                <span class="px-2 py-0.5 text-[9px] font-bold rounded-md bg-red-50 text-red-800 border border-red-200">● Hypertension</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- "Why The Risk?" Card -->
+                    <div class="glass rounded-3xl p-6 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-outfit font-extrabold text-slate-900 text-sm uppercase tracking-wide">Why The Risk?</h3>
+                                <button class="text-xs text-blue-600 font-bold hover:underline">View all data</button>
+                            </div>
+
+                            <!-- Factors Stack -->
+                            <div class="space-y-3.5">
+                                <!-- Factor 1 -->
+                                <div class="flex items-start gap-3">
+                                    <span class="flex items-center justify-center w-6 h-6 rounded-lg bg-rose-50 text-rose-500 mt-0.5"><i data-lucide="activity" class="w-3.5 h-3.5"></i></span>
+                                    <div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-xs font-bold text-slate-950">Elevated LDL Cholesterol</span>
+                                            <span class="text-[10px] font-mono bg-rose-100 text-rose-800 px-1 py-0.2 rounded font-bold">145 mg/dL</span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 mt-0.5 leading-tight">Accelerates arterial plaque accumulation and vascular narrowing.</p>
+                                    </div>
+                                </div>
+                                <!-- Factor 2 -->
+                                <div class="flex items-start gap-3">
+                                    <span class="flex items-center justify-center w-6 h-6 rounded-lg bg-orange-50 text-orange-500 mt-0.5"><i data-lucide="gauge" class="w-3.5 h-3.5"></i></span>
+                                    <div>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="text-xs font-bold text-slate-950">Elevated Blood Pressure</span>
+                                            <span class="text-[10px] font-mono bg-orange-100 text-orange-800 px-1 py-0.2 rounded font-bold">130/85 mmHg</span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 mt-0.5 leading-tight">Subjects coronary pathways to systemic arterial strain.</p>
+                                    </div>
+                                </div>
+                                <!-- Factor 3 -->
+                                <div class="flex items-start gap-3">
+                                    <span class="flex items-center justify-center w-6 h-6 rounded-lg bg-slate-100 text-slate-600 mt-0.5"><i data-lucide="footprints" class="w-3.5 h-3.5"></i></span>
+                                    <div>
+                                        <span class="text-xs font-bold text-slate-950">Sedentary Lifestyle Pattern</span>
+                                        <p class="text-[10px] text-slate-500 mt-0.5 leading-tight">Elevates biological age triggers and increases baseline cholesterol.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Genetic context -->
+                        <div class="pt-3 border-t border-slate-900/5 mt-4">
+                            <div class="flex items-center justify-between text-[10px] text-slate-400 font-bold uppercase tracking-wider font-outfit">
+                                <span>Hereditary Background</span>
+                                <span class="text-red-500 font-bold">High Linkage</span>
+                            </div>
+                            <p class="text-[10px] text-slate-500 mt-1 leading-normal">Cardiovascular and ischemic diseases documented in direct bloodline.</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Row 2: Epigenetic Disease Risk Profile -->
+                <div class="flex flex-col gap-4">
+                    <h3 class="font-outfit font-extrabold text-slate-900 text-sm uppercase tracking-wide">Epigenetic Disease Risk Profile</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        
+                        <!-- 1. T2 Diabetes (Suboptimal) -->
+                        <div class="glass rounded-2xl p-5 shadow-sm border-l-4 border-amber-500 flex flex-col justify-between hover:shadow-md transition">
+                            <div>
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="text-xs font-bold text-slate-950">T2 Diabetes</span>
+                                    <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-700 text-[8px] font-bold uppercase">Suboptimal</span>
+                                </div>
+                                <div class="mb-3">
+                                    <span class="text-[9px] text-slate-400 font-bold uppercase block tracking-wider">Polygenic Risk</span>
+                                    <span class="font-outfit font-extrabold text-lg text-slate-900">44th percentile</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1 mb-4">
+                                    <span class="px-1.5 py-0.5 font-mono text-[8px] font-bold bg-slate-100 rounded text-slate-600">TCF7L2</span>
+                                    <span class="px-1.5 py-0.5 font-mono text-[8px] font-bold bg-slate-100 rounded text-slate-600">PPARG</span>
+                                </div>
+                            </div>
+                            <div class="pt-3 border-t border-slate-900/5">
+                                <span class="text-[9px] text-cyan-600 font-extrabold uppercase block tracking-wider font-outfit">Action Plan</span>
+                                <p class="text-[10px] text-slate-500 leading-tight mt-1">Exercise: Conduct ≥150 mins moderate physical activity weekly.</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. Alzheimer's (Optimal) -->
+                        <div class="glass rounded-2xl p-5 shadow-sm border-l-4 border-emerald-500 flex flex-col justify-between hover:shadow-md transition">
+                            <div>
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="text-xs font-bold text-slate-950">Alzheimer's</span>
+                                    <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 text-[8px] font-bold uppercase">Optimal</span>
+                                </div>
+                                <div class="mb-3">
+                                    <span class="text-[9px] text-slate-400 font-bold uppercase block tracking-wider">Polygenic Risk</span>
+                                    <span class="font-outfit font-extrabold text-lg text-slate-900">12th percentile</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1 mb-4">
+                                    <span class="px-1.5 py-0.5 font-mono text-[8px] font-bold bg-slate-100 rounded text-slate-600">APOE</span>
+                                    <span class="px-1.5 py-0.5 font-mono text-[8px] font-bold bg-slate-100 rounded text-slate-600">PSEN1</span>
+                                </div>
+                            </div>
+                            <div class="pt-3 border-t border-slate-900/5">
+                                <span class="text-[9px] text-cyan-600 font-extrabold uppercase block tracking-wider font-outfit">Action Plan</span>
+                                <p class="text-[10px] text-slate-500 leading-tight mt-1">Nutrition: Focus on heart-healthy Mediterranean protocols and Omega-3 fats.</p>
+                            </div>
+                        </div>
+
+                        <!-- 3. Cardiovascular (Critical) -->
+                        <div class="glass rounded-2xl p-5 shadow-sm border-l-4 border-rose-500 flex flex-col justify-between hover:shadow-md transition">
+                            <div>
+                                <div class="flex justify-between items-center mb-3">
+                                    <span class="text-xs font-bold text-slate-950">Cardiovascular</span>
+                                    <span class="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-700 text-[8px] font-bold uppercase">Critical</span>
+                                </div>
+                                <div class="mb-3">
+                                    <span class="text-[9px] text-slate-400 font-bold uppercase block tracking-wider">Polygenic Risk</span>
+                                    <span class="font-outfit font-extrabold text-lg text-rose-600">91st percentile</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1 mb-4">
+                                    <span class="px-1.5 py-0.5 font-mono text-[8px] font-bold bg-slate-100 rounded text-slate-600">TCF7L2</span>
+                                    <span class="px-1.5 py-0.5 font-mono text-[8px] font-bold bg-rose-100 text-rose-700 font-bold">cg18064256</span>
+                                </div>
+                            </div>
+                            <div class="pt-3 border-t border-slate-900/5">
+                                <span class="text-[9px] text-cyan-600 font-extrabold uppercase block tracking-wider font-outfit">Action Plan</span>
+                                <p class="text-[10px] text-slate-500 leading-tight mt-1">Strict Monitoring: Record BP daily. Consult cardiologist immediately.</p>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- RIGHT COLUMN (Cols 5): Interactive Digital Twin Overview -->
+            <div class="lg:col-span-5 w-full flex flex-col gap-6">
+                
+                <div class="glass rounded-3xl p-6 shadow-sm flex flex-col h-full justify-between relative overflow-hidden">
+                    
+                    <!-- Card Background Glow Overlay -->
+                    <div class="absolute bottom-[-20%] right-[-20%] w-72 h-72 bg-cyan-400/10 rounded-full filter blur-2xl pointer-events-none"></div>
+
+                    <!-- Header Area -->
+                    <div class="relative z-10">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="font-outfit font-extrabold text-slate-900 text-base leading-none">Your Digital Twin Overview</h3>
+                            <button class="text-xs text-blue-600 font-bold hover:underline">View all data</button>
+                        </div>
+                        <p class="text-[11px] text-slate-500 leading-normal mb-6">
+                            A personalized biological simulation models your health records, genomics, and real-time inputs to model and predict target organ functions.
+                        </p>
+                    </div>
+
+                    <!-- Vector Anatomical Model Area -->
+                    <div class="relative flex items-center justify-center w-full min-h-[340px] border border-white/50 bg-white/40 rounded-2xl p-4 my-2">
+                        
+                        <!-- Zoom Controls -->
+                        <div class="absolute top-4 left-4 flex flex-col gap-1.5">
+                            <button class="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 shadow-sm transition">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </button>
+                            <button class="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 shadow-sm transition">
+                                <i data-lucide="minus" class="w-4 h-4"></i>
+                            </button>
+                            <button class="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-900 hover:text-white hover:border-slate-900 shadow-sm transition">
+                                <i data-lucide="expand" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <!-- Stylized Anatomical SVG Placeholder (Human Shape + Glowing Heart & Organs) -->
+                        <div class="relative w-44 h-76 flex items-center justify-center body-glow">
+                            <!-- Human Body Silhouette Vector -->
+                            <svg class="w-full h-full text-slate-300 opacity-80" viewBox="0 0 100 220" fill="currentColor">
+                                <path d="M50,10 C56,10 60,14 60,20 C60,26 56,30 50,30 C44,30 40,26 40,20 C40,14 44,10 50,10 Z M50,32 C42,32 30,36 30,48 L30,90 L34,140 L42,210 L50,210 L58,210 L66,140 L70,90 L70,48 C70,36 58,32 50,32 Z"/>
+                            </svg>
+
+                            <!-- GLOWING HOTSPOT: Heart (72% risk) -->
+                            <div class="tooltip absolute top-[28%] left-[44%] -translate-x-1/2 -translate-y-1/2 z-20">
+                                <span class="relative flex h-6 w-6 cursor-pointer">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-6 w-6 bg-gradient-to-tr from-rose-500 to-amber-500 text-[9px] text-white font-extrabold items-center justify-center shadow-lg">72%</span>
+                                </span>
+                                <span class="tooltiptext">
+                                    <strong>Cardiac Pathways</strong><br>
+                                    High coronary ischemia indicators present. Action recommended.
+                                </span>
+                            </div>
+
+                            <!-- GLOWING HOTSPOT: Liver/Lung Area (15% risk) -->
+                            <div class="tooltip absolute top-[36%] left-[54%] -translate-x-1/2 -translate-y-1/2 z-20">
+                                <span class="relative flex h-5 w-5 cursor-pointer">
+                                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span class="relative inline-flex rounded-full h-5 w-5 bg-gradient-to-tr from-emerald-500 to-cyan-500 text-[8px] text-white font-extrabold items-center justify-center shadow-lg">15%</span>
+                                </span>
+                                <span class="tooltiptext">
+                                    <strong>Respiratory Function</strong><br>
+                                    Healthy oxygen exchange. Minimal hazard markers.
+                                </span>
+                            </div>
+
+                            <!-- Stylized circular heart aura overlay -->
+                            <div class="absolute top-[28%] left-[44%] -translate-x-1/2 -translate-y-1/2 w-14 h-14 border border-rose-500/20 rounded-full animate-pulse-slow"></div>
+                        </div>
+
+                    </div>
+
+                    <!-- Bottom Assist Footer -->
+                    <div class="relative z-10 pt-4 flex justify-between items-center text-[11px] text-slate-400 font-semibold font-outfit">
+                        <span>Model Type: Methylation Twin-v2.1</span>
+                        <span class="flex items-center gap-1 text-emerald-600"><i data-lucide="check" class="w-3.5 h-3.5"></i> Simulated & Synced</span>
+                    </div>
+
+                    <!-- Floating AI Assistant Sparkle Action Button (✨) -->
+                    <button onclick="alert('Digital Twin AI Copilot is here. Ask me anything about your cardiac risk markers.')" class="absolute bottom-4 right-4 flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-600 text-white shadow-lg hover:shadow-cyan-400/20 hover:scale-105 transition-all transform z-30">
+                        <i data-lucide="sparkles" class="w-5.5 h-5.5 animate-pulse"></i>
+                    </button>
+
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <!-- Initialize Lucide Icons -->
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

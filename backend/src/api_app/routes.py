@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -13,15 +14,271 @@ from api_app.schemas import (
     ReviewDecisionRequest,
     TextIngestRequest,
 )
-from api_app.services import DATASET_SPLITS, load_claim_file
+from api_app.services import BACKEND_ROOT, DATASET_SPLITS, load_claim_file
+from rule_engine.generator import (
+    generate_missing_specs,
+    verify as verify_rule_generation,
+    write_specs,
+)
+from rule_engine.implementation_schema import SpecificationError
+from rule_engine.engine_core import config as load_rules_config
 
 
 v1_router = APIRouter(prefix="/api/v1")
 legacy_router = APIRouter()
 
+ALLOWED_CONFIG_FILES = {"rules.json", "policies.json", "diagnoses.json", "providers.json", "services.json"}
+
+# The config documents live in backend/rules/. Kept as a module constant so the
+# config routes and the cross-file validator read the same directory.
+RULES_DIR = BACKEND_ROOT / "rules"
+
+MAX_ACTOR_LENGTH = 128
+
 
 def _service(request: Request, name: str) -> Any:
     return getattr(request.app.state, name)
+
+
+def _load_rules_data(filename: str, overrides: dict[str, Any] | None = None):
+    """Load a config file from disk, return parsed data (list or dict)."""
+    if overrides and filename in overrides:
+        return overrides[filename]
+    path = RULES_DIR / filename
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _refresh_runtime_config(request: Request) -> None:
+    """Make successful Admin Panel saves visible to the running API process."""
+    rules_config = load_rules_config(RULES_DIR.parent)
+    request.app.state.claim_service.rules_config = rules_config
+    request.app.state.explanation_service.rules = {
+        rule["rule_id"]: rule for rule in rules_config["rules"]
+    }
+
+
+def _validate_config(filename: str, data: Any, overrides: dict[str, Any] | None = None) -> list[str]:
+    """
+    Cross-file integrity checks.
+    Returns a list of human-readable error strings (empty = all good).
+    """
+    errors: list[str] = []
+
+    # ── Helpers to load reference sets ───────────────────────────────────────
+    def svc_codes() -> set[str]:
+        raw = _load_rules_data("services.json", overrides) or {}
+        return set(raw.keys())
+
+    def provider_ids() -> set[str]:
+        raw = _load_rules_data("providers.json", overrides) or []
+        return {p["provider_id"] for p in raw if isinstance(p, dict) and "provider_id" in p}
+
+    def diagnosis_codes() -> set[str]:
+        raw = _load_rules_data("diagnoses.json", overrides) or []
+        return {d["code"] for d in raw if isinstance(d, dict) and "code" in d}
+
+    def policy_ids() -> set[str]:
+        raw = _load_rules_data("policies.json", overrides) or {}
+        return set(raw.keys())
+
+    # ── rules.json ────────────────────────────────────────────────────────────
+    if filename == "rules.json":
+        if not isinstance(data, list):
+            errors.append("rules.json must be a JSON array.")
+            return errors
+        seen_ids: set[str] = set()
+        for i, rule in enumerate(data):
+            if not isinstance(rule, dict):
+                errors.append(f"Rule #{i}: must be an object.")
+                continue
+            rid = rule.get("rule_id", "")
+            if not rid:
+                errors.append(f"Rule #{i}: missing rule_id.")
+            elif rid in seen_ids:
+                errors.append(f"Rule #{i}: duplicate rule_id '{rid}'.")
+            else:
+                seen_ids.add(rid)
+            if not rule.get("title", "").strip():
+                errors.append(f"Rule '{rid}': title is required.")
+            for field in ("logic", "corrective_action", "source"):
+                if not isinstance(rule.get(field), str) or not rule[field].strip():
+                    errors.append(f"Rule '{rid}': {field} is required.")
+            if rule.get("severity") not in ("low", "medium", "high"):
+                errors.append(f"Rule '{rid}': severity must be low / medium / high (got {rule.get('severity')!r}).")
+            if not rule.get("version", "").strip():
+                errors.append(f"Rule '{rid}': version is required.")
+
+    # ── policies.json ─────────────────────────────────────────────────────────
+    elif filename == "policies.json":
+        if not isinstance(data, dict):
+            errors.append("policies.json must be a JSON object keyed by policy_id.")
+            return errors
+        known_svcs = svc_codes()
+        known_provs = provider_ids()
+        for pid, policy in data.items():
+            if not isinstance(policy, dict):
+                errors.append(f"Policy '{pid}': must be an object.")
+                continue
+            if policy.get("policy_id") != pid:
+                errors.append(f"Policy '{pid}': policy_id must match the object key.")
+            for field in ("policy_id", "version", "payer_id", "currency"):
+                if not isinstance(policy.get(field), str) or not policy[field].strip():
+                    errors.append(f"Policy '{pid}': {field} is required.")
+            for field in ("allowed_providers", "auth_required_services"):
+                if not isinstance(policy.get(field), list) or not all(isinstance(value, str) and value.strip() for value in policy.get(field, [])):
+                    errors.append(f"Policy '{pid}': {field} must be a list of non-empty strings.")
+            for field in ("required_documents", "max_unit_price", "max_quantity_per_line"):
+                if not isinstance(policy.get(field), dict):
+                    errors.append(f"Policy '{pid}': {field} must be an object.")
+            if isinstance(policy.get("required_documents"), dict):
+                for svc, doc in policy["required_documents"].items():
+                    if not isinstance(doc, str) or not doc.strip():
+                        errors.append(f"Policy '{pid}': required_documents['{svc}'] must be a non-empty string.")
+            for field in ("max_unit_price", "max_quantity_per_line"):
+                if isinstance(policy.get(field), dict):
+                    for svc, value in policy[field].items():
+                        if not isinstance(value, (int, float)) or isinstance(value, bool) or value <= 0:
+                            errors.append(f"Policy '{pid}': {field}['{svc}'] must be a positive number.")
+            # Allowed providers must exist
+            for prov in policy.get("allowed_providers", []):
+                if prov and prov not in known_provs:
+                    errors.append(f"Policy '{pid}': provider '{prov}' not found in providers.json.")
+            # Auth-required services must exist
+            for svc in policy.get("auth_required_services", []):
+                if svc and svc not in known_svcs:
+                    errors.append(f"Policy '{pid}': auth_required_service '{svc}' not found in services.json.")
+            # required_documents keys must be valid service codes
+            for svc in policy.get("required_documents", {}).keys():
+                if svc and svc not in known_svcs:
+                    errors.append(f"Policy '{pid}': required_documents key '{svc}' not found in services.json.")
+            # max_unit_price keys must be valid service codes
+            for svc in policy.get("max_unit_price", {}).keys():
+                if svc and svc not in known_svcs:
+                    errors.append(f"Policy '{pid}': max_unit_price key '{svc}' not found in services.json.")
+            # max_quantity_per_line keys must be valid service codes
+            for svc in policy.get("max_quantity_per_line", {}).keys():
+                if svc and svc not in known_svcs:
+                    errors.append(f"Policy '{pid}': max_quantity_per_line key '{svc}' not found in services.json.")
+            # Currency must be non-empty
+            # Submission window must be positive
+            if not isinstance(policy.get("submission_window_days"), (int, float)) or policy.get("submission_window_days", 0) <= 0:
+                errors.append(f"Policy '{pid}': submission_window_days must be a positive number.")
+
+    # ── diagnoses.json ────────────────────────────────────────────────────────
+    elif filename == "diagnoses.json":
+        if not isinstance(data, list):
+            errors.append("diagnoses.json must be a JSON array.")
+            return errors
+        seen_codes: set[str] = set()
+        for i, dx in enumerate(data):
+            if not isinstance(dx, dict):
+                errors.append(f"Diagnosis #{i}: must be an object.")
+                continue
+            code = dx.get("code", "")
+            if not code:
+                errors.append(f"Diagnosis #{i}: missing code.")
+            elif code in seen_codes:
+                errors.append(f"Diagnosis #{i}: duplicate code '{code}'.")
+            else:
+                seen_codes.add(code)
+            if not dx.get("display", "").strip():
+                errors.append(f"Diagnosis '{code}': display description is required.")
+
+    # ── providers.json ────────────────────────────────────────────────────────
+    elif filename == "providers.json":
+        if not isinstance(data, list):
+            errors.append("providers.json must be a JSON array.")
+            return errors
+        seen_pids: set[str] = set()
+        for i, prov in enumerate(data):
+            if not isinstance(prov, dict):
+                errors.append(f"Provider #{i}: must be an object.")
+                continue
+            pid = prov.get("provider_id", "")
+            if not pid:
+                errors.append(f"Provider #{i}: missing provider_id.")
+            elif pid in seen_pids:
+                errors.append(f"Provider #{i}: duplicate provider_id '{pid}'.")
+            else:
+                seen_pids.add(pid)
+            if not prov.get("display", "").strip():
+                errors.append(f"Provider '{pid}': display name is required.")
+
+    # ── services.json ─────────────────────────────────────────────────────────
+    elif filename == "services.json":
+        if not isinstance(data, dict):
+            errors.append("services.json must be a JSON object keyed by service code.")
+            return errors
+        for code, svc in data.items():
+            if not isinstance(svc, dict):
+                errors.append(f"Service '{code}': must be an object.")
+                continue
+            if not svc.get("description", "").strip():
+                errors.append(f"Service '{code}': description is required.")
+            bp = svc.get("base_price")
+            mp = svc.get("max_price")
+            mq = svc.get("max_quantity")
+            if not isinstance(bp, (int, float)) or bp < 0:
+                errors.append(f"Service '{code}': base_price must be a non-negative number.")
+            if not isinstance(mp, (int, float)) or mp < 0:
+                errors.append(f"Service '{code}': max_price must be a non-negative number.")
+            if isinstance(bp, (int, float)) and isinstance(mp, (int, float)) and mp < bp:
+                errors.append(f"Service '{code}': max_price ({mp}) must be >= base_price ({bp}).")
+            if not isinstance(mq, int) or mq < 1:
+                errors.append(f"Service '{code}': max_quantity must be a positive integer.")
+
+    return errors
+
+
+@v1_router.get("/config/{filename}", tags=["config"])
+def get_config(filename: str):
+    if filename not in ALLOWED_CONFIG_FILES:
+        raise HTTPException(status_code=400, detail="Invalid config file")
+    file_path = RULES_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return json.loads(file_path.read_text(encoding="utf-8"))
+
+@v1_router.post("/config/{filename}", tags=["config"])
+async def save_config(filename: str, request: Request):
+    if filename not in ALLOWED_CONFIG_FILES:
+        raise HTTPException(status_code=400, detail="Invalid config file")
+    data = await request.json()
+
+    errors = _validate_config(filename, data, {filename: data})
+    # Provider and service edits can invalidate references from existing policies.
+    if filename in {"providers.json", "services.json"}:
+        policies = _load_rules_data("policies.json")
+        errors.extend(_validate_config("policies.json", policies, {filename: data}))
+    if errors:
+        raise HTTPException(status_code=422, detail={"errors": errors})
+
+    if filename == "rules.json":
+        try:
+            generated_specs = generate_missing_specs(data)
+            verify_rule_generation(data, generated_specs)
+            write_specs(generated_specs)
+        except (SpecificationError, SystemExit) as exc:
+            message = str(exc) or "Rule generation failed."
+            raise HTTPException(
+                status_code=422,
+                detail={"errors": [f"Rule generation failed: {message}"]},
+            ) from exc
+
+    file_path = RULES_DIR / filename
+    temporary_path = file_path.with_suffix(f"{file_path.suffix}.tmp")
+    temporary_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    temporary_path.replace(file_path)
+    _refresh_runtime_config(request)
+    response = {"status": "ok", "message": f"{filename} saved successfully."}
+    if filename == "rules.json":
+        response["generation"] = {
+            "status": "verified",
+            "message": "Rule catalog saved and deterministic implementations verified.",
+        }
+    return response
 
 
 @v1_router.get("/health", tags=["system"])
@@ -95,9 +352,26 @@ def explain(payload: ExplanationRequest, request: Request):
 @v1_router.post("/reviews", status_code=201, tags=["reviews"])
 def record_review(payload: ReviewDecisionRequest, request: Request):
     decision = payload.model_dump(mode="json")
-    actor = request.headers.get("X-Actor")
-    if actor:
-        decision["actor"] = actor
+
+    # The X-Actor header may *name* the actor, but it must not be able to write
+    # an unvalidated identity into the audit trail. Applying it after schema
+    # validation meant a blank or 300-character header silently overrode an
+    # already-validated body field.
+    header_actor = request.headers.get("X-Actor")
+    if header_actor is not None:
+        cleaned = header_actor.strip()
+        if not cleaned:
+            raise HTTPException(
+                status_code=422,
+                detail={"errors": ["X-Actor header must not be blank."]},
+            )
+        if len(cleaned) > MAX_ACTOR_LENGTH:
+            raise HTTPException(
+                status_code=422,
+                detail={"errors": [f"X-Actor header must be at most {MAX_ACTOR_LENGTH} characters."]},
+            )
+        decision["actor"] = cleaned
+
     return _service(request, "audit_service").record_review(decision)
 
 
@@ -126,9 +400,15 @@ def legacy_index() -> dict[str, Any]:
     }
 
 
+@legacy_router.get("/health", include_in_schema=False)
 @legacy_router.get("/api/health", include_in_schema=False)
 def legacy_health():
     return {"status": "ok", "engine": "backend.rule_engine"}
+
+
+@legacy_router.get("/v1/models", include_in_schema=False)
+def legacy_models():
+    return {"object": "list", "data": []}
 
 
 @legacy_router.get("/api/datasets/{split}", include_in_schema=False)

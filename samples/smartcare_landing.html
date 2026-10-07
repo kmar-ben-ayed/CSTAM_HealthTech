@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartCare Solutions - AI-Powered Medicine</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Plus Jakarta Sans', 'sans-serif'],
+                        syne: ['Syne', 'sans-serif'],
+                    },
+                    animation: {
+                        'spin-slow': 'spin 15s linear infinite',
+                        'float-slow': 'float 6s ease-in-out infinite',
+                        'float-medium': 'float 4s ease-in-out infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Keyframes */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .animate-float-slow {
+            animation: float 6s ease-in-out infinite;
+        }
+        .animate-float-medium {
+            animation: float 4s ease-in-out infinite;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .text-glow {
+            text-shadow: 0 0 40px rgba(0, 242, 254, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-[#F3F4F6] text-[#0F172A] font-sans antialiased h-full overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-900">
+
+    <!-- Global Viewport Border Frame (Design Spec Style) -->
+    <div class="fixed inset-4 border border-white/60 rounded-[32px] pointer-events-none z-50 shadow-inner"></div>
+
+    <!-- BACKGROUND EFFECTS -->
+    <div class="fixed inset-0 overflow-hidden -z-10 pointer-events-none">
+        <!-- Giant Watermark Background Text -->
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center select-none pointer-events-none opacity-[0.03]">
+            <h1 class="font-syne text-[10vw] font-extrabold tracking-[0.2em] uppercase leading-none text-slate-800">
+                FUTURE MEDICINE
+            </h1>
+        </div>
+
+        <!-- 3D Fluid Gradient Ribbon Layer -->
+        <svg class="absolute bottom-[-10%] left-[-10%] w-[120%] h-[120%] opacity-25 filter blur-[60px]" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="M0,80 Q30,40 50,70 T100,30 L100,100 L0,100 Z" fill="url(#ribbon-gradient)"></path>
+            <defs>
+                <linearGradient id="ribbon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#00F2FE" />
+                    <stop offset="50%" stop-color="#4FACFE" />
+                    <stop offset="100%" stop-color="#10B981" />
+                </linearGradient>
+            </defs>
+        </svg>
+
+        <!-- Subtle Ambient Grid -->
+        <div class="absolute inset-0 bg-[linear-gradient(to_right,rgba(15,23,42,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(15,23,42,0.02)_1px,transparent_1px)] bg-[size:4rem_4rem]"></div>
+    </div>
+
+    <!-- MAIN VIEW CONTAINER -->
+    <div class="relative min-h-full flex flex-col p-8 md:p-12 z-10">
+
+        <!-- A. HEADER / NAVIGATION BAR -->
+        <header class="flex justify-between items-center w-full mb-10 md:mb-16">
+            <!-- Logo (Left) -->
+            <div class="flex items-center gap-3">
+                <div class="grid grid-cols-2 gap-1 w-7 h-7 bg-slate-900 p-1.5 rounded-lg shadow-sm">
+                    <div class="bg-cyan-400 rounded-sm"></div>
+                    <div class="bg-blue-400 rounded-sm"></div>
+                    <div class="bg-emerald-400 rounded-sm"></div>
+                    <div class="bg-white rounded-sm"></div>
+                </div>
+                <div class="leading-none">
+                    <span class="font-display font-bold text-lg tracking-tight block">SmartCare</span>
+                    <span class="text-[10px] text-slate-500 font-medium uppercase tracking-[0.2em]">Solutions</span>
+                </div>
+            </div>
+
+            <!-- Floating Pill Navigation (Center) -->
+            <nav class="hidden md:flex items-center gap-1 p-1.5 rounded-full glass shadow-sm">
+                <a href="#" class="flex items-center gap-2 px-4 py-2 rounded-full text-slate-800 bg-white font-medium shadow-sm transition">
+                    <i data-lucide="home" class="w-4 h-4 text-cyan-500"></i> Home
+                </a>
+                <a href="#" class="flex items-center gap-2 px-4 py-2 rounded-full text-slate-600 hover:text-slate-900 font-medium transition hover:bg-white/50">
+                    <i data-lucide="book-open" class="w-4 h-4 text-slate-400"></i> Articles
+                </a>
+                <a href="#" class="flex items-center gap-2 px-4 py-2 rounded-full text-slate-600 hover:text-slate-900 font-medium transition hover:bg-white/50">
+                    <i data-lucide="activity" class="w-4 h-4 text-slate-400"></i> Predictive Analytics
+                </a>
+                <a href="#" class="flex items-center gap-2 px-4 py-2 rounded-full text-slate-600 hover:text-slate-900 font-medium transition hover:bg-white/50">
+                    <i data-lucide="binary" class="w-4 h-4 text-slate-400"></i> Image analysis
+                </a>
+            </nav>
+
+            <!-- CTA Pill Button (Right) -->
+            <button class="group flex items-center gap-3 bg-slate-950 hover:bg-slate-850 text-white pl-1.5 pr-5 py-1.5 rounded-full shadow-lg transition-all transform hover:-translate-y-0.5">
+                <span class="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-400 text-slate-950 font-bold group-hover:rotate-45 transition-transform duration-300">
+                    <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                </span>
+                <span class="font-semibold text-sm">Start now</span>
+                <span class="text-xs text-cyan-400 font-bold tracking-widest group-hover:translate-x-1 transition-transform">&gt;&gt;&gt;</span>
+            </button>
+        </header>
+
+        <!-- B. MAIN HERO CONTENT AREA (GRID) -->
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start flex-1 w-full max-w-7xl mx-auto">
+            
+            <!-- Left Hero Section (Grid cols 7) -->
+            <div class="lg:col-span-7 flex flex-col items-start space-y-6">
+                <!-- Pre-Header Tag -->
+                <span class="inline-flex items-center gap-2 px-4.5 py-1.5 rounded-full bg-white/80 border border-white/50 text-slate-800 font-semibold text-xs uppercase tracking-widest shadow-sm">
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                    Personalized treatment plans
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                </span>
+
+                <!-- Main Hero Headline with Integrated Pill -->
+                <h2 class="font-display font-extrabold text-4xl sm:text-5xl xl:text-6xl text-slate-900 tracking-tight leading-[1.1] uppercase max-w-2xl text-glow">
+                    AI-Powered Medicine:<br>
+                    <span class="inline-flex items-center align-middle gap-1.5 px-3 py-1.5 bg-white border border-white/60 rounded-full shadow-md animate-float-medium mx-1 sm:mx-2">
+                        <!-- Avatars -->
+                        <span class="flex -space-x-2">
+                            <img class="inline-block h-6 w-6 sm:h-8 sm:w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120" alt="Doctor 1">
+                            <img class="inline-block h-6 w-6 sm:h-8 sm:w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120" alt="Doctor 2">
+                            <img class="inline-block h-6 w-6 sm:h-8 sm:w-8 rounded-full ring-2 ring-white" src="https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=120" alt="Doctor 3">
+                        </span>
+                        <!-- DNA helix symbol badge -->
+                        <span class="flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-cyan-400 to-blue-500 text-white shadow-sm">
+                            <i data-lucide="dna" class="w-3.5 h-3.5 sm:w-4.5 sm:h-4.5"></i>
+                        </span>
+                    </span>
+                    Redefining Healthcare
+                </h2>
+
+                <!-- Underline Description & Rotating Circular Badge -->
+                <div class="flex flex-col sm:flex-row gap-6 items-start sm:items-center w-full pt-4">
+                    <!-- Left Micro-copy -->
+                    <p class="text-slate-500 text-sm md:text-base leading-relaxed max-w-sm">
+                        With AI-powered diagnostics, we aim to enhance the accuracy and efficiency of disease detection, delivering real-time actionable medical profiles.
+                    </p>
+
+                    <!-- Circular Rotating Badge -->
+                    <div class="relative flex items-center justify-center w-28 h-28 shrink-0 bg-white border border-white/50 rounded-full shadow-lg hover:scale-105 transition-transform duration-300 group cursor-pointer">
+                        <!-- Curved Text -->
+                        <svg class="absolute w-full h-full animate-spin-slow" viewBox="0 0 100 100">
+                            <defs>
+                                <path id="textPath" d="M 50,50 m -35,0 a 35,35 0 1,1 70,0 a 35,35 0 1,1 -70,0"></path>
+                            </defs>
+                            <text class="text-[7.5px] font-bold fill-slate-700 tracking-[0.25em] uppercase">
+                                <textPath href="#textPath">Functional • Dynamic • Responsive • </textPath>
+                            </text>
+                        </svg>
+                        <!-- Center Arrow -->
+                        <span class="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center group-hover:rotate-45 transition-transform">
+                            <i data-lucide="arrow-up-left" class="w-4 h-4"></i>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Right Sub-CTA Inline Tag -->
+                <div class="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 rounded-full text-emerald-800 text-xs md:text-sm font-semibold shadow-sm">
+                    <span class="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white">
+                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                    </span>
+                    <span>The future is now — unlock the potential of ai diagnostics</span>
+                </div>
+            </div>
+
+            <!-- Right Visual Layout Section (Floating glass cards) (Grid cols 5) -->
+            <div class="lg:col-span-5 flex flex-col space-y-6 w-full">
+                
+                <!-- 1. Bottom-Left Card: Sarah Johnson -->
+                <div class="glass rounded-3xl p-6 shadow-xl animate-float-slow hover:shadow-2xl transition-all duration-300">
+                    <!-- Profile Header -->
+                    <div class="flex justify-between items-center mb-6">
+                        <div class="flex items-center gap-4">
+                            <img class="w-12 h-12 rounded-full object-cover ring-2 ring-white shadow" src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=150" alt="Dr. Sarah Johnson">
+                            <div>
+                                <h3 class="font-display font-bold text-slate-950 text-base leading-none">Dr. Sarah Johnson</h3>
+                                <p class="text-xs text-slate-500 mt-1 font-medium">Chief Medical Officer</p>
+                            </div>
+                        </div>
+                        <button class="w-9 h-9 rounded-full bg-white flex items-center justify-center border border-white/50 text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 shadow-sm transition">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <!-- 2 Column Grid Info -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="p-4 rounded-2xl bg-white/40 border border-white/30">
+                            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-100 text-cyan-600 mb-3">
+                                <i data-lucide="microscope" class="w-4.5 h-4.5"></i>
+                            </span>
+                            <h4 class="font-bold text-xs text-slate-950 tracking-tight">Research</h4>
+                            <p class="text-[11px] text-slate-500 leading-normal mt-1">Deeper insights into diseases and epigenetic risk factors</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-white/40 border border-white/30">
+                            <span class="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 mb-3">
+                                <i data-lucide="scan-line" class="w-4.5 h-4.5"></i>
+                            </span>
+                            <h4 class="font-bold text-xs text-slate-950 tracking-tight">Analysis</h4>
+                            <p class="text-[11px] text-slate-500 leading-normal mt-1">Analyzing MRI scans, X-rays, pathology slides in seconds</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Middle-Right Stacked Navigation -->
+                <div class="glass rounded-3xl p-5 shadow-lg border border-white/40">
+                    <ul class="space-y-1">
+                        <!-- Item 01 -->
+                        <li class="flex justify-between items-center p-3.5 rounded-2xl text-slate-500 hover:text-slate-800 transition hover:bg-white/40 cursor-pointer">
+                            <span class="font-display font-semibold text-sm">Resources <span class="text-xs opacity-50 font-normal ml-1">/ 01</span></span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs font-mono tracking-widest text-slate-400">• • •</span>
+                                <span class="flex items-center justify-center w-7 h-7 rounded-full bg-white border border-white text-slate-800 shadow-sm"><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></span>
+                            </div>
+                        </li>
+                        <!-- Item 02 (Active Highlithed) -->
+                        <li class="flex justify-between items-center p-3.5 rounded-2xl text-slate-950 bg-white border border-white/60 shadow-sm cursor-pointer">
+                            <span class="font-display font-bold text-sm">Community <span class="text-xs text-slate-500 font-normal ml-1">/ 02</span></span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs font-mono tracking-widest text-cyan-500">● ● •</span>
+                                <span class="flex items-center justify-center w-7 h-7 rounded-full bg-slate-950 text-white shadow"><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></span>
+                            </div>
+                        </li>
+                        <!-- Item 03 -->
+                        <li class="flex justify-between items-center p-3.5 rounded-2xl text-slate-500 hover:text-slate-800 transition hover:bg-white/40 cursor-pointer">
+                            <span class="font-display font-semibold text-sm">Articles <span class="text-xs opacity-50 font-normal ml-1">/ 03</span></span>
+                            <div class="flex items-center gap-3">
+                                <span class="text-xs font-mono tracking-widest text-slate-400">• • •</span>
+                                <span class="flex items-center justify-center w-7 h-7 rounded-full bg-white border border-white text-slate-800 shadow-sm"><i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 3. Bottom-Right Floating Feature Cards -->
+                <div class="flex flex-col gap-4">
+                    <!-- Card 1: Personalized Treatment -->
+                    <div class="flex items-start gap-4 p-5 glass rounded-2xl shadow-md border border-white/40 hover:-translate-y-1 transition duration-300">
+                        <span class="flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-100 text-cyan-600 shadow-sm shrink-0">
+                            <i data-lucide="pill" class="w-5 h-5"></i>
+                        </span>
+                        <div>
+                            <h4 class="font-display font-bold text-sm text-slate-950">Personalized Treatment</h4>
+                            <p class="text-xs text-slate-500 leading-normal mt-1">AI empowers healthcare providers to deliver custom-tailored, biological-linked treatment plans.</p>
+                            <div class="flex gap-2 mt-3">
+                                <span class="px-2.5 py-0.5 rounded-md bg-slate-950 text-white text-[9px] font-medium tracking-tight">⚙ Healthcare</span>
+                                <span class="px-2.5 py-0.5 rounded-md bg-white border border-white text-slate-600 text-[9px] font-medium tracking-tight">💡 Effectiveness</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 2: Predictive Analytics -->
+                    <div class="flex items-start gap-4 p-5 glass rounded-2xl shadow-md border border-white/40 hover:-translate-y-1 transition duration-300">
+                        <span class="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-100 text-blue-600 shadow-sm shrink-0">
+                            <i data-lucide="heart-pulse" class="w-5 h-5"></i>
+                        </span>
+                        <div>
+                            <h4 class="font-display font-bold text-sm text-slate-950">Predictive Analytics</h4>
+                            <p class="text-xs text-slate-500 leading-normal mt-1">AI analyzes patient histories and genetic structures in real-time, warning doctors before symptoms develop.</p>
+                            <div class="flex mt-3">
+                                <span class="px-2.5 py-0.5 rounded-md bg-white border border-white text-slate-600 text-[9px] font-medium tracking-tight">♡ Individual characteristics</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- FOOTER & CONTROLS -->
+        <footer class="flex justify-between items-center w-full mt-10 md:mt-16 pt-6 border-t border-slate-900/5">
+            <!-- Left Social Links (Floating pill button) -->
+            <div class="flex items-center gap-2">
+                <a href="#" class="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-white/60 text-slate-600 hover:bg-slate-950 hover:text-white hover:border-slate-950 shadow-sm transition">
+                    <i data-lucide="twitter" class="w-4 h-4"></i>
+                </a>
+                <a href="#" class="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-white/60 text-slate-600 hover:bg-slate-950 hover:text-white hover:border-slate-950 shadow-sm transition">
+                    <i data-lucide="facebook" class="w-4 h-4"></i>
+                </a>
+                <a href="#" class="flex items-center justify-center w-9 h-9 rounded-full bg-white border border-white/60 text-slate-600 hover:bg-slate-950 hover:text-white hover:border-slate-950 shadow-sm transition">
+                    <i data-lucide="instagram" class="w-4 h-4"></i>
+                </a>
+            </div>
+
+            <!-- Bottom Center Scroll Indicator -->
+            <div class="flex flex-col items-center gap-1.5 cursor-pointer hover:translate-y-0.5 transition duration-300">
+                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Discover more</span>
+                <span class="flex items-center justify-center w-6 h-6 rounded-full bg-white border border-white/50 shadow-sm text-slate-500">
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 animate-bounce"></i>
+                </span>
+            </div>
+
+            <!-- Copyright/Status Text -->
+            <span class="text-xs text-slate-400 font-medium hidden sm:inline-block">SmartCare Solutions • All rights reserved</span>
+        </footer>
+
+    </div>
+
+    <!-- Initialize Lucide Icons -->
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

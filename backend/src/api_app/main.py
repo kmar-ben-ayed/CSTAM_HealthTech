@@ -154,9 +154,17 @@ def create_app(
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_error(request: Request, error: StarletteHTTPException):
         codes = {404: "not_found", 405: "method_not_allowed"}
-        message = error.detail if isinstance(error.detail, str) else "Request failed"
+        if isinstance(error.detail, str):
+            message = error.detail
+            payload = {"error": message, "code": codes.get(error.status_code, "http_error")}
+        else:
+            payload = {
+                "error": "Request failed",
+                "code": codes.get(error.status_code, "http_error"),
+                "details": error.detail,
+            }
         return JSONResponse(
-            {"error": message, "code": codes.get(error.status_code, "http_error")},
+            payload,
             status_code=error.status_code,
             headers=error.headers,
         )

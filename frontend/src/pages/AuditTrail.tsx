@@ -7,7 +7,7 @@ const AUDIT_EVENTS = [
     time: '10:33:02',
     date: 'Sep 25, 2026',
     event: 'REVIEW_ACTION',
-    actor: 'Aya Gaha',
+    actor: 'Marwen Agrebi',
     actorType: 'human',
     claimId: 'CLM-10481',
     runId: 'RUN-4821',
@@ -24,7 +24,7 @@ const AUDIT_EVENTS = [
     time: '10:32:17',
     date: 'Sep 25, 2026',
     event: 'REVIEW_OPENED',
-    actor: 'Aya Gaha',
+    actor: 'Marwen Agrebi',
     actorType: 'human',
     claimId: 'CLM-10481',
     runId: 'RUN-4821',
@@ -125,11 +125,11 @@ const AUDIT_EVENTS = [
 
 const EVENT_CONFIG: Record<string, { color: string; bg: string }> = {
   CLAIM_RECEIVED: { color: 'var(--accent)', bg: 'var(--accent-subtle)' },
-  RUN_STARTED: { color: 'var(--status-review)', bg: 'var(--status-review-bg)' },
-  RUN_COMPLETED: { color: 'var(--status-pass)', bg: 'var(--status-pass-bg)' },
-  RULE_EVALUATED: { color: 'var(--status-uta)', bg: 'var(--status-uta-bg)' },
-  REVIEW_OPENED: { color: 'var(--status-na)', bg: 'var(--status-na-bg)' },
-  REVIEW_ACTION: { color: 'var(--status-fail)', bg: 'var(--status-fail-bg)' },
+  RUN_STARTED: { color: 'var(--status-review-ink)', bg: 'var(--status-review-bg)' },
+  RUN_COMPLETED: { color: 'var(--status-pass-ink)', bg: 'var(--status-pass-bg)' },
+  RULE_EVALUATED: { color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)' },
+  REVIEW_OPENED: { color: 'var(--status-na-ink)', bg: 'var(--status-na-bg)' },
+  REVIEW_ACTION: { color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)' },
 };
 
 const RESULT_COLOR: Record<string, string> = {
@@ -251,10 +251,11 @@ export default function AuditTrail() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', color: '#0f172a', marginBottom: 4 }}>
+          <span className="sc-eyebrow"> Tamper-evident log</span>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', margin: '12px 0 4px' }}>
             Audit Trail
           </h1>
-          <p style={{ fontSize: '0.9rem', color: '#64748b' }}>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
             Trace system and reviewer actions across every claim.
           </p>
         </div>
@@ -263,8 +264,8 @@ export default function AuditTrail() {
           {verified && !verifying && (
             <div className="chain-verified">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <circle cx="6" cy="6" r="5" fill="#1f7a5c"/>
-                <path d="M3.5 6l2 2 3-4" stroke="#fff" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="6" cy="6" r="5" fill="var(--status-pass)"/>
+                <path d="M3.5 6l2 2 3-4" stroke="var(--card-bg)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               Audit chain verified
             </div>
@@ -273,12 +274,12 @@ export default function AuditTrail() {
             onClick={handleVerify}
             disabled={verifying}
             style={{
-              background: '#fff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--card-bg)',
+              border: '1px solid var(--border)',
               borderRadius: 7,
               padding: '7px 14px',
               fontSize: '0.8125rem',
-              color: '#475569',
+              color: 'var(--text-secondary)',
               cursor: verifying ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit',
               fontWeight: 500,
@@ -290,7 +291,7 @@ export default function AuditTrail() {
           >
             {verifying ? (
               <>
-                <div style={{ width: 12, height: 12, border: '1.5px solid #1d5c8a', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sentinel-orbit 0.8s linear infinite' }} />
+                <div style={{ width: 12, height: 12, border: '1.5px solid var(--accent-ink)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sentinel-orbit 0.8s linear infinite' }} />
                 Verifying...
               </>
             ) : (
@@ -303,12 +304,12 @@ export default function AuditTrail() {
             )}
           </button>
           <button style={{
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
             borderRadius: 7,
             padding: '7px 14px',
             fontSize: '0.8125rem',
-            color: '#475569',
+            color: 'var(--text-secondary)',
             cursor: 'pointer',
             fontFamily: 'inherit',
             fontWeight: 500,
@@ -329,8 +330,8 @@ export default function AuditTrail() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center' }}>
         <div style={{ position: 'relative' }}>
           <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="6" cy="6" r="4.5" stroke="#94a3b8" strokeWidth="1.3"/>
-            <path d="M9.5 9.5l3 3" stroke="#94a3b8" strokeWidth="1.3" strokeLinecap="round"/>
+            <circle cx="6" cy="6" r="4.5" stroke="var(--text-tertiary)" strokeWidth="1.3"/>
+            <path d="M9.5 9.5l3 3" stroke="var(--text-tertiary)" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
           <input
             type="text"
@@ -338,12 +339,12 @@ export default function AuditTrail() {
             value={filterClaim}
             onChange={e => setFilterClaim(e.target.value)}
             style={{
-              background: '#fff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--card-bg)',
+              border: '1px solid var(--border)',
               borderRadius: 7,
               padding: '7px 12px 7px 32px',
               fontSize: '0.875rem',
-              color: '#0f172a',
+              color: 'var(--text-primary)',
               fontFamily: 'inherit',
               outline: 'none',
               width: 200,
@@ -355,12 +356,12 @@ export default function AuditTrail() {
           value={filterActor}
           onChange={e => setFilterActor(e.target.value)}
           style={{
-            background: '#fff',
-            border: '1px solid #e2e8f0',
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
             borderRadius: 7,
             padding: '7px 12px',
             fontSize: '0.875rem',
-            color: filterActor ? '#0f172a' : '#94a3b8',
+            color: filterActor ? 'var(--text-primary)' : 'var(--text-tertiary)',
             fontFamily: 'inherit',
             outline: 'none',
             cursor: 'pointer',
@@ -375,12 +376,12 @@ export default function AuditTrail() {
           value={filterEvent}
           onChange={e => setFilterEvent(e.target.value)}
           style={{
-            background: '#fff',
-            border: '1px solid #e2e8f0',
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
             borderRadius: 7,
             padding: '7px 12px',
             fontSize: '0.875rem',
-            color: filterEvent ? '#0f172a' : '#94a3b8',
+            color: filterEvent ? 'var(--text-primary)' : 'var(--text-tertiary)',
             fontFamily: 'inherit',
             outline: 'none',
             cursor: 'pointer',
@@ -393,13 +394,13 @@ export default function AuditTrail() {
         {(filterClaim || filterActor || filterEvent) && (
           <button
             onClick={() => { setFilterClaim(''); setFilterActor(''); setFilterEvent(''); }}
-            style={{ background: 'transparent', border: 'none', fontSize: '0.8125rem', color: '#94a3b8', cursor: 'pointer', fontFamily: 'inherit' }}
+            style={{ background: 'transparent', border: 'none', fontSize: '0.8125rem', color: 'var(--text-tertiary)', cursor: 'pointer', fontFamily: 'inherit' }}
           >
             Clear
           </button>
         )}
 
-        <div style={{ marginLeft: 'auto', fontSize: '0.8125rem', color: '#94a3b8' }}>
+        <div style={{ marginLeft: 'auto', fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
           {filtered.length} events
         </div>
       </div>
@@ -420,7 +421,7 @@ export default function AuditTrail() {
                   top: 36,
                   bottom: 0,
                   width: 1,
-                  background: '#f1f5f9',
+                  background: 'var(--canvas-bg-secondary)',
                   zIndex: 0,
                 }} />
               )}
@@ -477,9 +478,9 @@ export default function AuditTrail() {
                         <span style={{
                           fontFamily: "var(--font-sans)",
                           fontSize: '0.6875rem',
-                          color: '#1d5c8a',
-                          background: 'rgba(15,122,130,0.08)',
-                          border: '1px solid rgba(15,122,130,0.2)',
+                          color: 'var(--accent-ink)',
+                          background: 'var(--accent-subtle)',
+                          border: '1px solid var(--status-review-border)',
                           borderRadius: 4,
                           padding: '2px 7px',
                           fontWeight: 600,
@@ -488,45 +489,45 @@ export default function AuditTrail() {
                         </span>
                       )}
 
-                      <span style={{ fontSize: '0.875rem', color: '#334155' }}>{event.detail}</span>
+                      <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{event.detail}</span>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 12 }}>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>{event.time}</div>
-                        <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>{event.date}</div>
+                        <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>{event.time}</div>
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{event.date}</div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <div style={{
                           width: 22,
                           height: 22,
                           borderRadius: '50%',
-                          background: event.actorType === 'human' ? '#f8f1e3' : '#e9f5ef',
-                          border: event.actorType === 'human' ? '1px solid #e8d6ac' : '1px solid #c4e1d1',
+                          background: event.actorType === 'human' ? 'var(--status-uta-bg)' : 'var(--status-pass-bg)',
+                          border: event.actorType === 'human' ? '1px solid var(--status-uta-border)' : '1px solid var(--status-pass-border)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}>
                           {event.actorType === 'human' ? (
                             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                              <circle cx="5.5" cy="3.5" r="2" stroke="#96650f" strokeWidth="1.1"/>
-                              <path d="M1 10c0-2.5 2-4.5 4.5-4.5S10 7.5 10 10" stroke="#96650f" strokeWidth="1.1" strokeLinecap="round"/>
+                              <circle cx="5.5" cy="3.5" r="2" stroke="var(--status-uta-ink)" strokeWidth="1.1"/>
+                              <path d="M1 10c0-2.5 2-4.5 4.5-4.5S10 7.5 10 10" stroke="var(--status-uta-ink)" strokeWidth="1.1" strokeLinecap="round"/>
                             </svg>
                           ) : (
                             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                              <rect x="1.5" y="2" width="8" height="7" rx="1.5" stroke="#1a6a4f" strokeWidth="1.1"/>
-                              <path d="M3.5 5h4M3.5 7h2" stroke="#1a6a4f" strokeWidth="1.1" strokeLinecap="round"/>
+                              <rect x="1.5" y="2" width="8" height="7" rx="1.5" stroke="var(--status-pass-ink)" strokeWidth="1.1"/>
+                              <path d="M3.5 5h4M3.5 7h2" stroke="var(--status-pass-ink)" strokeWidth="1.1" strokeLinecap="round"/>
                             </svg>
                           )}
                         </div>
-                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{event.actor}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{event.actor}</span>
                       </div>
                       <svg
                         width="14"
                         height="14"
                         viewBox="0 0 14 14"
                         fill="none"
-                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease', color: '#94a3b8', flexShrink: 0 }}
+                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease', color: 'var(--text-tertiary)', flexShrink: 0 }}
                       >
                         <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
@@ -538,7 +539,7 @@ export default function AuditTrail() {
                     <div style={{
                       marginTop: 14,
                       paddingTop: 14,
-                      borderTop: '1px solid #f1f5f9',
+                      borderTop: '1px solid var(--border)',
                       animation: 'fade-in 0.2s ease-out',
                     }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 14 }}>
@@ -551,12 +552,12 @@ export default function AuditTrail() {
                           { label: 'Rule / version', value: event.ruleId ? `${event.ruleId} · ${event.ruleVersion}` : '–', mono: true },
                         ].map(f => (
                           <div key={f.label}>
-                            <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
+                            <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
                               {f.label}
                             </div>
                             <div style={{
                               fontSize: '0.8125rem',
-                              color: '#334155',
+                              color: 'var(--text-primary)',
                               fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
                               fontWeight: f.mono ? 500 : 400,
                             }}>
@@ -568,39 +569,39 @@ export default function AuditTrail() {
 
                       {event.reason && (
                         <div style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Reason</div>
-                          <div style={{ fontSize: '0.8125rem', color: '#334155' }}>{event.reason}</div>
+                          <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Reason</div>
+                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{event.reason}</div>
                         </div>
                       )}
 
                       {event.note && (
                         <div style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Reviewer note</div>
-                          <div style={{ fontSize: '0.8125rem', color: '#334155', fontStyle: 'italic' }}>{event.note}</div>
+                          <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Reviewer note</div>
+                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', fontStyle: 'italic' }}>{event.note}</div>
                         </div>
                       )}
 
                       {/* Hash chain */}
-                      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '12px 14px' }}>
+                      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 14px' }}>
                         <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                            <path d="M6 1l5 2v3c0 3-2.5 5.5-5 6C3.5 11.5 1 9 1 6V3L6 1z" stroke="#1d5c8a" strokeWidth="1.1" strokeLinejoin="round"/>
+                            <path d="M6 1l5 2v3c0 3-2.5 5.5-5 6C3.5 11.5 1 9 1 6V3L6 1z" stroke="var(--accent-ink)" strokeWidth="1.1" strokeLinejoin="round"/>
                           </svg>
-                          <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: '#1d5c8a', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Hash chain</span>
+                          <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent-ink)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Hash chain</span>
                           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#1f7a5c' }} />
-                            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#1a6a4f' }}>Verified</span>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-pass)' }} />
+                            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--status-pass-ink)' }}>Verified</span>
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                           <div>
-                            <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Previous hash</div>
-                            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#64748b', wordBreak: 'break-all', lineHeight: 1.4 }}>{event.prevHash}</div>
+                            <div style={{ fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Previous hash</div>
+                            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.4 }}>{event.prevHash}</div>
                           </div>
-                          <div style={{ height: 1, background: '#e2e8f0' }} />
+                          <div style={{ height: 1, background: 'var(--canvas-bg-secondary)' }} />
                           <div>
-                            <div style={{ fontSize: '0.6rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Event hash</div>
-                            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#0f172a', wordBreak: 'break-all', lineHeight: 1.4, fontWeight: 600 }}>{event.eventHash}</div>
+                            <div style={{ fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Event hash</div>
+                            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: 'var(--text-primary)', wordBreak: 'break-all', lineHeight: 1.4, fontWeight: 600 }}>{event.eventHash}</div>
                           </div>
                         </div>
                       </div>
@@ -615,8 +616,8 @@ export default function AuditTrail() {
 
       {filtered.length === 0 && (
         <div style={{ textAlign: 'center', padding: '64px 24px' }}>
-          <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#334155', marginBottom: 8 }}>No audit events found</div>
-          <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Try adjusting your filters</div>
+          <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>No audit events found</div>
+          <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>Try adjusting your filters</div>
         </div>
       )}
     </div>

@@ -133,5 +133,23 @@
     "corrective_action": "Verify and correct the declared currency against the source bill.",
     "version": "1.0.0",
     "source": "fictional-rulebook/R015@1.0.0"
+  },
+  {
+    "rule_id": "R016",
+    "title": "New Rule",
+    "severity": "medium",
+    "logic": "If provider is EDU-PROV-01 pass, else fail  ",
+    "corrective_action": "All claims coming from edu 1 are rejected",
+    "version": "1.0.0",
+    "source": "test"
+  },
+  {
+    "rule_id": "R017",
+    "title": "New Rule",
+    "severity": "medium",
+    "logic": "If diagnosis is DX-EDU-02 pass, is missing or other fail",
+    "corrective_action": "Please work",
+    "version": "1.0.0",
+    "source": "TEST"
   }
 ]

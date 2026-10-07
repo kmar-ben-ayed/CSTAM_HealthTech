@@ -35,6 +35,10 @@ def make_result(c,r,status,paths,message,line_ids=None):
 
 def base_check(c,r,cfg):
     rid=r['rule_id'];paths=[];ids=[];unknown=[]
+    from .generated.rules import RULE_IMPLEMENTATIONS
+    generated_check = RULE_IMPLEMENTATIONS.get(rid)
+    if generated_check is not None:
+        return generated_check(c, r, cfg)
     if rid=='R001':
         for k in ['invoice_number','member_id','diagnosis_code']:
             if empty(c[k]):paths.append('/'+k)

@@ -102,6 +102,19 @@ export interface ClaimRow {
   amount: string;
   rule: string;
   updated: string;
+  /** Extended detail used by the cards view. */
+  invoice?: string;
+  diagnosis?: string;
+  serviceCode?: string;
+  policy?: string;
+  payer?: string;
+  currency?: string;
+  lineCount?: number;
+  passedRules?: number;
+  totalRules?: number;
+  humanReview?: boolean;
+  severity?: string;
+  ruleIds?: string[];
 }
 
 export interface ReviewRule {
@@ -204,6 +217,14 @@ function mapStatus(results: RuleResult[]): ClaimRow['status'] {
 export function toClaimRow(claim: BackendClaim, results: RuleResult[] = []): ClaimRow {
   const status = mapStatus(results);
   const failedRules = results.filter((result) => result.status !== 'PASS' && result.status !== 'NOT_APPLICABLE');
+  const evaluated = results.filter((result) => result.status !== 'NOT_IMPLEMENTED');
+  const passed = results.filter((result) => result.status === 'PASS').length;
+  const lines = Array.isArray(claim.lines) ? claim.lines : [];
+  const severities = failedRules.map((result) => (result.severity || '').toLowerCase());
+  const severity = severities.includes('critical') ? 'Critical'
+    : severities.includes('high') ? 'High'
+      : severities.includes('medium') ? 'Medium'
+        : severities.length ? 'Low' : 'None';
 
   return {
     id: claim.claim_id,
@@ -216,6 +237,18 @@ export function toClaimRow(claim: BackendClaim, results: RuleResult[] = []): Cla
     amount: formatAmount(claim.total_amount, claim.currency),
     rule: failedRules.length ? failedRules.map((result) => result.rule_id).join(', ') : '—',
     updated: formatDate(claim.submission_date),
+    invoice: claim.invoice_number || '—',
+    diagnosis: claim.diagnosis_code || '—',
+    serviceCode: lines[0]?.service_code || '—',
+    policy: claim.policy_id || '—',
+    payer: claim.payer_id || '—',
+    currency: claim.currency || 'SAR',
+    lineCount: lines.length,
+    passedRules: passed,
+    totalRules: evaluated.length,
+    humanReview: results.some((result) => result.requires_human_review),
+    severity,
+    ruleIds: failedRules.map((result) => result.rule_id),
   };
 }
 

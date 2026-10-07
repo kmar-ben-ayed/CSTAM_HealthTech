@@ -126,7 +126,7 @@ function formatClaimAmount(value: unknown, currency: unknown): string {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  high: '#b4403f', medium: '#96650f', low: '#5f6c76',
+  high: 'var(--status-fail)', medium: 'var(--status-uta)', low: 'var(--text-secondary)',
 };
 
 export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
@@ -358,7 +358,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
   const renderRuleCard = (rule: Rule) => {
     const st = STATUS_STYLE[rule.status];
     const isSelected = inspectorOpen && selectedRule.id === rule.id;
-    const catColor = CATEGORY_COLORS[rule.category] || '#94a3b8';
+    const catColor = CATEGORY_COLORS[rule.category] || 'var(--text-tertiary)';
 
     return (
       <button
@@ -370,7 +370,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
         }}
         className={`claim-review-rule-card claim-review-rule-card-${rule.status.toLowerCase().replace(/_/g, '-')}${isSelected ? ' is-selected' : ''}`}
         style={{
-          background: '#fff',
+          background: 'var(--card-bg)',
           borderRadius: 8,
           padding: '14px 16px',
           cursor: 'pointer',
@@ -383,10 +383,10 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.04em', minWidth: 36 }}>
               {rule.id}
             </span>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.01em' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               {rule.name}
             </span>
-            <span style={{ fontSize: '0.6rem', fontWeight: 600, color: catColor, background: `${catColor}14`, border: `1px solid ${catColor}25`, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.6rem', fontWeight: 600, color: catColor, background: `color-mix(in srgb, ${catColor} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${catColor} 15%, transparent)`, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               {rule.category}
             </span>
           </span>
@@ -397,7 +397,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             </span>
           </span>
         </span>
-        <span style={{ display: 'block', fontSize: '0.8125rem', color: '#64748b', marginTop: 8, lineHeight: 1.5 }}>
+        <span style={{ display: 'block', fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.5 }}>
           {rule.finding}
         </span>
         <span className="claim-review-rule-card-inspect">Inspect finding <span aria-hidden="true">→</span></span>
@@ -451,7 +451,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
         textAlign: 'center',
         padding: 24,
       }}>
-        <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#8c322f' }}>
+        <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--status-fail-ink)' }}>
           {loadError || 'This claim could not be loaded.'}
         </div>
         <button
@@ -461,7 +461,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             border: 'none',
             borderRadius: 6,
             padding: '8px 16px',
-            color: '#fff',
+            color: 'var(--card-bg)',
             fontSize: '0.8125rem',
             fontWeight: 600,
             cursor: 'pointer',
@@ -496,7 +496,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               gap: 6,
               background: 'transparent',
               border: 'none',
-              color: '#64748b',
+              color: 'var(--text-secondary)',
               cursor: 'pointer',
               fontFamily: 'inherit',
               fontSize: '0.875rem',
@@ -510,9 +510,9 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             </svg>
             Claims
           </button>
-          <div style={{ width: 1, height: 20, background: '#e2e8f0' }} />
+          <div style={{ width: 1, height: 20, background: 'var(--canvas-bg-secondary)' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '0.02em' }}>
+            <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
               {claimId}
             </span>
             {!confirmed ? (
@@ -521,7 +521,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 alignItems: 'center',
                 gap: 5,
                 background: 'var(--status-review-bg)',
-                color: 'var(--status-review)',
+                color: 'var(--status-review-ink)',
                 border: '1px solid var(--status-review-border)',
                 borderRadius: 4,
                 padding: '3px 10px',
@@ -539,7 +539,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 alignItems: 'center',
                 gap: 5,
                 background: 'var(--status-pass-bg)',
-                color: 'var(--status-pass)',
+                color: 'var(--status-pass-ink)',
                 border: '1px solid var(--status-pass-border)',
                 borderRadius: 4,
                 padding: '3px 10px',
@@ -613,7 +613,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               borderRadius: 4,
               padding: '6px 16px',
               fontSize: '0.8125rem',
-              color: '#fff',
+              color: 'var(--card-bg)',
               cursor: 'pointer',
               fontFamily: 'inherit',
               fontWeight: 600,
@@ -647,7 +647,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             <button type="button" onClick={() => setClaimContextOpen(false)} aria-label="Collapse claim context">‹</button>
           </div>
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 10 }}>
+            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 10 }}>
               Claim information
             </div>
 
@@ -676,10 +676,10 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
   },
 ].map(f => (
               <div key={f.label} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: '0.6875rem', color: '#94a3b8', marginBottom: 2, fontWeight: 500 }}>{f.label}</div>
+                <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginBottom: 2, fontWeight: 500 }}>{f.label}</div>
                 <div style={{
                   fontSize: '0.8125rem',
-                  color: '#0f172a',
+                  color: 'var(--text-primary)',
                   fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
                   fontWeight: f.mono ? 500 : 400,
                 }}>
@@ -715,16 +715,16 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 { label: 'Submission date', value: formatClaimDate(claim?.submission_date), mono: true },
               ].map(f => (
                 <div key={f.label} style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>{f.label}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#334155', fontFamily: f.mono ? "'JetBrains Mono', monospace" : 'inherit', textAlign: 'right' }}>{f.value}</div>
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{f.label}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: f.mono ? "'JetBrains Mono', monospace" : 'inherit', textAlign: 'right' }}>{f.value}</div>
                 </div>
               ))}
             </div>
-          <div style={{ height: 1, background: '#f1f5f9', margin: '16px 0' }} />
+          <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', margin: '16px 0' }} />
 
           {/* Service lines */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 12 }}>
+            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 12 }}>
               Service lines
             </div>
 
@@ -732,32 +732,32 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               <div
                 key={line.line_id || index}
                 style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--border)',
                   borderRadius: 6,
                   padding: '10px 12px',
                   marginBottom: 8,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                     {line.service_code || '—'}
                   </span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: '#0f172a' }}>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                     {formatClaimAmount(line.net_amount, claim?.currency)}
                   </span>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: 4 }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
                   Service date: {formatClaimDate(line.service_date)}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>Auth:</span>
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>Auth:</span>
                   {line.authorization_id ? (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: '#10b981' }}>
+                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: 'var(--status-pass)' }}>
                       {line.authorization_id}
                     </span>
                   ) : (
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#b4403f', fontStyle: 'italic' }}>
+                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: 'var(--status-fail-ink)', fontStyle: 'italic' }}>
                       null
                     </span>
                   )}
@@ -766,11 +766,11 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             ))}
           </div>
 
-          <div style={{ height: 1, background: '#f1f5f9', margin: '16px 0' }} />
+          <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', margin: '16px 0' }} />
 
           {/* Diagnoses */}
           <div>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 12 }}>
+            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 12 }}>
               Diagnosis
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -781,9 +781,9 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
           </div>
 
           {/* Run info */}
-          <div style={{ height: 1, background: '#f1f5f9', margin: '16px 0' }} />
+          <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', margin: '16px 0' }} />
           <div>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 12 }}>
+            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 12 }}>
               Run metadata
             </div>
             {[
@@ -792,10 +792,10 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               { label: 'Coverage status', value: claim?.coverage?.status || '—', mono: false },
             ].map(f => (
               <div key={f.label} style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: '0.6875rem', color: '#94a3b8' }}>{f.label}</div>
+                <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{f.label}</div>
                 <div style={{
                   fontSize: '0.75rem',
-                  color: '#334155',
+                  color: 'var(--text-primary)',
                   fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
                   fontWeight: f.mono ? 500 : 400,
                 }}>
@@ -855,7 +855,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
           {/* Finding header */}
           <div style={{
             padding: '16px',
-            borderBottom: '1px solid #f1f5f9',
+            borderBottom: '1px solid var(--border)',
             background: 'var(--card-bg)',
             borderLeft: '0',
           }}>
@@ -870,7 +870,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                   <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: 'var(--accent)' }}>
                     {selectedRule.id}
                   </div>
-                  <div className="claim-review-selected-name" style={{ fontSize: '0.875rem', fontWeight: 600, color: '#0f172a', letterSpacing: '-0.01em' }}>
+                  <div className="claim-review-selected-name" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                     {selectedRule.name}
                   </div>
                 </div>
@@ -886,7 +886,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 {STATUS_LABEL[selectedRule.status]}
               </span>
             </div>
-            <p style={{ fontSize: '0.8125rem', color: '#64748b', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               {selectedRule.finding}
             </p>
           </div>
@@ -904,9 +904,9 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               }}>
                 <div className="claim-review-section-heading" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M6 1l5 9H1L6 1z" stroke="#0f172a" strokeWidth="1.2" strokeLinejoin="round"/>
+                    <path d="M6 1l5 9H1L6 1z" stroke="var(--text-primary)" strokeWidth="1.2" strokeLinejoin="round"/>
                   </svg>
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: '#0f172a', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
                     Deterministic finding
                   </span>
                 </div>
@@ -924,14 +924,14 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 </span>
               </div>
               <div style={{ padding: '14px 0' }}>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Rule
                 </div>
-                <p style={{ fontSize: '0.8125rem', color: '#334155', lineHeight: 1.6, marginBottom: 14 }}>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 14 }}>
                   {selectedRule.finding}
                 </p>
 
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Evidence paths
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
@@ -949,7 +949,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
 
                 {selectedRule.observed !== undefined && (
                   <>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Observed
                     </div>
                     <div className="evidence-block">
@@ -963,11 +963,11 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 )}
                 {selectedRule.expected && (
                   <>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', margin: '10px 0 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', margin: '10px 0 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                       Expected
                     </div>
                     <div className="evidence-block claim-review-report-expected">
-                      <span style={{ color: '#10b981', fontStyle: 'italic' }}>{selectedRule.expected}</span>
+                      <span style={{ color: 'var(--status-pass)', fontStyle: 'italic' }}>{selectedRule.expected}</span>
 
                     </div>
                   </>
@@ -1007,20 +1007,20 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
           aiAssessment.explanation_source === 'llm'
             ? 'var(--accent)'
             : aiAssessment.explanation_source === 'fallback'
-              ? '#7d540f'
-              : '#64748b',
+              ? 'var(--status-uta-ink)'
+              : 'var(--text-tertiary)',
         background:
           aiAssessment.explanation_source === 'llm'
             ? 'var(--accent-subtle)'
             : aiAssessment.explanation_source === 'fallback'
-              ? '#f8f1e3'
-              : '#f1f5f9',
+              ? 'var(--status-uta-bg)'
+              : 'var(--text-primary)',
         border: `1px solid ${
           aiAssessment.explanation_source === 'llm'
             ? 'var(--status-pass-border)'
             : aiAssessment.explanation_source === 'fallback'
-              ? '#e8d6ac'
-              : '#e2e8f0'
+              ? 'var(--status-uta-border)'
+              : 'var(--border)'
         }`,
         borderRadius: 3,
         padding: '1px 6px',
@@ -1040,7 +1040,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
     style={{
       fontFamily: "var(--font-sans)",
       fontSize: '0.625rem',
-      color: '#94a3b8',
+      color: 'var(--text-tertiary)',
     }}
   >
     {aiProvider || 'pending'}{aiFallback ? ' · fallback used' : ''}
@@ -1052,13 +1052,13 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               </div>
               <div style={{ padding: '14px 0' }}>
                 {aiLoading ? (
-                  <div style={{ color: '#64748b', fontSize: '0.875rem', lineHeight: 1.7 }}>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7 }}>
                     Generating a grounded explanation…
                   </div>
                 ) : !aiExplanation ? (
                   <div style={{
-                    background: '#f8f1e3',
-                    border: '1px solid #e8d6ac',
+                    background: 'var(--status-uta-bg)',
+                    border: '1px solid var(--status-uta-border)',
                     borderRadius: 6,
                     padding: '12px',
                     display: 'flex',
@@ -1066,44 +1066,44 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                     alignItems: 'flex-start',
                   }}>
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                      <path d="M8 2l6 11H2L8 2z" stroke="#96650f" strokeWidth="1.3" strokeLinejoin="round"/>
-                      <path d="M8 6v4M8 11.5v.5" stroke="#96650f" strokeWidth="1.3" strokeLinecap="round"/>
+                      <path d="M8 2l6 11H2L8 2z" stroke="var(--status-uta-ink)" strokeWidth="1.3" strokeLinejoin="round"/>
+                      <path d="M8 6v4M8 11.5v.5" stroke="var(--status-uta-ink)" strokeWidth="1.3" strokeLinecap="round"/>
                     </svg>
                     <div>
-                      <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#6b4a0f', marginBottom: 4 }}>
+                      <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--status-uta-ink)', marginBottom: 4 }}>
                         AI explanation unavailable
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#7d540f', lineHeight: 1.5 }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--status-uta-ink)', lineHeight: 1.5 }}>
                         {aiError || 'The deterministic finding remains available. You may proceed with review based on the rule result and evidence above.'}
                       </div>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <p style={{ fontSize: '0.875rem', color: '#334155', lineHeight: 1.7, marginBottom: 14 }}>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.7, marginBottom: 14 }}>
                       {aiExplanation}
                     </p>
 
                     {aiAssessment && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-                        <span style={{ fontSize: '0.6875rem', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '2px 8px' }}>
+                        <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px' }}>
                           Source: {aiAssessment.explanation_source}
                         </span>
                         {aiAssessment.explanation_grounding !== null && (
-                          <span style={{ fontSize: '0.6875rem', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '2px 8px' }}>
+                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px' }}>
                             Grounding: {Math.round(aiAssessment.explanation_grounding * 100)}%
                           </span>
                         )}
                         {aiAssessment.evidence_completeness !== null && (
-                          <span style={{ fontSize: '0.6875rem', color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '2px 8px' }}>
+                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px' }}>
                             Evidence completeness: {Math.round(aiAssessment.evidence_completeness * 100)}%
                           </span>
                         )}
                         <span style={{
                           fontSize: '0.6875rem',
-                          color: aiAssessment.escalate ? '#8c322f' : '#64748b',
-                          background: aiAssessment.escalate ? '#fbefee' : '#f8fafc',
-                          border: `1px solid ${aiAssessment.escalate ? '#e9c8c7' : '#e2e8f0'}`,
+                          color: aiAssessment.escalate ? 'var(--status-fail-ink)' : 'var(--text-tertiary)',
+                          background: aiAssessment.escalate ? 'var(--status-fail-bg)' : 'var(--card-bg)',
+                          border: `1px solid ${aiAssessment.escalate ? 'var(--status-fail-border)' : 'var(--border)'}`,
                           borderRadius: 4,
                           padding: '2px 8px',
                           fontWeight: aiAssessment.escalate ? 700 : 400,
@@ -1116,8 +1116,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                     )}
 
                     {/* Citations */}
-                    <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
-                      <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                      <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
                         Citations
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -1128,7 +1128,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                             style={{
                               fontFamily: "var(--font-sans)",
                               fontSize: '0.6875rem',
-                              color: 'var(--status-review)',
+                              color: 'var(--status-review-ink)',
                               background: 'var(--status-review-bg)',
                               border: '1px solid var(--status-review-border)',
                               borderRadius: 4,
@@ -1159,33 +1159,33 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             {/* Human review panel */}
             {!confirmed ? (
               <div style={{
-                background: '#fff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--card-bg)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 overflow: 'hidden',
               }}>
                 <div style={{
                   padding: '10px 14px',
-                  borderBottom: '1px solid #e2e8f0',
-                  background: '#fafafa',
+                  borderBottom: '1px solid var(--border)',
+                  background: 'var(--canvas-bg-secondary)',
                 }}>
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: '#0f172a', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
                     Human review
                   </span>
                 </div>
                 <div style={{ padding: '14px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
                     {[
-                      { key: 'confirm', label: 'Confirm issue', desc: 'Issue is valid', color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
-                      { key: 'request-info', label: 'Request information', desc: 'More info needed', color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
-                      { key: 'dismiss', label: 'Dismiss', desc: 'Issue is not valid', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0' },
+                      { key: 'confirm', label: 'Confirm issue', desc: 'Issue is valid', color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
+                      { key: 'request-info', label: 'Request information', desc: 'More info needed', color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
+                      { key: 'dismiss', label: 'Dismiss', desc: 'Issue is not valid', color: 'var(--text-tertiary)', bg: 'var(--card-bg)', border: 'var(--border)' },
                     ].map(action => (
                       <button
                         key={action.key}
                         onClick={() => setReviewAction(action.key)}
                         style={{
-                          background: reviewAction === action.key ? action.bg : '#f8fafc',
-                          border: `1px solid ${reviewAction === action.key ? action.border : '#e2e8f0'}`,
+                          background: reviewAction === action.key ? action.bg : 'var(--card-bg)',
+                          border: `1px solid ${reviewAction === action.key ? action.border : 'var(--border)'}`,
                           borderRadius: 7,
                           padding: '10px 12px',
                           display: 'flex',
@@ -1197,8 +1197,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                         }}
                       >
                         <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: reviewAction === action.key ? action.color : '#334155' }}>{action.label}</div>
-                          <div style={{ fontSize: '0.6875rem', color: '#94a3b8', marginTop: 1 }}>{action.desc}</div>
+                          <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: reviewAction === action.key ? action.color : 'var(--text-primary)' }}>{action.label}</div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: 1 }}>{action.desc}</div>
                         </div>
                         {reviewAction === action.key && (
                           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -1212,7 +1212,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                   {reviewAction && (
                     <>
                       <div style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
+                        <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
                           Reason
                         </label>
                         <select
@@ -1220,12 +1220,12 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                           onChange={e => setReviewReason(e.target.value)}
                           style={{
                             width: '100%',
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
+                            background: 'var(--card-bg)',
+                            border: '1px solid var(--border)',
                             borderRadius: 6,
                             padding: '7px 10px',
                             fontSize: '0.8125rem',
-                            color: '#0f172a',
+                            color: 'var(--text-primary)',
                             fontFamily: 'inherit',
                             outline: 'none',
                           }}
@@ -1240,7 +1240,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                       </div>
 
                       <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
+                        <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
                           Reviewer note
                         </label>
                         <textarea
@@ -1250,12 +1250,12 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                           rows={3}
                           style={{
                             width: '100%',
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
+                            background: 'var(--card-bg)',
+                            border: '1px solid var(--border)',
                             borderRadius: 6,
                             padding: '8px 10px',
                             fontSize: '0.8125rem',
-                            color: '#0f172a',
+                            color: 'var(--text-primary)',
                             fontFamily: 'inherit',
                             outline: 'none',
                             resize: 'vertical',
@@ -1268,11 +1268,11 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                         disabled={reviewSubmitting}
                         style={{
                           width: '100%',
-                          background: '#0f172a',
+                          background: 'var(--text-primary)',
                           border: 'none',
                           borderRadius: 7,
                           padding: '10px',
-                          color: '#fff',
+                          color: 'var(--card-bg)',
                           fontSize: '0.875rem',
                           fontWeight: 600,
                           cursor: 'pointer',
@@ -1284,11 +1284,11 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                         {reviewSubmitting ? 'Recording decision…' : 'Submit decision → record to audit'}
                       </button>
                       {reviewError && (
-                        <p style={{ fontSize: '0.75rem', color: '#8c322f', marginTop: 8, lineHeight: 1.4 }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--status-fail-ink)', marginTop: 8, lineHeight: 1.4 }}>
                           {reviewError}
                         </p>
                       )}
-                      <p style={{ fontSize: '0.6875rem', color: '#94a3b8', marginTop: 8, textAlign: 'center', lineHeight: 1.4 }}>
+                      <p style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: 8, textAlign: 'center', lineHeight: 1.4 }}>
                         This action will be recorded in the immutable audit trail.
                       </p>
                     </>
@@ -1297,8 +1297,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               </div>
             ) : (
               <div style={{
-                background: '#e9f5ef',
-                border: '1px solid #c4e1d1',
+                background: 'var(--status-pass-bg)',
+                border: '1px solid var(--status-pass-border)',
                 borderRadius: 8,
                 padding: '16px',
                 display: 'flex',
@@ -1306,15 +1306,15 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 alignItems: 'flex-start',
               }}>
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
-                  <circle cx="9" cy="9" r="8" fill="#1f7a5c"/>
-                  <path d="M5 9l3 3 5-6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="9" cy="9" r="8" fill="var(--status-pass)"/>
+                  <path d="M5 9l3 3 5-6" stroke="var(--card-bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 <div>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#17503c', marginBottom: 4 }}>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--status-pass-ink)', marginBottom: 4 }}>
                     Decision recorded
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#1a6a4f', lineHeight: 1.5 }}>
-                    Reviewed by Aya Gaha · {new Date().toLocaleTimeString()} · Recorded to audit trail
+                  <div style={{ fontSize: '0.75rem', color: 'var(--status-pass-ink)', lineHeight: 1.5 }}>
+                    Reviewed by Marwen Agrebi · {new Date().toLocaleTimeString()} · Recorded to audit trail
                   </div>
                 </div>
               </div>
@@ -1340,8 +1340,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
         >
           <div
             style={{
-              background: '#fff',
-              border: '1px solid #e2e8f0',
+              background: 'var(--card-bg)',
+              border: '1px solid var(--border)',
               borderRadius: 12,
               padding: '24px',
               width: 440,
@@ -1351,7 +1351,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             onClick={e => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
                 {reviewAction === 'confirm' ? 'Confirm issue' :
                  reviewAction === 'request-info' ? 'Request information' :
                  reviewAction === 'dismiss' ? 'Dismiss finding' :
@@ -1359,7 +1359,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               </h3>
               <button
                 onClick={() => setReviewAction(null)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '1.2rem' }}
               >
                 ×
               </button>
@@ -1367,8 +1367,8 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
 
             <div style={{ marginBottom: 16 }}>
               <div style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: 'var(--card-bg)',
+                border: '1px solid var(--border)',
                 borderRadius: 7,
                 padding: '10px 12px',
                 marginBottom: 14,
@@ -1376,10 +1376,10 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 gap: 8,
               }}>
                 <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>{selectedRule.id}</span>
-                <span style={{ fontSize: '0.8125rem', color: '#334155' }}>{selectedRule.name}</span>
+                <span style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{selectedRule.name}</span>
               </div>
 
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>
                 Reason
               </label>
               <select
@@ -1387,15 +1387,15 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 onChange={e => setReviewReason(e.target.value)}
                 style={{
                   width: '100%',
-                  background: '#fff',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--border)',
                   borderRadius: 7,
                   padding: '9px 12px',
                   fontSize: '0.875rem',
                   fontFamily: 'inherit',
                   marginBottom: 14,
                   outline: 'none',
-                  color: '#0f172a',
+                  color: 'var(--text-primary)',
                 }}
               >
                 <option value="">Select a reason...</option>
@@ -1406,7 +1406,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 <option>Other (see note)</option>
               </select>
 
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>
                 Note (optional)
               </label>
               <textarea
@@ -1416,15 +1416,15 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 rows={3}
                 style={{
                   width: '100%',
-                  background: '#fff',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--border)',
                   borderRadius: 7,
                   padding: '9px 12px',
                   fontSize: '0.875rem',
                   fontFamily: 'inherit',
                   outline: 'none',
                   resize: 'vertical',
-                  color: '#0f172a',
+                  color: 'var(--text-primary)',
                 }}
               />
             </div>
@@ -1434,12 +1434,12 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 onClick={() => setReviewAction(null)}
                 style={{
                   flex: 1,
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--border)',
                   borderRadius: 7,
                   padding: '10px',
                   fontSize: '0.875rem',
-                  color: '#475569',
+                  color: 'var(--text-secondary)',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                   fontWeight: 500,
@@ -1451,11 +1451,11 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                 onClick={handleConfirm}
                 style={{
                   flex: 2,
-                  background: '#0f172a',
+                  background: 'var(--text-primary)',
                   border: 'none',
                   borderRadius: 7,
                   padding: '10px',
-                  color: '#fff',
+                  color: 'var(--card-bg)',
                   fontSize: '0.875rem',
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -1466,7 +1466,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
               </button>
             </div>
 
-            <p style={{ fontSize: '0.6875rem', color: '#94a3b8', marginTop: 10, textAlign: 'center' }}>
+            <p style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: 10, textAlign: 'center' }}>
               This action is permanent and will be recorded in the immutable audit chain.
             </p>
           </div>

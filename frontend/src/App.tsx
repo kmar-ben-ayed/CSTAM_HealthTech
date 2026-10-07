@@ -14,6 +14,7 @@ import AuditTrail from './pages/AuditTrail';
 import Rules from './pages/Rules';
 import Ingest from './pages/Ingest';
 import Analytics from './pages/Analytics';
+import AdminPanel from './pages/AdminPanel';
 import { getIngestedClaims } from './api/claims';
 
 type Page =
@@ -26,6 +27,7 @@ type Page =
   | 'audit'
   | 'ingest'
   | 'rules'
+  | 'admin'
   | 'analytics'
   | 'profile';
 
@@ -126,6 +128,16 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
+        key: 'admin',
+        label: 'System Admin',
+        icon: (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2v12M2 8h12M4.5 4.5l7 7M4.5 11.5l7-7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <circle cx="8" cy="8" r="3" fill="currentColor" stroke="none" />
+          </svg>
+        ),
+      },
+      {
         key: 'analytics',
         label: 'Analytics',
         icon: (
@@ -147,6 +159,7 @@ const BREADCRUMB_LABELS: Partial<Record<Page, string>> = {
   audit: 'Audit Trail',
   ingest: 'Ingest Data',
   rules: 'Policy & Rules',
+  admin: 'System Admin',
   analytics: 'Analytics',
   profile: 'Profile & Preferences',
 };
@@ -283,7 +296,7 @@ function Sidebar({
   return (
     <aside
       style={{
-        width: 224,
+        width: 240,
         background: 'var(--sidebar-bg)',
         borderRight: '1px solid var(--sidebar-border)',
         display: 'flex',
@@ -295,79 +308,39 @@ function Sidebar({
       }}
     >
       {/* Logo */}
-      <div
-        style={{
-          padding: '18px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          cursor: 'pointer',
-        }}
+      <button
+        type="button"
+        className="sidebar-logo"
         onClick={() => onNavigate('dashboard')}
+        aria-label="ClaimGuard AI — go to Overview"
       >
-        <Sentinel state="idle" size={28} />
-        <div>
-          <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#f1f5f9', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-            ClaimGuard
-          </div>
-          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--sidebar-accent)', letterSpacing: '0.02em' }}>
-            AI
-          </div>
-        </div>
-      </div>
+        <span className="sidebar-logo-mark">
+          <Sentinel state="idle" size={26} />
+        </span>
+        <span className="sidebar-logo-text">
+          <span className="sidebar-logo-name">ClaimGuard</span>
+          <span className="sidebar-logo-ai">AI</span>
+        </span>
+      </button>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '12px 10px', overflow: 'auto' }} className="sidebar-scroll">
+      <nav className="sidebar-scroll" style={{ flex: 1, padding: '12px 10px', overflow: 'auto' }}>
         {NAV_SECTIONS.map((section, si) => (
           <div key={si} style={{ marginBottom: 18 }}>
             {section.label && (
-              <div
-                style={{
-                  fontSize: '0.6rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.12em',
-                  color: 'rgba(148,163,184,0.45)',
-                  textTransform: 'uppercase',
-                  padding: '0 6px',
-                  marginBottom: 4,
-                  marginTop: si > 0 ? 2 : 0,
-                }}
-              >
+              <div style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.14em', color: 'rgba(148,163,184,0.78)', textTransform: 'uppercase', padding: '0 10px', marginBottom: 8, marginTop: si > 0 ? 6 : 0 }}>
                 {section.label}
               </div>
             )}
             {section.items.map((item) => {
               const isActive = currentPage === item.key;
               return (
-                <button
-                  key={item.key}
-                  onClick={() => onNavigate(item.key)}
-                  className={`nav-item ${isActive ? 'active' : ''}`}
-                  style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span className="nav-icon" style={{ opacity: isActive ? 1 : 0.6, display: 'flex' }}>
-                      {item.icon}
-                    </span>
+                <button key={item.key} onClick={() => onNavigate(item.key)} className={`nav-item ${isActive ? 'active' : ''}`} style={{ width: '100%', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, fontSize: '0.875rem', fontWeight: 500, transition: 'all 0.15s ease' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span className="nav-icon" style={{ opacity: isActive ? 1 : 0.5, display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
                     {item.label}
                   </div>
-                  {item.key === 'review-queue' && reviewCount > 0 && (
-                    <span
-                      style={{
-                        background: 'rgba(244,63,94,0.15)',
-                        color: '#c25554',
-                        border: '1px solid rgba(244,63,94,0.25)',
-                        borderRadius: 10,
-                        padding: '1px 7px',
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                        fontFamily: "var(--font-sans)",
-                      }}
-                    >
-                      {reviewCount}
-                    </span>
-                  )}
+                  {item.key === 'review-queue' && reviewCount > 0 && <span className="sc-badge" style={{ background: 'var(--status-fail-bg)', color: 'var(--status-fail-ink)', borderColor: 'var(--status-fail-border)' }}>{reviewCount}</span>}
                 </button>
               );
             })}
@@ -408,7 +381,7 @@ function Sidebar({
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    color: '#94a3b8',
+                    color: 'var(--text-tertiary)',
                     fontSize: '0.8125rem',
                     fontFamily: 'inherit',
                     padding: '0 0 8px',
@@ -451,8 +424,8 @@ function Sidebar({
             ) : (
               <>
                 <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--sidebar-text-active)' }}>Aya Gaha</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--sidebar-text)', marginTop: 2 }}>aya.gaha@healthcorp.org</div>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--sidebar-text-active)' }}>Marwen Agrebi</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--sidebar-text)', marginTop: 2 }}>marwen.agrebi@healthcorp.org</div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--sidebar-text)', marginTop: 1 }}>Senior Reviewer · HealthCorp</div>
                 </div>
                 {[
@@ -541,15 +514,15 @@ function Sidebar({
               justifyContent: 'center',
               fontSize: '0.75rem',
               fontWeight: 700,
-              color: '#fff',
+              color: 'var(--card-bg)',
               flexShrink: 0,
             }}
           >
-            AG
+            MA
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--sidebar-text-active)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Aya Gaha
+              Marwen Agrebi
             </div>
             <div style={{ fontSize: '0.6875rem', color: 'var(--sidebar-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               Senior Reviewer
@@ -612,10 +585,9 @@ function TopBar({
 
   return (
     <header
+      className="app-topbar"
       style={{
-        background: 'var(--topbar-bg)',
-        borderBottom: '1px solid var(--topbar-border)',
-        height: 52,
+        height: 56,
         display: 'flex',
         alignItems: 'center',
         padding: '0 20px',
@@ -635,7 +607,7 @@ function TopBar({
                   {crumb.label}
                 </button>
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M4 2l4 4-4 4" stroke="#d1d5db" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </>
             ) : (
@@ -648,33 +620,18 @@ function TopBar({
       {/* Search bar */}
       <button
         onClick={onSearchOpen}
+        className="topbar-search"
         style={{
-          width: 260,
-          background: 'var(--canvas-bg)',
-          border: '1px solid var(--card-border)',
-          borderRadius: 7,
-          padding: '6px 12px 6px 10px',
-          fontSize: '0.8125rem',
-          color: 'var(--text-tertiary)',
-          fontFamily: 'inherit',
-          cursor: 'text',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          transition: 'border-color 0.15s ease',
+          width: 280,
           flexShrink: 0,
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent)')}
-        onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--card-border)')}
       >
         <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
           <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.2" />
           <path d="M9 9l2.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
-        <span style={{ flex: 1, textAlign: 'left' }}>Quick search...</span>
-        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.625rem', color: 'var(--text-tertiary)', fontWeight: 600, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 4, padding: '1px 5px' }}>
-          ⌘K
-        </span>
+        <span style={{ flex: 1, textAlign: 'left' }}>Search claims, rules, runs…</span>
+        <kbd>⌘K</kbd>
       </button>
 
       {/* Right actions */}
@@ -705,7 +662,7 @@ function TopBar({
               <path d="M7 14a2 2 0 004 0" stroke="currentColor" strokeWidth="1.3" />
             </svg>
             {unreadCount > 0 && (
-              <div style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: '50%', background: '#b4403f', border: '1.5px solid var(--topbar-bg)' }} />
+              <div style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: '50%', background: 'var(--status-fail)', border: '1.5px solid var(--topbar-bg)' }} />
             )}
           </button>
 
@@ -924,10 +881,10 @@ function TopBar({
 
         {/* Profile chip */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 7, cursor: 'pointer' }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6875rem', fontWeight: 700, color: '#fff' }}>
-            AG
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6875rem', fontWeight: 700, color: 'var(--card-bg)' }}>
+            MA
           </div>
-          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Aya Gaha</span>
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Marwen Agrebi</span>
         </div>
       </div>
     </header>
@@ -952,19 +909,19 @@ function ProfilePage({ theme, onSetTheme }: { theme: ThemeMode; onSetTheme: (m: 
         </div>
         <div style={{ padding: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 24 }}>
-            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
-              AG
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', fontWeight: 700, color: 'var(--card-bg)' }}>
+              MA
             </div>
             <div>
-              <div style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--text-primary)' }}>Aya Gaha</div>
-              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 2 }}>aya.gaha@healthcorp.org</div>
+              <div style={{ fontSize: '1.0625rem', fontWeight: 700, color: 'var(--text-primary)' }}>Marwen Agrebi</div>
+              <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: 2 }}>marwen.agrebi@healthcorp.org</div>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             {[
-              { label: 'Full name', value: 'Aya Gaha' },
+              { label: 'Full name', value: 'Marwen Agrebi' },
               { label: 'Role', value: 'Senior Reviewer' },
-              { label: 'Email', value: 'aya.gaha@healthcorp.org' },
+              { label: 'Email', value: 'marwen.agrebi@healthcorp.org' },
               { label: 'Organization', value: 'HealthCorp' },
               { label: 'Department', value: 'Claims Review' },
               { label: 'Member since', value: 'January 2025' },
@@ -1036,6 +993,7 @@ const PAGE_PATHS: Partial<Record<Page, string>> = {
   audit: '/app/audit',
   ingest: '/app/ingest',
   rules: '/app/rules',
+  admin: '/app/admin',
   analytics: '/app/analytics',
   profile: '/app/profile',
 };
@@ -1120,7 +1078,14 @@ function WorkspaceLayout({
               onSearchOpen={() => setSearchOpen(true)}
             />
           )}
-          <main style={{ flex: 1, overflow: 'auto', background: 'var(--canvas-bg)' }}>
+          <main
+            style={{
+              flex: 1,
+              overflow: 'auto',
+              background:
+                'radial-gradient(1100px 520px at 12% -8%, rgba(56,189,248,0.10), transparent 60%), radial-gradient(900px 460px at 96% 0%, rgba(79,172,254,0.10), transparent 58%), var(--canvas-bg)',
+            }}
+          >
             <Outlet />
           </main>
         </div>
@@ -1192,6 +1157,7 @@ function AppRoutes() {
         <Route path="audit" element={<AuditTrail />} />
         <Route path="ingest" element={<Ingest onNavigate={navigatePage} />} />
         <Route path="rules" element={<Rules onNavigate={navigatePage} />} />
+        <Route path="admin" element={<AdminPanel />} />
         <Route path="analytics" element={<Analytics onNavigate={navigatePage} />} />
         <Route path="profile" element={<ProfilePage theme={theme} onSetTheme={setTheme} />} />
         <Route path="*" element={<NotFound onHome={() => navigate('/app/dashboard')} />} />
