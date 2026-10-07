@@ -1,21 +1,34 @@
-import { useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import Sentinel from './components/Sentinel';
 import SearchModal from './components/SearchModal';
 import { useTheme, type ThemeMode } from './hooks/useTheme';
-import Login from './pages/Login';
-import Landing from './pages/Landing';
-import Dashboard from './pages/Dashboard';
-import Claims from './pages/Claims';
-import ReviewQueue from './pages/ReviewQueue';
-import ClaimReview from './pages/ClaimReview';
-import Runs from './pages/Runs';
-import AuditTrail from './pages/AuditTrail';
-import Rules from './pages/Rules';
-import Ingest from './pages/Ingest';
-import Analytics from './pages/Analytics';
-import AdminPanel from './pages/AdminPanel';
 import { getIngestedClaims } from './api/claims';
+
+const Login = lazy(() => import('./pages/Login'));
+const Landing = lazy(() => import('./pages/Landing'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Claims = lazy(() => import('./pages/Claims'));
+const ReviewQueue = lazy(() => import('./pages/ReviewQueue'));
+const ClaimReview = lazy(() => import('./pages/ClaimReview'));
+const Runs = lazy(() => import('./pages/Runs'));
+const AuditTrail = lazy(() => import('./pages/AuditTrail'));
+const Rules = lazy(() => import('./pages/Rules'));
+const Ingest = lazy(() => import('./pages/Ingest'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+
+function PageLoading() {
+  return (
+    <div role="status" aria-live="polite" style={{ padding: 24, color: 'var(--text-secondary)' }}>
+      Loading…
+    </div>
+  );
+}
+
+function LazyPage({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageLoading />}>{children}</Suspense>;
+}
 
 type Page =
   | 'landing'
@@ -1129,12 +1142,14 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/" element={<Landing onEnterApp={() => navigate('/login')} />} />
+      <Route path="/" element={<LazyPage><Landing onEnterApp={() => navigate('/login')} /></LazyPage>} />
       <Route
         path="/login"
-        element={isAuthenticated
-          ? <Navigate to={requestedPath || '/app/dashboard'} replace />
-          : <Login onLogin={handleLogin} />}
+        element={
+          isAuthenticated
+            ? <Navigate to={requestedPath || '/app/dashboard'} replace />
+            : <LazyPage><Login onLogin={handleLogin} /></LazyPage>
+        }
       />
       <Route
         path="/app"
@@ -1149,16 +1164,16 @@ function AppRoutes() {
           : <Navigate to="/login" state={{ from: location }} replace />}
       >
         <Route index element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard onNavigate={navigatePage} />} />
-        <Route path="claims" element={<Claims onNavigate={navigatePage} />} />
-        <Route path="claims/:claimId" element={<ClaimReviewRoute onNavigate={navigatePage} />} />
-        <Route path="review-queue" element={<ReviewQueue onNavigate={navigatePage} />} />
-        <Route path="runs" element={<Runs />} />
-        <Route path="audit" element={<AuditTrail />} />
-        <Route path="ingest" element={<Ingest onNavigate={navigatePage} />} />
-        <Route path="rules" element={<Rules onNavigate={navigatePage} />} />
-        <Route path="admin" element={<AdminPanel />} />
-        <Route path="analytics" element={<Analytics onNavigate={navigatePage} />} />
+        <Route path="dashboard" element={<LazyPage><Dashboard onNavigate={navigatePage} /></LazyPage>} />
+        <Route path="claims" element={<LazyPage><Claims onNavigate={navigatePage} /></LazyPage>} />
+        <Route path="claims/:claimId" element={<LazyPage><ClaimReviewRoute onNavigate={navigatePage} /></LazyPage>} />
+        <Route path="review-queue" element={<LazyPage><ReviewQueue onNavigate={navigatePage} /></LazyPage>} />
+        <Route path="runs" element={<LazyPage><Runs /></LazyPage>} />
+        <Route path="audit" element={<LazyPage><AuditTrail /></LazyPage>} />
+        <Route path="ingest" element={<LazyPage><Ingest onNavigate={navigatePage} /></LazyPage>} />
+        <Route path="rules" element={<LazyPage><Rules onNavigate={navigatePage} /></LazyPage>} />
+        <Route path="admin" element={<LazyPage><AdminPanel /></LazyPage>} />
+        <Route path="analytics" element={<LazyPage><Analytics onNavigate={navigatePage} /></LazyPage>} />
         <Route path="profile" element={<ProfilePage theme={theme} onSetTheme={setTheme} />} />
         <Route path="*" element={<NotFound onHome={() => navigate('/app/dashboard')} />} />
       </Route>
