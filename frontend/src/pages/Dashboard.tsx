@@ -15,7 +15,7 @@ const QUEUE_ITEMS = [
     service: 'Sep 15, 2026',
     findings: 4,
     status: 'review',
-    statusLabel: 'Needs Review',
+    statusLabel: 'Needs review',
     updated: '12 min ago',
     sentinel: 'review' as SentinelState,
   },
@@ -25,7 +25,7 @@ const QUEUE_ITEMS = [
     service: 'Sep 13, 2026',
     findings: 1,
     status: 'uncertain',
-    statusLabel: 'Unable to Assess',
+    statusLabel: 'Unable to assess',
     updated: '1h ago',
     sentinel: 'uncertain' as SentinelState,
   },
@@ -35,7 +35,7 @@ const QUEUE_ITEMS = [
     service: 'Sep 12, 2026',
     findings: 3,
     status: 'review',
-    statusLabel: 'Needs Review',
+    statusLabel: 'Needs review',
     updated: '2h ago',
     sentinel: 'review' as SentinelState,
   },
@@ -54,7 +54,7 @@ const QUEUE_ITEMS = [
     service: 'Sep 10, 2026',
     findings: 2,
     status: 'review',
-    statusLabel: 'Needs Review',
+    statusLabel: 'Needs review',
     sentinel: 'review' as SentinelState,
   },
 ];
@@ -68,12 +68,18 @@ const ACTIVITY = [
   { time: '09:44:12', event: 'RUN_STARTED', actor: 'System', detail: 'Run RUN-4820 · Pacific Medical dataset', type: 'system' },
 ];
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
-  review: { bg: 'var(--status-review-bg)', text: 'var(--status-review)', border: 'var(--status-review-border)', dot: 'var(--status-review)' },
-  fail: { bg: 'var(--status-fail-bg)', text: 'var(--status-fail)', border: 'var(--status-fail-border)', dot: 'var(--status-fail)' },
-  pass: { bg: 'var(--status-pass-bg)', text: 'var(--status-pass)', border: 'var(--status-pass-border)', dot: 'var(--status-pass)' },
-  uncertain: { bg: 'var(--status-uta-bg)', text: 'var(--status-uta)', border: 'var(--status-uta-border)', dot: 'var(--status-uta)' },
+const STATUS_PILL: Record<string, string> = {
+  review: 'is-review',
+  fail: 'is-fail',
+  pass: 'is-pass',
+  uncertain: 'is-uta',
 };
+
+function initials(name: string): string {
+  const words = name.replace(/[^A-Za-z ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '··';
+  return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
+}
 
 const ACTIVITY_COLORS: Record<string, string> = {
   human: 'var(--status-review)',
@@ -109,7 +115,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   }, {});
   const queueItems = reviewClaims.slice(0, 5);
   const statusLabels: Record<ClaimRow['status'], string> = {
-    review: 'Needs Review', fail: 'Failed', uncertain: 'Unable to Assess', pass: 'Passed',
+    review: 'Needs review', fail: 'Failed', uncertain: 'Unable to assess', pass: 'Passed',
   };
   const activityColor = (event: BackendAuditEvent) => event.event_type === 'human_decision'
     ? ACTIVITY_COLORS.human
@@ -137,7 +143,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           <path d="M5 7h8M5 10h5" stroke="var(--accent-ink)" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: 'var(--accent-ink)',
+      accent: 'var(--accent)',
     },
     {
       label: 'Needs review',
@@ -151,7 +157,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           <path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="var(--status-uta-ink)" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
       ),
-      accent: 'var(--status-uta)',
+      accent: 'var(--status-review)',
     },
     {
       label: 'Unable to assess',
@@ -183,48 +189,49 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     },
   ];
 
+  const today = new Date();
+  const hour = today.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const dateline = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const outcomeShare = (count: number) => (claims.length ? (count / claims.length) * 100 : 0);
+  const outcomes = [
+    { key: 'pass', label: 'Pass', count: statusCounts.pass || 0, color: 'var(--status-pass)' },
+    { key: 'fail', label: 'Fail', count: statusCounts.fail || 0, color: 'var(--status-fail)' },
+    { key: 'uncertain', label: 'Unable', count: statusCounts.uncertain || 0, color: 'var(--status-uta)' },
+    { key: 'review', label: 'Review', count: statusCounts.review || 0, color: 'var(--status-review)' },
+  ];
+
   return (
     <div className="dashboard-shell">
       {/* Header */}
       <div className="dashboard-header">
         <div>
-          <span className="sc-eyebrow"> Operations overview</span>
-          <h1 className="sc-title-caps" style={{ fontSize: 'clamp(1.6rem, 2.4vw, 2.1rem)', margin: '12px 0 4px', lineHeight: 1.05 }}>
-            Claims operations
-          </h1>
+          <p className="page-dateline">{dateline}</p>
+          <h1 style={{ margin: '0 0 6px' }}>{greeting}, Marwen</h1>
           <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-            23 claims await review. Three are marked urgent.
+            {loading
+              ? 'Loading claims…'
+              : `${reviewClaims.length} ${reviewClaims.length === 1 ? 'claim needs' : 'claims need'} a decision.`}
           </p>
         </div>
-        <div className="dashboard-header-actions">
-          <div className="sc-badge">
-            <span className="sc-dot" />
-            Fri, Sep 25, 2026
-          </div>
-          <button
-            onClick={() => onNavigate('review-queue')}
-            className="btn btn-primary"
-          >
-            Open review queue
+        <div className="dashboard-header-actions" style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => onNavigate('ingest')} className="btn btn-secondary">
+            Ingest data
+          </button>
+          <button onClick={() => onNavigate('review-queue')} className="btn btn-primary">
+            Open review queue →
           </button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="dashboard-metrics">
+      {/* KPI tiles */}
+      <div className="kpi-tiles">
         {kpis.map((kpi) => (
-          <div
-            key={kpi.label}
-            className="dashboard-metric"
-          >
-            <div className="dashboard-metric-value">
-              {kpi.value}
-            </div>
-            <div className="dashboard-metric-label">{kpi.label}</div>
-            <div className="dashboard-metric-note">{kpi.sub}</div>
-            <div className={`dashboard-metric-change ${kpi.changePos === true ? 'positive' : kpi.changePos === false ? 'negative' : ''}`}>
-              {kpi.change}
-            </div>
+          <div key={kpi.label} className="kpi-tile">
+            <div className="kpi-tile-label">{kpi.label}</div>
+            <span className="kpi-tile-dot" style={{ background: kpi.accent }} aria-hidden="true" />
+            <div className="kpi-tile-value">{loading ? '—' : kpi.value}</div>
+            <div className="kpi-tile-caption">{kpi.sub}</div>
           </div>
         ))}
       </div>
@@ -235,30 +242,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           <div className="dashboard-panel dashboard-queue-panel">
           <div className="dashboard-panel-header">
             <div>
-              <h2 style={{ fontSize: '1rem', fontWeight: 650, color: 'var(--text-primary)' }}>Priority review</h2>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 3 }}>Sorted by findings and time waiting</p>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)' }}>Priority review</h2>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 3 }}>Highest-risk claims first</p>
             </div>
-            <button
-              onClick={() => onNavigate('claims')}
-              style={{
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-                padding: '5px 12px',
-                fontSize: '0.8125rem',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              View all
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+            <button onClick={() => onNavigate('claims')} className="text-action" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>
+              View all claims →
             </button>
           </div>
 
@@ -277,7 +265,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             </thead>
             <tbody>
               {queueItems.map(item => {
-                const sc = STATUS_COLORS[item.status] || STATUS_COLORS['review'];
                 return (
                   <tr
                     key={item.id}
@@ -288,10 +275,8 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   >
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Sentinel state={item.sentinel} size={22} />
-                        <span style={{ fontFamily: "var(--font-mono)", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {item.id}
-                        </span>
+                        <Sentinel state={item.sentinel} size={24} />
+                        <span className="mono-id" style={{ color: 'var(--text-primary)' }}>{item.id}</span>
                       </div>
                     </td>
                     <td>
@@ -303,41 +288,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       </span>
                     </td>
                     <td>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minWidth: 28,
-                        height: 22,
-                        background: item.findings > 0 ? 'var(--status-fail-bg)' : 'var(--status-pass-bg)',
-                        color: item.findings > 0 ? 'var(--status-fail)' : 'var(--status-pass)',
-                        borderRadius: 4,
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        fontFamily: "var(--font-sans)",
-                        border: item.findings > 0 ? '1px solid var(--status-fail-border)' : '1px solid var(--status-pass-border)',
-                      }}>
-                        {item.findings}
+                      <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                        <strong style={{ color: item.findings > 0 ? 'var(--status-fail-ink)' : 'var(--status-pass-ink)' }}>{item.findings}</strong>
+                        {item.findings === 1 ? ' finding' : ' findings'}
                       </span>
                     </td>
                     <td>
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        background: sc.bg,
-                        color: sc.text,
-                        border: `1px solid ${sc.border}`,
-                        borderRadius: 20,
-                        padding: '3px 10px',
-                        fontSize: '0.6875rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.02em',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: sc.dot, display: 'inline-block', flexShrink: 0 }} />
-                        {statusLabels[item.status]}
-                      </span>
+                      <span className={`status-pill ${STATUS_PILL[item.status]}`}>{statusLabels[item.status]}</span>
                     </td>
                     <td>
                       <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{item.updated}</span>
@@ -345,17 +302,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     <td>
                       <button
                         onClick={e => { e.stopPropagation(); onNavigate('claim-review', item.id); }}
-                        style={{
-                          background: 'var(--canvas-bg)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 4,
-                          padding: '4px 10px',
-                          fontSize: '0.75rem',
-                          color: 'var(--text-primary)',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          fontWeight: 600,
-                        }}
+                        className="btn btn-secondary btn-sm"
                       >
                         Review
                       </button>
@@ -371,64 +318,55 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <div className="dashboard-side">
           <section className="dashboard-panel context-panel">
             <div className="dashboard-panel-header">
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 650, color: 'var(--text-primary)' }}>Latest evaluation</h3>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)' }}>Latest evaluation</h3>
               <button onClick={() => onNavigate('runs')} className="text-action">Run details</button>
             </div>
-            <dl className="run-context">
+            <dl className="evaluation-facts">
               <div><dt>Source</dt><dd>Accumulated store</dd></div>
               <div><dt>Claims evaluated</dt><dd>{claims.length}</dd></div>
               <div><dt>Ruleset</dt><dd>Configured backend rules</dd></div>
               <div><dt>Last event</dt><dd>{activity[0] ? new Date(activity[0].timestamp).toLocaleTimeString() : '—'}</dd></div>
             </dl>
+            <div className="outcome-distribution">
+              <div className="outcome-distribution-label">Outcome distribution · {claims.length} claims</div>
+              <div className="outcome-bar" role="img" aria-label={outcomes.map((o) => `${o.label} ${o.count}`).join(', ')}>
+                {outcomes.filter((o) => o.count > 0).map((o) => (
+                  <span key={o.key} style={{ width: `${outcomeShare(o.count)}%`, background: o.color }} />
+                ))}
+              </div>
+              <div className="outcome-legend">
+                {outcomes.map((o) => (
+                  <span key={o.key}><i style={{ background: o.color }} />{o.label} {Math.round(outcomeShare(o.count))}%</span>
+                ))}
+              </div>
+            </div>
             <p className="context-note">Rule outcomes are deterministic. AI explanations are linked to the recorded evidence.</p>
           </section>
 
           <section className="dashboard-panel activity-panel">
             <div className="dashboard-panel-header">
               <div>
-                <h3 style={{ fontSize: '0.9375rem', fontWeight: 650, color: 'var(--text-primary)' }}>Recent activity</h3>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)' }}>Recent activity</h3>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 3 }}>Last 60 minutes</p>
               </div>
-              <button onClick={() => onNavigate('audit')} className="text-action">Audit trail</button>
+              <button onClick={() => onNavigate('audit')} className="text-action" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>Audit trail →</button>
             </div>
-            <div className="activity-list">
+            <div className="activity-feed">
+              {activity.length === 0 && !loading && (
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', padding: '4px 0' }}>No activity recorded yet.</p>
+              )}
               {activity.map((a, i) => (
-                <div key={i} style={{ display: 'flex', gap: 10, position: 'relative' }}>
-                  {/* Timeline line */}
-                  {i < activity.length - 1 && (
-                    <div style={{
-                      position: 'absolute',
-                      left: 5,
-                      top: 18,
-                      bottom: -4,
-                      width: 1,
-                      background: 'var(--border)',
-                    }} />
-                  )}
-                  <div style={{
-                    width: 11,
-                    height: 11,
-                    borderRadius: '50%',
-                    background: activityColor(a),
-                    marginTop: 4,
-                    flexShrink: 0,
-                    zIndex: 1,
-                  }} />
-                  <div style={{ paddingBottom: 16, flex: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <span style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.6875rem',
-                        fontWeight: 600,
-                        color: activityColor(a),
-                        letterSpacing: '0.02em',
-                      }}>
-                        {activityLabel(a)}
-                      </span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.625rem', color: 'var(--text-tertiary)' }}>{new Date(a.timestamp).toLocaleTimeString()}</span>
+                <div key={i} className="activity-entry">
+                  <span className="activity-avatar" style={{ color: activityColor(a) }} aria-hidden="true">{initials(a.actor)}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.45 }}>
+                      <strong style={{ fontWeight: 650 }}>{a.actor}</strong>{' '}
+                      <span style={{ color: 'var(--text-secondary)' }}>{activityLabel(a).toLowerCase().replace(/_/g, ' ')}</span>{' '}
+                      <span className="mono-id" style={{ color: 'var(--accent-ink)', fontWeight: 600 }}>{activityDetail(a)}</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>{activityDetail(a)}</div>
-                    <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: 1 }}>{a.actor}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                      {new Date(a.timestamp).toLocaleTimeString()}
+                    </div>
                   </div>
                 </div>
               ))}

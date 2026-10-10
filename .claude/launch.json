@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "demo-backend",
+      "runtimeExecutable": "C:\\Users\\USER\\Desktop\\CS\\ClaimGuardAI_Student_Starter_Pack\\CSTAM_HealthTech\\backend\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["C:\\Users\\USER\\AppData\\Local\\Temp\\claude\\C--Users-USER-Desktop-CS-ClaimGuardAI-Student-Starter-Pack-CSTAM-HealthTech\\50eab4b4-1fc6-4b82-a6de-fd2e7dfa7256\\scratchpad\\demo_backend.py"],
+      "port": 8000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
+      "port": 5173
+    }
+  ]
+}

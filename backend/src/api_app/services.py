@@ -483,7 +483,12 @@ class ExplanationService:
         rule = self.rules.get(rule_id)
         if rule is None:
             raise ApiProblem(404, "rule_not_found", "Unknown rule ID")
-        finding = next(result for result in baseline(claim, self.claims_service.rules_config) if result["rule_id"] == rule_id)
+        finding = next(
+            (result for result in baseline(claim, self.claims_service.rules_config) if result["rule_id"] == rule_id),
+            None,
+        )
+        if finding is None:
+            raise ApiProblem(404, "rule_not_active", "This rule is not active, so it has no finding to explain")
 
         fallback_used = False
         if provider_name == "mock":
@@ -551,6 +556,15 @@ class AuditService:
             "rule_execution": ("evaluation_id", "rule_id", "rule_version", "status", "severity", "requires_human_review", "confidence", "confidence_kind", "method"),
             "ai_decision": ("rule_id", "provider", "fallback_used", "finding_hash", "explanation", "assessment"),
             "human_decision": ("rule_id", "action", "original_status", "decision_timestamp"),
+            # Rule authoring (claim_id is "rule:<RULE_ID>" for these events)
+            "rule_draft_submitted": ("draft_id", "kind", "logic_sha256"),
+            "rule_draft_question": ("draft_id", "question_id", "question_kind"),
+            "rule_draft_answered": ("draft_id", "question_id", "question_kind", "answer_sha256"),
+            "rule_draft_checked": ("draft_id", "passed", "spec_sha256", "report_sha256", "disagreements"),
+            "rule_draft_rejected": ("draft_id", "reason"),
+            "rule_draft_cancelled": ("draft_id",),
+            "rule_activated": ("draft_id", "spec_sha256", "logic_sha256", "version", "drafter_model", "oracle_model"),
+            "rule_deactivated": (),
         }
         recent = []
         for entry in reversed(entries[-limit:]):

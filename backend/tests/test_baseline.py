@@ -1,9 +1,7 @@
 import unittest,sys,json,copy,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'src'));import paths
-from src.rule_engine.engine_core import config,base_check,load_jsonl,baseline,validate_transport
-from src.rule_engine.evaluator import evaluate
-from src.rule_engine.generator import generate_missing_specs
+from src.rule_engine.engine_core import config,load_jsonl,baseline,validate_transport
 from src.evaluate import score
 from src.audit.audit import append,verify
 from src.AI_agent.llm_adapter import MockExplanationProvider,validate_explanation
@@ -14,7 +12,7 @@ class StarterTests(unittest.TestCase):
         cls.cfg=config(ROOT)
         cls.example=load_jsonl(ROOT/'data'/'development'/'claims.jsonl')[0]
     def setUp(self):self.c=copy.deepcopy(self.example)
-    def result(self,rid):return base_check(self.c,next(r for r in self.cfg['rules'] if r['rule_id']==rid),self.cfg)
+    def result(self,rid):return next(r for r in baseline(self.c,self.cfg) if r['rule_id']==rid)
     def test_required_null(self):
         self.c['invoice_number']=None;self.assertEqual(self.result('R001')['status'],'FAIL')
     def test_coverage_boundary(self):
@@ -68,53 +66,11 @@ class StarterTests(unittest.TestCase):
         self.assertEqual(self.result('R014')['status'],'FAIL')
         self.c['currency']='USD'
         self.assertEqual(self.result('R015')['status'],'FAIL')
-    def test_deleted_rule_is_not_evaluated(self):
+    def test_rules_without_an_active_spec_are_not_evaluated(self):
         rule_ids = [result["rule_id"] for result in baseline(self.c, self.cfg)]
         self.assertNotIn("R016", rule_ids)
-
-    def test_expression_evaluator_supports_common_rule_types(self):
-        self.assertTrue(evaluate(
-            {"op": "greater_than", "left": "/total_amount", "right": 100},
-            {**self.c, "total_amount": 101},
-            self.cfg,
-        ))
-        self.assertTrue(evaluate(
-            {"op": "all", "collection": "/lines", "item": {
-                "op": "is_present", "value": "$item/service_code"
-            }},
-            self.c,
-            self.cfg,
-        ))
-        duplicate_claim = copy.deepcopy(self.c)
-        duplicate_claim["lines"].append(copy.deepcopy(duplicate_claim["lines"][0]))
-        self.assertTrue(evaluate(
-            {"op": "duplicate_by", "collection": "/lines", "fields": ["service_code", "service_date"]},
-            duplicate_claim,
-            self.cfg,
-        ))
-
-    def test_admin_rule_text_infers_provider_expression_without_catalog_write(self):
-        rule = {
-            "rule_id": "R017",
-            "title": "Provider restriction",
-            "severity": "high",
-            "logic": "If provider is EDU-PROV-02 pass, missing and other prov is fail",
-            "corrective_action": "Use EDU-PROV-02.",
-            "version": "1.0.0",
-            "source": "fictional-rulebook/R017@1.0.0",
-        }
-        spec = generate_missing_specs(self.cfg["rules"] + [rule])["R017"]
-        self.assertEqual(spec["expression"], {
-            "op": "equals",
-            "left": "/provider_id",
-            "right": "EDU-PROV-02",
-        })
-        self.assertEqual(spec["on_true"], "PASS")
-        self.assertEqual(spec["on_false"], "FAIL")
-
-    def test_deleted_rule_spec_is_pruned_from_generated_specs(self):
-        specs = generate_missing_specs(self.cfg["rules"])
-        self.assertNotIn("R017", specs)
+        self.assertNotIn("R017", rule_ids)
+        self.assertEqual(self.cfg["inactive"]["R017"], "no active implementation")
     def test_scorer_rejects_missing_pair(self):
         claims = load_jsonl(ROOT/'data'/'development'/'claims.jsonl')[:10]
         gold = load_jsonl(ROOT/'data'/'development'/'expected_results.jsonl')[:10]

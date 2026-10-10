@@ -1,0 +1,194 @@
+[
+  {
+    "id": "INV-01",
+    "rule": {"title": "Known diagnosis", "severity": "high", "corrective_action": "Correct the diagnosis code.",
+             "logic": "The diagnosis code must be one of the known diagnosis codes. A missing diagnosis code cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "in", "value": {"path": "/diagnosis_code"}, "collection": {"config": "diagnoses"}}}],
+      "messages": {"PASS": "Known diagnosis.", "FAIL": "Unknown diagnosis.", "UNABLE_TO_ASSESS": "Diagnosis missing."}}
+  },
+  {
+    "id": "INV-02",
+    "rule": {"title": "Line quantity cap", "severity": "medium", "corrective_action": "Split or correct the line.",
+             "logic": "Every line's quantity must be at most 5. A line with a missing quantity cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"for_each": {"path": "/lines"}, "as": "line", "steps": [
+        {"require": {"op": "at_most", "left": {"path": "$line/quantity"}, "right": {"value": 5}}}]}],
+      "messages": {"PASS": "Quantities within 5.", "FAIL": "A quantity exceeds 5.", "UNABLE_TO_ASSESS": "A quantity is missing."}}
+  },
+  {
+    "id": "INV-03",
+    "rule": {"title": "Pharmacy quantity range", "severity": "low", "corrective_action": "Correct the pharmacy quantity.",
+             "logic": "Pharmacy lines (service code SVC-PHARM) must have a quantity between 1 and 10 inclusive. Other lines are not concerned. A pharmacy line with a missing quantity cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"for_each": {"path": "/lines"}, "as": "line", "steps": [
+        {"only_if": {"op": "equals", "left": {"path": "$line/service_code"}, "right": {"value": "SVC-PHARM"}}},
+        {"require": {"op": "all_of", "items": [
+          {"op": "at_least", "left": {"path": "$line/quantity"}, "right": {"value": 1}},
+          {"op": "at_most", "left": {"path": "$line/quantity"}, "right": {"value": 10}}]}}]}],
+      "messages": {"PASS": "Pharmacy quantities in range.", "FAIL": "A pharmacy quantity is out of range.",
+                   "UNABLE_TO_ASSESS": "A pharmacy line is missing data.", "NOT_APPLICABLE": "No pharmacy lines."}}
+  },
+  {
+    "id": "INV-04",
+    "rule": {"title": "Submitted in 2026", "severity": "low", "corrective_action": "Check the submission date.",
+             "logic": "The submission date must fall in the year 2026 (from 2026-01-01 to 2026-12-31 inclusive)."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "within_dates", "value": {"path": "/submission_date"}, "from": {"value": "2026-01-01"}, "to": {"value": "2026-12-31"}}}],
+      "messages": {"PASS": "Submitted in 2026.", "FAIL": "Not submitted in 2026.", "UNABLE_TO_ASSESS": "Submission date invalid."}}
+  },
+  {
+    "id": "INV-05",
+    "rule": {"title": "At most five lines", "severity": "low", "corrective_action": "Split the claim.",
+             "logic": "A claim may contain at most 5 lines."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "at_most", "left": {"count": {"path": "/lines"}}, "right": {"value": 5}}}],
+      "messages": {"PASS": "Five lines or fewer.", "FAIL": "More than five lines.", "UNABLE_TO_ASSESS": "Lines unavailable."}}
+  },
+  {
+    "id": "INV-06",
+    "rule": {"title": "Invoice number required", "severity": "high", "corrective_action": "Add the invoice number.",
+             "logic": "The invoice number must be present; a missing or blank invoice number is a failure."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "is_present", "value": {"path": "/invoice_number"}}}],
+      "messages": {"PASS": "Invoice number present.", "FAIL": "Invoice number missing.", "UNABLE_TO_ASSESS": "Cannot check."}}
+  },
+  {
+    "id": "INV-07",
+    "rule": {"title": "Member id prefix", "severity": "low", "corrective_action": "Correct the member id.",
+             "logic": "The member id must start with the letters MEM- followed by ten characters."},
+    "reference_spec": null,
+    "expect_unsupported": true
+  },
+  {
+    "id": "INV-08",
+    "rule": {"title": "Coverage period complete", "severity": "medium", "corrective_action": "Complete the coverage dates.",
+             "logic": "Coverage must have both a start date and an end date. If either one is missing, the rule fails."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "all_of", "items": [
+        {"op": "is_present", "value": {"path": "/coverage/start_date"}},
+        {"op": "is_present", "value": {"path": "/coverage/end_date"}}]}}],
+      "messages": {"PASS": "Coverage dates complete.", "FAIL": "A coverage date is missing.", "UNABLE_TO_ASSESS": "Cannot check."}}
+  },
+  {
+    "id": "INV-09",
+    "rule": {"title": "Line amount ceiling", "severity": "medium", "corrective_action": "Review high-value lines.",
+             "logic": "Each line's net amount must not exceed 5000. A missing net amount cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"for_each": {"path": "/lines"}, "as": "line", "steps": [
+        {"require": {"op": "at_most", "left": {"path": "$line/net_amount"}, "right": {"value": 5000}}}]}],
+      "messages": {"PASS": "Line amounts within 5000.", "FAIL": "A line exceeds 5000.", "UNABLE_TO_ASSESS": "A net amount is missing."}}
+  },
+  {
+    "id": "INV-10",
+    "rule": {"title": "Attachments final", "severity": "medium", "corrective_action": "Finalise the documents.",
+             "logic": "If the claim has attachments, every attachment must have document status final. Claims without attachments are not concerned."},
+    "reference_spec": {"language_version": 2,
+      "steps": [
+        {"only_if": {"op": "greater_than", "left": {"count": {"path": "/attachments"}}, "right": {"value": 0}}},
+        {"for_each": {"path": "/attachments"}, "as": "doc", "steps": [
+          {"require": {"op": "equals", "left": {"path": "$doc/document_status"}, "right": {"value": "final"}}}]}],
+      "messages": {"PASS": "All attachments final.", "FAIL": "An attachment is not final.",
+                   "UNABLE_TO_ASSESS": "An attachment status is missing.", "NOT_APPLICABLE": "No attachments."}}
+  },
+  {
+    "id": "INV-11",
+    "rule": {"title": "Authorizations approved", "severity": "high", "corrective_action": "Obtain approval.",
+             "logic": "Every authorization record on the claim must have status approved. Claims without authorization records are not concerned. A record with a missing status cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [
+        {"only_if": {"op": "greater_than", "left": {"count": {"path": "/authorizations"}}, "right": {"value": 0}}},
+        {"for_each": {"path": "/authorizations"}, "as": "auth", "steps": [
+          {"require": {"op": "equals", "left": {"path": "$auth/status"}, "right": {"value": "approved"}}}]}],
+      "messages": {"PASS": "All authorizations approved.", "FAIL": "An authorization is not approved.",
+                   "UNABLE_TO_ASSESS": "An authorization status is missing.", "NOT_APPLICABLE": "No authorizations."}}
+  },
+  {
+    "id": "INV-12",
+    "rule": {"title": "Positive total", "severity": "medium", "corrective_action": "Correct the total.",
+             "logic": "The claim total amount must be greater than zero. A missing total cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "greater_than", "left": {"path": "/total_amount"}, "right": {"value": 0}}}],
+      "messages": {"PASS": "Total is positive.", "FAIL": "Total is zero or negative.", "UNABLE_TO_ASSESS": "Total missing."}}
+  },
+  {
+    "id": "INV-13",
+    "rule": {"title": "Price floor", "severity": "low", "corrective_action": "Check the unit price.",
+             "logic": "Each line's unit price must be at least the catalogue base price of its service. Lines with an unknown service code cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"for_each": {"path": "/lines"}, "as": "line", "steps": [
+        {"need": {"op": "in", "value": {"path": "$line/service_code"}, "collection": {"config": "services"}}},
+        {"require": {"op": "at_least", "left": {"path": "$line/unit_price"},
+                     "right": {"config": "services", "get": [{"path": "$line/service_code"}, "base_price"]}}}]}],
+      "messages": {"PASS": "Prices at or above base.", "FAIL": "A price is below base.", "UNABLE_TO_ASSESS": "Unknown service or missing price."}}
+  },
+  {
+    "id": "INV-14",
+    "rule": {"title": "Preferred providers", "severity": "low", "corrective_action": "Route to a preferred provider.",
+             "logic": "The provider must be EDU-PROV-01 or EDU-PROV-02."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "any_of", "items": [
+        {"op": "equals", "left": {"path": "/provider_id"}, "right": {"value": "EDU-PROV-01"}},
+        {"op": "equals", "left": {"path": "/provider_id"}, "right": {"value": "EDU-PROV-02"}}]}}],
+      "messages": {"PASS": "Preferred provider.", "FAIL": "Not a preferred provider.", "UNABLE_TO_ASSESS": "Provider missing."}}
+  },
+  {
+    "id": "INV-15",
+    "rule": {"title": "Attachment patient", "severity": "high", "corrective_action": "Check the attached documents.",
+             "logic": "Every attachment must belong to the claim's patient (same patient id). Claims without attachments are not concerned."},
+    "reference_spec": {"language_version": 2,
+      "steps": [
+        {"only_if": {"op": "greater_than", "left": {"count": {"path": "/attachments"}}, "right": {"value": 0}}},
+        {"for_each": {"path": "/attachments"}, "as": "doc", "steps": [
+          {"require": {"op": "equals", "left": {"path": "$doc/patient_id"}, "right": {"path": "/patient_id"}}}]}],
+      "messages": {"PASS": "Attachments match the patient.", "FAIL": "An attachment is for another patient.",
+                   "UNABLE_TO_ASSESS": "A patient id is missing.", "NOT_APPLICABLE": "No attachments."}}
+  },
+  {
+    "id": "INV-16",
+    "rule": {"title": "No repeated service code", "severity": "low", "corrective_action": "Merge repeated lines.",
+             "logic": "No two lines of a claim may have the same service code. Lines with a missing service code are ignored, but then the rule cannot be fully assessed unless a repetition is found."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "unique", "collection": {"path": "/lines"}, "as": "line", "by": [{"path": "$line/service_code"}]}}],
+      "messages": {"PASS": "No repeated service codes.", "FAIL": "A service code is repeated.", "UNABLE_TO_ASSESS": "A service code is missing."}}
+  },
+  {
+    "id": "INV-17",
+    "rule": {"title": "Recent services", "severity": "medium", "corrective_action": "Check old services.",
+             "logic": "Each line's service date must be at most 90 days before the submission date. A missing service date cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"for_each": {"path": "/lines"}, "as": "line", "steps": [
+        {"require": {"op": "at_most", "left": {"days_between": [{"path": "$line/service_date"}, {"path": "/submission_date"}]}, "right": {"value": 90}}}]}],
+      "messages": {"PASS": "All services are recent.", "FAIL": "A service is older than 90 days.", "UNABLE_TO_ASSESS": "A service date is missing."}}
+  },
+  {
+    "id": "INV-18",
+    "rule": {"title": "Coverage member match", "severity": "high", "corrective_action": "Correct the member id.",
+             "logic": "The claim's member id must equal the coverage member id. If either is missing the rule cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "equals", "left": {"path": "/member_id"}, "right": {"path": "/coverage/member_id"}}}],
+      "messages": {"PASS": "Member ids match.", "FAIL": "Member ids differ.", "UNABLE_TO_ASSESS": "A member id is missing."}}
+  },
+  {
+    "id": "INV-19",
+    "rule": {"title": "Imaging needs authorization", "severity": "high", "corrective_action": "Add the authorization reference.",
+             "logic": "Every imaging line (service code SVC-IMAGE) must reference an authorization id. Other lines are not concerned."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"for_each": {"path": "/lines"}, "as": "line", "steps": [
+        {"only_if": {"op": "equals", "left": {"path": "$line/service_code"}, "right": {"value": "SVC-IMAGE"}}},
+        {"require": {"op": "is_present", "value": {"path": "$line/authorization_id"}}}]}],
+      "messages": {"PASS": "Imaging lines reference an authorization.", "FAIL": "An imaging line has no authorization.",
+                   "UNABLE_TO_ASSESS": "Cannot check.", "NOT_APPLICABLE": "No imaging lines."}}
+  },
+  {
+    "id": "INV-20",
+    "rule": {"title": "Total not inflated", "severity": "medium", "corrective_action": "Recompute the total.",
+             "logic": "The claim total must not exceed the sum over all lines of quantity times unit price by more than 1. Missing amounts cannot be assessed."},
+    "reference_spec": {"language_version": 2,
+      "steps": [{"require": {"op": "at_most",
+        "left": {"subtract": [{"path": "/total_amount"},
+                              {"sum": {"path": "/lines"}, "as": "line", "of": {"multiply": [{"path": "$line/quantity"}, {"path": "$line/unit_price"}]}}]},
+        "right": {"value": 1}}}],
+      "messages": {"PASS": "Total is consistent.", "FAIL": "Total exceeds the line sum by more than 1.", "UNABLE_TO_ASSESS": "An amount is missing."}}
+  }
+]

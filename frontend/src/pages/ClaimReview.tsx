@@ -488,137 +488,32 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
         flexShrink: 0,
       }} className="claim-review-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button
-            onClick={() => onNavigate('claims')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              padding: '4px 8px',
-              borderRadius: 5,
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Claims
+          <button type="button" onClick={() => onNavigate('claims')} className="claim-review-back">
+            Back to claims
           </button>
-          <div style={{ width: 1, height: 20, background: 'var(--canvas-bg-secondary)' }} />
+          <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>
+            <span className="mono-id" style={{ fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
               {claimId}
             </span>
-            {!confirmed ? (
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                background: 'var(--status-review-bg)',
-                color: 'var(--status-review-ink)',
-                border: '1px solid var(--status-review-border)',
-                borderRadius: 4,
-                padding: '3px 10px',
-                fontSize: '0.6875rem',
-                fontWeight: 700,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--status-review)' }} />
-                Needs Review
-              </span>
-            ) : (
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                background: 'var(--status-pass-bg)',
-                color: 'var(--status-pass-ink)',
-                border: '1px solid var(--status-pass-border)',
-                borderRadius: 4,
-                padding: '3px 10px',
-                fontSize: '0.6875rem',
-                fontWeight: 700,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--status-pass)' }} />
-                Reviewed
-              </span>
-            )}
+            {!confirmed
+              ? <span className="status-pill is-review">Needs review</span>
+              : <span className="status-pill is-pass">Reviewed</span>}
           </div>
         </div>
 
         {/* Action buttons */}
         <div className="claim-review-actions" style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => setReviewAction('request-info')}
-            style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-              padding: '6px 14px',
-              fontSize: '0.8125rem',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontWeight: 500,
-            }}
-          >
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReviewAction('request-info')}>
             Request info
           </button>
-          <button
-            onClick={() => setReviewAction('correct-recheck')}
-            style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-              padding: '6px 14px',
-              fontSize: '0.8125rem',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontWeight: 500,
-            }}
-          >
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReviewAction('correct-recheck')}>
             Correct & Recheck
           </button>
-          <button
-            onClick={() => setReviewAction('dismiss')}
-            style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-              padding: '6px 14px',
-              fontSize: '0.8125rem',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontWeight: 500,
-            }}
-          >
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReviewAction('dismiss')}>
             Dismiss
           </button>
-          <button
-            onClick={() => setReviewAction('confirm')}
-            style={{
-              background: 'var(--accent)',
-              border: 'none',
-              borderRadius: 4,
-              padding: '6px 16px',
-              fontSize: '0.8125rem',
-              color: 'var(--card-bg)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              fontWeight: 600,
-            }}
-          >
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewAction('confirm')}>
             Confirm decision
           </button>
         </div>
@@ -647,9 +542,12 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
             <button type="button" onClick={() => setClaimContextOpen(false)} aria-label="Collapse claim context">‹</button>
           </div>
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 10 }}>
-              Claim information
-            </div>
+            <div className="case-card-label">Provider</div>
+            <h2 className="serif-title" style={{ fontSize: '1.75rem', margin: '4px 0 4px', overflowWrap: 'anywhere' }}>{claimProviderId}</h2>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: '0 0 14px' }}>
+              {claimLines.map((line) => line.service_code).filter(Boolean).join(', ') || 'No service codes'}
+              {' · '}{claimLines.length} line{claimLines.length === 1 ? '' : 's'}
+            </p>
 
             {[
   { label: 'Claim ID', value: claimId, mono: true },
@@ -675,18 +573,13 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
     mono: true,
   },
 ].map(f => (
-              <div key={f.label} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginBottom: 2, fontWeight: 500 }}>{f.label}</div>
-                <div style={{
-                  fontSize: '0.8125rem',
-                  color: 'var(--text-primary)',
-                  fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
-                  fontWeight: f.mono ? 500 : 400,
-                }}>
-                  {f.value}
-                </div>
+              <div key={f.label} className="leader-row">
+                <span className="leader-row-label">{f.label}</span>
+                <span className="leader-row-fill" aria-hidden="true" />
+                <span className="leader-row-value" title={String(f.value)}>{f.value}</span>
               </div>
             ))}
+            <div style={{ height: 14 }} />
 
             {claim && (
               <button type="button" className="claim-review-fhir-trigger" onClick={() => setFhirDrawerOpen(true)}>
@@ -906,9 +799,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                     <path d="M6 1l5 9H1L6 1z" stroke="var(--text-primary)" strokeWidth="1.2" strokeLinejoin="round"/>
                   </svg>
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
-                    Deterministic finding
-                  </span>
+                  <span className="serif-label inspector-section-title">Evidence</span>
                 </div>
                 <span style={{
                   fontFamily: "var(--font-sans)",
@@ -990,9 +881,7 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
                     <circle cx="6" cy="6" r="5" stroke="var(--accent)" strokeWidth="1.2"/>
                     <circle cx="6" cy="6" r="2" fill="var(--accent)"/>
                   </svg>
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
-                    AI-assisted explanation
-                  </span>
+                  <span className="serif-label inspector-section-title">Explanation</span>
                 </div>
 <div
   className="claim-review-section-heading-meta"
@@ -1158,53 +1047,28 @@ export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
 
             {/* Human review panel */}
             {!confirmed ? (
-              <div style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  padding: '10px 14px',
-                  borderBottom: '1px solid var(--border)',
-                  background: 'var(--canvas-bg-secondary)',
-                }}>
-                  <span style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-primary)', textTransform: 'uppercase' }}>
-                    Human review
-                  </span>
-                </div>
-                <div style={{ padding: '14px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              <div>
+                <div className="serif-label inspector-section-title">Review action</div>
+                <div>
+                  <div className="review-options" role="radiogroup" aria-label="Review action">
                     {[
-                      { key: 'confirm', label: 'Confirm issue', desc: 'Issue is valid', color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
-                      { key: 'request-info', label: 'Request information', desc: 'More info needed', color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
-                      { key: 'dismiss', label: 'Dismiss', desc: 'Issue is not valid', color: 'var(--text-tertiary)', bg: 'var(--card-bg)', border: 'var(--border)' },
-                    ].map(action => (
+                      { key: 'confirm', label: 'Confirm issue', desc: 'The finding stands and the claim stays flagged.', color: 'var(--status-fail-ink)' },
+                      { key: 'request-info', label: 'Request information', desc: 'Ask the provider for what is missing.', color: 'var(--text-primary)' },
+                      { key: 'dismiss', label: 'Dismiss', desc: 'The rule does not apply here. A reason is required.', color: 'var(--text-primary)' },
+                    ].map((action, index) => (
                       <button
                         key={action.key}
+                        type="button"
+                        role="radio"
+                        aria-checked={reviewAction === action.key}
                         onClick={() => setReviewAction(action.key)}
-                        style={{
-                          background: reviewAction === action.key ? action.bg : 'var(--card-bg)',
-                          border: `1px solid ${reviewAction === action.key ? action.border : 'var(--border)'}`,
-                          borderRadius: 7,
-                          padding: '10px 12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          transition: 'all 0.15s ease',
-                        }}
+                        className={`review-option${reviewAction === action.key ? ' is-selected' : ''}`}
                       >
-                        <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: reviewAction === action.key ? action.color : 'var(--text-primary)' }}>{action.label}</div>
-                          <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: 1 }}>{action.desc}</div>
-                        </div>
-                        {reviewAction === action.key && (
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M2 7l4 4 6-7" stroke={action.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
+                        <span className="review-option-number" aria-hidden="true">{index + 1}</span>
+                        <span style={{ textAlign: 'left' }}>
+                          <span className="review-option-label" style={{ color: action.color }}>{action.label}</span>
+                          <span className="review-option-desc">{action.desc}</span>
+                        </span>
                       </button>
                     ))}
                   </div>

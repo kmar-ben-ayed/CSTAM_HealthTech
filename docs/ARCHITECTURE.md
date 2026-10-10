@@ -2,7 +2,7 @@
 
 ## 1. Design principles
 
-1. **Deterministic rules decide, AI only explains.** The verdict (`PASS/FAIL/UNABLE_TO_ASSESS/NOT_APPLICABLE`) always comes from `rule_engine/engine_core.py`. The LLM can never change a status, severity or the `requires_human_review` flag.
+1. **Deterministic rules decide, AI only explains.** The verdict (`PASS/FAIL/UNABLE_TO_ASSESS/NOT_APPLICABLE`) always comes from the rule specs, evaluated by `rule_engine/interpreter.py`. The LLM can never change a status, severity or the `requires_human_review` flag. When a model drafts a *new* rule, it only proposes a spec; code checks it before it runs ([RULE_ENGINE.md](RULE_ENGINE.md)).
 2. **Nothing is invented.** Missing data stays `None`, which yields `UNABLE_TO_ASSESS` (low confidence, human review) instead of a guessed default.
 3. **Every action is audited** in a hash-chained, append-only log. If the audit write fails, the request fails (HTTP 503) rather than proceeding unlogged.
 4. **Human in the loop.** Failing / uncertain findings are routed to a reviewer who records one of four actions with a mandatory reason.
@@ -38,7 +38,7 @@ flowchart LR
         end
 
         subgraph RE["rule_engine/"]
-            CORE["engine_core.py<br/>validate_transport + baseline R001-R015"]
+            CORE["engine_core.py + interpreter.py<br/>validate_transport + active rule specs"]
         end
 
         subgraph AI["AI_agent/"]
@@ -98,7 +98,9 @@ flowchart LR
 | Normalisation | `normalisation/fhir_adapter.py` | FHIR R4 Bundle <-> internal claim envelope, structural checks that never raise |
 | Normalisation | `normalisation/csv_to_jsonl.py` | Rebuilds claims from 5 relational CSV files |
 | Normalisation | `normalisation/schema_subset.py` | Lightweight validation against `claim.schema.json` |
-| Rules | `rule_engine/engine_core.py` | Transport validation, 15 deterministic rules, evidence pointers, confidence heuristic |
+| Rules | `rule_engine/engine_core.py` | Transport validation, running the active rule specs, evidence pointers, confidence heuristic |
+| Rules | `rule_engine/language.py`, `validation.py`, `interpreter.py`, `spec_store.py` | The rule language, its static checks, its evaluator and versioned spec storage |
+| Rule authoring | `rule_authoring/*` | Drafter agent, edge cases, oracle, checks and workflow for new rules ([RULE_ENGINE.md](RULE_ENGINE.md)) |
 | AI | `AI_agent/llm_adapter.py` | Grounded explanation providers, output validation, deterministic fallback |
 | AI | `AI_agent/confidence.py` | Evidence completeness, citation grounding, escalation reasons, review priority |
 | Audit | `audit/*` | SHA-256 hash chain, thread-safe logger, fsync'd append-only JSONL store |
