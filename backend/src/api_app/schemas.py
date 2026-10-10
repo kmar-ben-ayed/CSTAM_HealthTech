@@ -39,15 +39,18 @@ class CsvIngestRequest(StrictModel):
     files: dict[str, str]
 
 
+RULE_ID_PATTERN = r"^R\d{3,}$"
+
+
 class ExplanationRequest(StrictModel):
     claim: dict[str, Any]
-    rule_id: str = Field(pattern=r"^R0(?:0[1-9]|1[0-5])$")
+    rule_id: str = Field(pattern=RULE_ID_PATTERN, max_length=32)
     provider: Literal["mock", "openai"] = "openai"
 
 
 class ReviewDecisionRequest(StrictModel):
     claim_id: str = Field(min_length=1, max_length=128)
-    rule_id: str = Field(pattern=r"^R0(?:0[1-9]|1[0-5])$")
+    rule_id: str = Field(pattern=RULE_ID_PATTERN, max_length=32)
     action: Literal[
         "confirm_issue",
         "dismiss_with_reason",
@@ -68,6 +71,29 @@ class ReviewDecisionRequest(StrictModel):
         if not value:
             raise ValueError("must not be blank")
         return value
+
+
+class RuleDraftRequest(StrictModel):
+    """A rule in English. Leave rule_id empty for a new rule; give it to revise an existing one."""
+
+    rule_id: str | None = Field(default=None, pattern=RULE_ID_PATTERN, max_length=32)
+    title: str = Field(min_length=3, max_length=120)
+    severity: Literal["low", "medium", "high"]
+    logic: str = Field(min_length=10, max_length=2000)
+    corrective_action: str = Field(min_length=3, max_length=500)
+
+    @field_validator("title", "logic", "corrective_action")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class DraftAnswerRequest(StrictModel):
+    question_id: str = Field(min_length=1, max_length=32)
+    answer: str = Field(min_length=1, max_length=1000)
 
 
 class AuditVerificationResponse(BaseModel):

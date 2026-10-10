@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 import paths
 
-from src.rule_engine.engine_core import baseline, config, load_jsonl
+from src.rule_engine.engine_core import active_rules, baseline, config, load_jsonl
 from src.normalisation.fhir_adapter import (FhirError, bundle_to_claim, check_bundle, claim_and_findings,
                           claim_to_bundle, merge_sidecar, parse_bundles_text, EXT_AUTH_DETAILS)
 
@@ -171,7 +171,7 @@ class MalformedInputTests(unittest.TestCase):
         self.assertEqual(claim["attachments"][0]["text"], evil)
         self.assertEqual(
             len(baseline(claim, cfg)),
-            len(cfg["rules"]),
+            len(active_rules(cfg)),
         )  # rules are unaffected by attachment text
 
     def test_sidecar_claim_id_mismatch_rejected(self):

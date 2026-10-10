@@ -1,0 +1,1231 @@
+{
+  "description": "Hand-written reference specs for R001-R015. Loaded into the rule database automatically; each spec is bound to the SHA-256 of the rule text it implements (rules.json \"logic\").",
+  "provenance": {
+    "method": "hand-written reference spec",
+    "verified_against": "all expected_results.jsonl outcomes (development, validation, stress) and the original Python rules on mutated claims; see tests/test_reference_specs.py"
+  },
+  "specs": {
+    "R001": {
+      "logic_sha256": "a0baed130ad1c2a2b0dabfe2a391ac54de876814f34518bedcd85ef5c5775413",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "require": {
+              "op": "all_of",
+              "items": [
+                {
+                  "op": "is_present",
+                  "value": {
+                    "path": "/invoice_number"
+                  }
+                },
+                {
+                  "op": "is_present",
+                  "value": {
+                    "path": "/member_id"
+                  }
+                },
+                {
+                  "op": "is_present",
+                  "value": {
+                    "path": "/diagnosis_code"
+                  }
+                }
+              ]
+            },
+            "otherwise": "FAIL",
+            "note": "invoice number, member id and diagnosis code are present"
+          },
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "require": {
+                  "op": "all_of",
+                  "items": [
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$line/service_date"
+                      }
+                    },
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$line/service_code"
+                      }
+                    },
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$line/quantity"
+                      }
+                    },
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$line/unit_price"
+                      }
+                    },
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$line/net_amount"
+                      }
+                    }
+                  ]
+                },
+                "otherwise": "FAIL",
+                "note": "every line has a service date, service code, quantity, unit price and net amount"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "Required information is present.",
+          "FAIL": "Required information is missing.",
+          "UNABLE_TO_ASSESS": "Required information could not be checked.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R002": {
+      "logic_sha256": "30a969dc47bc4ccb2824578b39e261cb7b6378afb0f4e00c191cb5826c26db91",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "require": {
+                  "op": "on_or_before",
+                  "left": {
+                    "path": "$line/service_date"
+                  },
+                  "right": {
+                    "path": "/submission_date"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the service date is on or before the submission date"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "All service dates are on or before the submission date.",
+          "FAIL": "A service date is after the submission date.",
+          "UNABLE_TO_ASSESS": "A service date or the submission date is missing or invalid.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R003": {
+      "logic_sha256": "9026043043e30db62a1b6ee25b24212d08d76990386e2720736ddd802ec66cf1",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "require": {
+              "op": "equals",
+              "left": {
+                "path": "/coverage/status"
+              },
+              "right": {
+                "value": "active"
+              }
+            },
+            "otherwise": "FAIL",
+            "note": "coverage is active"
+          },
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "require": {
+                  "op": "on_or_after",
+                  "left": {
+                    "path": "$line/service_date"
+                  },
+                  "right": {
+                    "path": "/coverage/start_date"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the service date is on or after the coverage start"
+              },
+              {
+                "require": {
+                  "op": "on_or_before",
+                  "left": {
+                    "path": "$line/service_date"
+                  },
+                  "right": {
+                    "path": "/coverage/end_date"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the service date is on or before the coverage end"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "All service dates are within active coverage, including boundaries.",
+          "FAIL": "Coverage is not active or a service date is outside the coverage period.",
+          "UNABLE_TO_ASSESS": "Coverage status, coverage dates or a service date is missing.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R004": {
+      "logic_sha256": "1576ae2ce3dee15cd0b1c4ec22aa71355f46578f4355fafa7a59d5cd6d32342b",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "require": {
+              "op": "equals",
+              "left": {
+                "path": "/member_id"
+              },
+              "right": {
+                "path": "/coverage/member_id"
+              }
+            },
+            "otherwise": "FAIL",
+            "note": "the member id matches coverage"
+          },
+          {
+            "require": {
+              "op": "equals",
+              "left": {
+                "path": "/patient_id"
+              },
+              "right": {
+                "path": "/coverage/beneficiary_patient_id"
+              }
+            },
+            "otherwise": "FAIL",
+            "note": "the patient id matches the coverage beneficiary"
+          }
+        ],
+        "messages": {
+          "PASS": "Member and beneficiary identifiers match coverage.",
+          "FAIL": "A member or patient identifier does not match coverage.",
+          "UNABLE_TO_ASSESS": "A member or patient identifier is missing.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R005": {
+      "logic_sha256": "c82ea66a24510dcbd44507baee722cb7309a0e57ea77ef2dcf98f4b95c97c451",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "path": "/provider_id"
+              }
+            },
+            "note": "a provider id is given"
+          },
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "config": "policy",
+                "get": []
+              }
+            },
+            "note": "the claim's policy is known"
+          },
+          {
+            "require": {
+              "op": "in",
+              "value": {
+                "path": "/provider_id"
+              },
+              "collection": {
+                "config": "policy",
+                "get": [
+                  "allowed_providers"
+                ]
+              }
+            },
+            "otherwise": "FAIL",
+            "note": "the provider is allowed by the policy"
+          }
+        ],
+        "messages": {
+          "PASS": "Provider ID is allowed.",
+          "FAIL": "Provider ID is not allowed.",
+          "UNABLE_TO_ASSESS": "Provider ID or policy is missing or unavailable.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R006": {
+      "logic_sha256": "7f33550fd2a1f9217e94f0e2808e2e6d4708490984ebf7d1cdbff394593b9741",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "require": {
+              "op": "unique",
+              "collection": {
+                "path": "/lines"
+              },
+              "as": "line",
+              "by": [
+                {
+                  "path": "$line/service_code"
+                },
+                {
+                  "path": "$line/service_date"
+                },
+                {
+                  "first_present": [
+                    {
+                      "path": "$line/modifier"
+                    },
+                    {
+                      "value": "(none)"
+                    }
+                  ]
+                }
+              ]
+            },
+            "otherwise": "FAIL",
+            "note": "no two lines share service code, service date and modifier"
+          }
+        ],
+        "messages": {
+          "PASS": "No duplicate service/date/modifier combinations.",
+          "FAIL": "Possible duplicate lines require review.",
+          "UNABLE_TO_ASSESS": "Missing inputs prevent a complete duplicate check.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R007": {
+      "logic_sha256": "557bc9ce1fb4ce444246fa632c1429f0d920b4ed9ecb54fe3ec54503cdd528f7",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "require": {
+                  "op": "amounts_match",
+                  "left": {
+                    "multiply": [
+                      {
+                        "path": "$line/quantity"
+                      },
+                      {
+                        "path": "$line/unit_price"
+                      }
+                    ]
+                  },
+                  "right": {
+                    "path": "$line/net_amount"
+                  },
+                  "tolerance": 0.01
+                },
+                "otherwise": "FAIL",
+                "note": "net amount equals quantity times unit price"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "All net amounts are correct.",
+          "FAIL": "Net amount does not equal quantity * unit price for some lines.",
+          "UNABLE_TO_ASSESS": "Missing numeric inputs prevent a complete arithmetic check.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R008": {
+      "logic_sha256": "4b0be20979706ded805576cd84bfbca5a551258496b5f879b80db3bf2978f192",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "config": "policy",
+                "get": [
+                  "auth_required_services"
+                ]
+              }
+            },
+            "note": "the policy lists authorization-required services"
+          },
+          {
+            "only_if": {
+              "op": "greater_than",
+              "left": {
+                "count": {
+                  "config": "policy",
+                  "get": [
+                    "auth_required_services"
+                  ]
+                }
+              },
+              "right": {
+                "value": 0
+              }
+            },
+            "note": "the policy requires authorization for at least one service"
+          },
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "need": {
+                  "op": "in",
+                  "value": {
+                    "path": "$line/service_code"
+                  },
+                  "collection": {
+                    "config": "services",
+                    "get": []
+                  }
+                },
+                "note": "the service code is known"
+              },
+              {
+                "only_if": {
+                  "op": "in",
+                  "value": {
+                    "path": "$line/service_code"
+                  },
+                  "collection": {
+                    "config": "policy",
+                    "get": [
+                      "auth_required_services"
+                    ]
+                  }
+                },
+                "note": "the service requires authorization"
+              },
+              {
+                "require": {
+                  "op": "is_present",
+                  "value": {
+                    "path": "$line/authorization_id"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the line has an authorization reference"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "All authorization-required services have nonempty authorization references.",
+          "FAIL": "Required authorization reference is missing for some lines.",
+          "UNABLE_TO_ASSESS": "Unknown or missing service codes, or an unavailable policy, prevent a complete authorization reference check.",
+          "NOT_APPLICABLE": "No supplied lines require authorization under the policy."
+        }
+      }
+    },
+    "R009": {
+      "logic_sha256": "b2213d76b3248c432c6a57fe20dfd95a124c1c568e113c9bc132137a165005ba",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "config": "policy",
+                "get": [
+                  "auth_required_services"
+                ]
+              }
+            },
+            "note": "the policy lists authorization-required services"
+          },
+          {
+            "only_if": {
+              "op": "greater_than",
+              "left": {
+                "count": {
+                  "config": "policy",
+                  "get": [
+                    "auth_required_services"
+                  ]
+                }
+              },
+              "right": {
+                "value": 0
+              }
+            },
+            "note": "the policy requires authorization for at least one service"
+          },
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "need": {
+                  "op": "in",
+                  "value": {
+                    "path": "$line/service_code"
+                  },
+                  "collection": {
+                    "config": "services",
+                    "get": []
+                  }
+                },
+                "note": "the service code is known"
+              },
+              {
+                "only_if": {
+                  "op": "in",
+                  "value": {
+                    "path": "$line/service_code"
+                  },
+                  "collection": {
+                    "config": "policy",
+                    "get": [
+                      "auth_required_services"
+                    ]
+                  }
+                },
+                "note": "the service requires authorization"
+              },
+              {
+                "need": {
+                  "op": "is_present",
+                  "value": {
+                    "path": "$line/authorization_id"
+                  }
+                },
+                "note": "the line has an authorization reference (checked by R008)"
+              },
+              {
+                "need": {
+                  "op": "at_most",
+                  "left": {
+                    "count": {
+                      "path": "/authorizations"
+                    },
+                    "as": "candidate",
+                    "where": {
+                      "op": "equals",
+                      "left": {
+                        "path": "$candidate/authorization_id"
+                      },
+                      "right": {
+                        "path": "$line/authorization_id"
+                      }
+                    }
+                  },
+                  "right": {
+                    "value": 1
+                  }
+                },
+                "note": "the reference is unambiguous (no two authorization records share this id)"
+              },
+              {
+                "let": "auth",
+                "be": {
+                  "find": {
+                    "path": "/authorizations"
+                  },
+                  "as": "candidate",
+                  "where": {
+                    "op": "equals",
+                    "left": {
+                      "path": "$candidate/authorization_id"
+                    },
+                    "right": {
+                      "path": "$line/authorization_id"
+                    }
+                  }
+                }
+              },
+              {
+                "require": {
+                  "op": "is_present",
+                  "value": {
+                    "path": "$auth"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the referenced authorization exists"
+              },
+              {
+                "require": {
+                  "op": "equals",
+                  "left": {
+                    "path": "$auth/patient_id"
+                  },
+                  "right": {
+                    "path": "/patient_id"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the authorization is for this patient"
+              },
+              {
+                "require": {
+                  "op": "equals",
+                  "left": {
+                    "path": "$auth/service_code"
+                  },
+                  "right": {
+                    "path": "$line/service_code"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the authorization is for this service"
+              },
+              {
+                "require": {
+                  "op": "equals",
+                  "left": {
+                    "path": "$auth/status"
+                  },
+                  "right": {
+                    "value": "approved"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the authorization is approved"
+              },
+              {
+                "require": {
+                  "op": "within_dates",
+                  "value": {
+                    "path": "$line/service_date"
+                  },
+                  "from": {
+                    "path": "$auth/valid_from"
+                  },
+                  "to": {
+                    "path": "$auth/valid_to"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the service date is within the authorization period"
+              },
+              {
+                "require": {
+                  "op": "at_most",
+                  "left": {
+                    "sum": {
+                      "path": "/lines"
+                    },
+                    "as": "other",
+                    "of": {
+                      "path": "$other/quantity"
+                    },
+                    "where": {
+                      "op": "equals",
+                      "left": {
+                        "path": "$other/authorization_id"
+                      },
+                      "right": {
+                        "path": "$line/authorization_id"
+                      }
+                    }
+                  },
+                  "right": {
+                    "path": "$auth/max_quantity"
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "total quantity on lines sharing the authorization is within its maximum"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "Authorization records match the required services and claim lines.",
+          "FAIL": "Authorization records contain missing references or mismatched service, patient, status, dates, or quantity limits.",
+          "UNABLE_TO_ASSESS": "Missing authorization information prevents a complete authorization record check.",
+          "NOT_APPLICABLE": "No supplied lines require authorization under the policy."
+        }
+      }
+    },
+    "R010": {
+      "logic_sha256": "2f65278c2578bd5bcd55ece5d48b851392bdb65eac120d8cc561eb028ea99f67",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "config": "policy",
+                "get": [
+                  "required_documents"
+                ]
+              }
+            },
+            "note": "the policy lists required documents"
+          },
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "need": {
+                  "op": "in",
+                  "value": {
+                    "path": "$line/service_code"
+                  },
+                  "collection": {
+                    "config": "services",
+                    "get": []
+                  }
+                },
+                "note": "the service code is known"
+              },
+              {
+                "let": "required_type",
+                "be": {
+                  "config": "policy",
+                  "get": [
+                    "required_documents",
+                    {
+                      "path": "$line/service_code"
+                    }
+                  ]
+                }
+              },
+              {
+                "only_if": {
+                  "op": "is_present",
+                  "value": {
+                    "path": "$required_type"
+                  }
+                },
+                "note": "the service requires a document"
+              },
+              {
+                "need": {
+                  "op": "is_present",
+                  "value": {
+                    "path": "$line/service_date"
+                  }
+                },
+                "note": "the service date is known"
+              },
+              {
+                "require": {
+                  "op": "exists",
+                  "collection": {
+                    "path": "/attachments"
+                  },
+                  "as": "doc",
+                  "where": {
+                    "op": "all_of",
+                    "items": [
+                      {
+                        "op": "equals",
+                        "left": {
+                          "path": "$doc/type"
+                        },
+                        "right": {
+                          "path": "$required_type"
+                        }
+                      },
+                      {
+                        "op": "equals",
+                        "left": {
+                          "path": "$doc/patient_id"
+                        },
+                        "right": {
+                          "path": "/patient_id"
+                        }
+                      },
+                      {
+                        "op": "equals",
+                        "left": {
+                          "path": "$doc/service_code"
+                        },
+                        "right": {
+                          "path": "$line/service_code"
+                        }
+                      },
+                      {
+                        "op": "same_day",
+                        "left": {
+                          "path": "$doc/service_date"
+                        },
+                        "right": {
+                          "path": "$line/service_date"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "a matching document of the required type is attached"
+              },
+              {
+                "require": {
+                  "op": "exists",
+                  "collection": {
+                    "path": "/attachments"
+                  },
+                  "as": "doc",
+                  "where": {
+                    "op": "all_of",
+                    "items": [
+                      {
+                        "op": "equals",
+                        "left": {
+                          "path": "$doc/type"
+                        },
+                        "right": {
+                          "path": "$required_type"
+                        }
+                      },
+                      {
+                        "op": "equals",
+                        "left": {
+                          "path": "$doc/patient_id"
+                        },
+                        "right": {
+                          "path": "/patient_id"
+                        }
+                      },
+                      {
+                        "op": "equals",
+                        "left": {
+                          "path": "$doc/service_code"
+                        },
+                        "right": {
+                          "path": "$line/service_code"
+                        }
+                      },
+                      {
+                        "op": "same_day",
+                        "left": {
+                          "path": "$doc/service_date"
+                        },
+                        "right": {
+                          "path": "$line/service_date"
+                        }
+                      },
+                      {
+                        "op": "equals",
+                        "left": {
+                          "path": "$doc/document_status"
+                        },
+                        "right": {
+                          "value": "final"
+                        }
+                      }
+                    ]
+                  }
+                },
+                "otherwise": "UNABLE_TO_ASSESS",
+                "note": "at least one matching document is final (drafts cannot be assessed)"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "All required supporting documents match and are final.",
+          "FAIL": "Required supporting documentation is absent or does not match some lines.",
+          "UNABLE_TO_ASSESS": "Matching supporting documents are present but none is confirmed final, or required comparison data is unavailable.",
+          "NOT_APPLICABLE": "No supplied lines require supporting documentation under the policy."
+        }
+      }
+    },
+    "R011": {
+      "logic_sha256": "769454b4ba290bf6d138d9e59fde6f6e14eb3e3c064599c0c79584ffdef0d19e",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "require": {
+                  "op": "in",
+                  "value": {
+                    "path": "$line/service_code"
+                  },
+                  "collection": {
+                    "config": "services",
+                    "get": []
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the service code is in the service catalogue"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "All service codes are in the fictional catalogue.",
+          "FAIL": "Unknown service codes are present.",
+          "UNABLE_TO_ASSESS": "Missing service codes prevent a complete catalogue check.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R012": {
+      "logic_sha256": "df259ec0fa715546fcabc79ea369fa342db936e7329914214a9681f37fb02f29",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "require": {
+              "op": "amounts_match",
+              "left": {
+                "path": "/total_amount"
+              },
+              "right": {
+                "sum": {
+                  "path": "/lines"
+                },
+                "as": "line",
+                "of": {
+                  "path": "$line/net_amount"
+                }
+              },
+              "tolerance": 0.01
+            },
+            "otherwise": "FAIL",
+            "note": "the claim total equals the sum of line net amounts"
+          }
+        ],
+        "messages": {
+          "PASS": "Claim total equals the sum of line amounts.",
+          "FAIL": "Claim total does not equal the sum of line amounts.",
+          "UNABLE_TO_ASSESS": "A claim total or line amount is missing.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R013": {
+      "logic_sha256": "719cbef87893d6f4728b8a931e27b5f3a2a50e6423a9a20300805ae8e581c46d",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "config": "policy",
+                "get": []
+              }
+            },
+            "note": "the claim's policy is known"
+          },
+          {
+            "for_each": {
+              "path": "/lines"
+            },
+            "as": "line",
+            "steps": [
+              {
+                "need": {
+                  "op": "in",
+                  "value": {
+                    "path": "$line/service_code"
+                  },
+                  "collection": {
+                    "config": "services",
+                    "get": []
+                  }
+                },
+                "note": "the service code is known"
+              },
+              {
+                "let": "max_price",
+                "be": {
+                  "config": "policy",
+                  "get": [
+                    "max_unit_price",
+                    {
+                      "path": "$line/service_code"
+                    }
+                  ]
+                }
+              },
+              {
+                "let": "max_quantity",
+                "be": {
+                  "config": "policy",
+                  "get": [
+                    "max_quantity_per_line",
+                    {
+                      "path": "$line/service_code"
+                    }
+                  ]
+                }
+              },
+              {
+                "need": {
+                  "op": "all_of",
+                  "items": [
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$line/quantity"
+                      }
+                    },
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$line/unit_price"
+                      }
+                    },
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$max_price"
+                      }
+                    },
+                    {
+                      "op": "is_present",
+                      "value": {
+                        "path": "$max_quantity"
+                      }
+                    }
+                  ]
+                },
+                "note": "quantity, unit price and the policy limits are known"
+              },
+              {
+                "require": {
+                  "op": "all_of",
+                  "items": [
+                    {
+                      "op": "is_whole_number",
+                      "value": {
+                        "path": "$line/quantity"
+                      }
+                    },
+                    {
+                      "op": "greater_than",
+                      "left": {
+                        "path": "$line/quantity"
+                      },
+                      "right": {
+                        "value": 0
+                      }
+                    },
+                    {
+                      "op": "greater_than",
+                      "left": {
+                        "path": "$line/unit_price"
+                      },
+                      "right": {
+                        "value": 0
+                      }
+                    },
+                    {
+                      "op": "at_most",
+                      "left": {
+                        "path": "$line/unit_price"
+                      },
+                      "right": {
+                        "path": "$max_price"
+                      }
+                    },
+                    {
+                      "op": "at_most",
+                      "left": {
+                        "path": "$line/quantity"
+                      },
+                      "right": {
+                        "path": "$max_quantity"
+                      }
+                    }
+                  ]
+                },
+                "otherwise": "FAIL",
+                "note": "quantity is a positive whole number within the limit, and unit price is positive and within the limit"
+              }
+            ]
+          }
+        ],
+        "messages": {
+          "PASS": "All quantities and unit prices are within policy limits.",
+          "FAIL": "Quantity or unit price limits are violated.",
+          "UNABLE_TO_ASSESS": "Missing inputs prevent a complete quantity and price limit check.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    },
+    "R014": {
+      "logic_sha256": "5102576176485c22e911e419e967b20625830424a0b1b9d97e5952a5ed8e308e",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "config": "policy",
+                "get": [
+                  "submission_window_days"
+                ]
+              }
+            },
+            "note": "the policy has a submission window"
+          },
+          {
+            "let": "latest_service",
+            "be": {
+              "latest": {
+                "path": "/lines"
+              },
+              "as": "line",
+              "of": {
+                "path": "$line/service_date"
+              }
+            }
+          },
+          {
+            "let": "lag",
+            "be": {
+              "days_between": [
+                {
+                  "path": "$latest_service"
+                },
+                {
+                  "path": "/submission_date"
+                }
+              ]
+            }
+          },
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "path": "$lag"
+              }
+            },
+            "note": "all service dates and the submission date are valid"
+          },
+          {
+            "only_if": {
+              "op": "at_least",
+              "left": {
+                "path": "$lag"
+              },
+              "right": {
+                "value": 0
+              }
+            },
+            "note": "submission is not before the latest service (R002 handles that)"
+          },
+          {
+            "require": {
+              "op": "at_most",
+              "left": {
+                "path": "$lag"
+              },
+              "right": {
+                "config": "policy",
+                "get": [
+                  "submission_window_days"
+                ]
+              }
+            },
+            "otherwise": "FAIL",
+            "note": "days from the latest service to submission are within the window"
+          }
+        ],
+        "messages": {
+          "PASS": "The claim was submitted within the policy submission window.",
+          "FAIL": "The claim was submitted outside the policy submission window.",
+          "UNABLE_TO_ASSESS": "Missing or invalid dates, or an unavailable policy, prevent a submission window check.",
+          "NOT_APPLICABLE": "Submission precedes the latest service date; chronology is handled by R002."
+        }
+      }
+    },
+    "R015": {
+      "logic_sha256": "60fea49da1aa982d1520f99442695521b41f3e415acfead77f342a6a4a5d3218",
+      "spec": {
+        "language_version": 2,
+        "steps": [
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "config": "policy",
+                "get": [
+                  "currency"
+                ]
+              }
+            },
+            "note": "the policy currency is known"
+          },
+          {
+            "need": {
+              "op": "is_present",
+              "value": {
+                "path": "/currency"
+              }
+            },
+            "note": "the claim currency is given"
+          },
+          {
+            "require": {
+              "op": "equals",
+              "left": {
+                "path": "/currency"
+              },
+              "right": {
+                "config": "policy",
+                "get": [
+                  "currency"
+                ]
+              }
+            },
+            "otherwise": "FAIL",
+            "note": "the claim currency matches the policy currency"
+          }
+        ],
+        "messages": {
+          "PASS": "Declared currency matches policy currency.",
+          "FAIL": "Declared currency does not match policy currency.",
+          "UNABLE_TO_ASSESS": "Policy or currency is unavailable.",
+          "NOT_APPLICABLE": "This rule does not apply to the claim."
+        }
+      }
+    }
+  }
+}

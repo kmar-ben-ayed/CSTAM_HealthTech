@@ -1,7 +1,9 @@
 # Payer Rule Catalogue (R001-R015)
 
-All rules are **deterministic** (`method: "deterministic"`) and implemented in `backend/src/rule_engine/engine_core.py`.
+All rules are **deterministic** (`method: "deterministic"`). Each one is a data spec (the reference versions are in `backend/rules/reference_specs.json`), evaluated by `backend/src/rule_engine/interpreter.py`; see [RULE_ENGINE.md](RULE_ENGINE.md).
 Rule metadata (id, version, severity, source, corrective action) lives in `backend/rules/rules.json`; allowed providers per policy in `policies.json`; service catalogue in `services.json`.
+
+The 15 reference specs reproduce all 9,000 expected outcomes. There is one intentional difference from the original code: for R009, two authorization records with the same id give `UNABLE_TO_ASSESS` instead of silently using the last one.
 
 | Rule | Category | What it checks | FAIL when | UNABLE_TO_ASSESS when |
 |---|---|---|---|---|

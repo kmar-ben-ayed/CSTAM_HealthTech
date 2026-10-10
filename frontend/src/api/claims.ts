@@ -115,6 +115,10 @@ export interface ClaimRow {
   humanReview?: boolean;
   severity?: string;
   ruleIds?: string[];
+  /** Rules that failed or could not be assessed, with the engine's message. */
+  findingDetails?: Array<{ id: string; status: EvaluationStatus; message: string }>;
+  /** Rules with status FAIL only (UNABLE_TO_ASSESS not included). */
+  failCount?: number;
 }
 
 export interface ReviewRule {
@@ -249,6 +253,12 @@ export function toClaimRow(claim: BackendClaim, results: RuleResult[] = []): Cla
     humanReview: results.some((result) => result.requires_human_review),
     severity,
     ruleIds: failedRules.map((result) => result.rule_id),
+    findingDetails: failedRules.map((result) => ({
+      id: result.rule_id,
+      status: result.status,
+      message: typeof result.explanation === 'string' ? result.explanation : '',
+    })),
+    failCount: results.filter((result) => result.status === 'FAIL').length,
   };
 }
 

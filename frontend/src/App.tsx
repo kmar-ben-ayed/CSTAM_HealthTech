@@ -163,18 +163,33 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+// The group each page belongs to, shown first in the breadcrumb ("Workspace / Claims").
+const BREADCRUMB_ROOTS: Partial<Record<Page, string>> = {
+  dashboard: 'Workspace',
+  claims: 'Workspace',
+  'claim-review': 'Workspace',
+  'review-queue': 'Workspace',
+  runs: 'Workflow',
+  audit: 'Workflow',
+  ingest: 'Workflow',
+  rules: 'Configure',
+  admin: 'Configure',
+  analytics: 'Configure',
+  profile: 'Account',
+};
+
 const BREADCRUMB_LABELS: Partial<Record<Page, string>> = {
   dashboard: 'Overview',
   claims: 'Claims',
-  'claim-review': 'Claim Review',
-  'review-queue': 'Review Queue',
+  'claim-review': 'Claim review',
+  'review-queue': 'Review queue',
   runs: 'Runs',
-  audit: 'Audit Trail',
-  ingest: 'Ingest Data',
-  rules: 'Policy & Rules',
-  admin: 'System Admin',
+  audit: 'Audit trail',
+  ingest: 'Ingest data',
+  rules: 'Policy & rules',
+  admin: 'System admin',
   analytics: 'Analytics',
-  profile: 'Profile & Preferences',
+  profile: 'Profile & preferences',
 };
 
 // ── Notifications ──────────────────────────────────────────────────────────
@@ -265,8 +280,10 @@ function NotifIcon({ type }: { type: string }) {
   );
 }
 
-// ── Sidebar ────────────────────────────────────────────────────────────────
-function Sidebar({
+// ── Dock ───────────────────────────────────────────────────────────────────
+// A floating icon rail. Each item shows its name on hover or keyboard focus;
+// the avatar opens the same profile menu the old sidebar had.
+function Dock({
   currentPage,
   onNavigate,
   theme,
@@ -283,6 +300,7 @@ function Sidebar({
   const [showAppearance, setShowAppearance] = useState(false);
   const [reviewCount, setReviewCount] = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -306,247 +324,149 @@ function Sidebar({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  return (
-    <aside
-      style={{
-        width: 240,
-        background: 'var(--sidebar-bg)',
-        borderRight: '1px solid var(--sidebar-border)',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        flexShrink: 0,
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      {/* Logo */}
-      <button
-        type="button"
-        className="sidebar-logo"
-        onClick={() => onNavigate('dashboard')}
-        aria-label="ClaimGuard AI — go to Overview"
-      >
-        <span className="sidebar-logo-mark">
-          <Sentinel state="idle" size={26} />
-        </span>
-        <span className="sidebar-logo-text">
-          <span className="sidebar-logo-name">ClaimGuard</span>
-          <span className="sidebar-logo-ai">AI</span>
-        </span>
-      </button>
+  const menuItemStyle: React.CSSProperties = {
+    width: '100%',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: '0.875rem',
+    color: 'var(--sidebar-text)',
+    padding: '9px 14px',
+    textAlign: 'left',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  };
 
-      {/* Nav */}
-      <nav className="sidebar-scroll" style={{ flex: 1, padding: '12px 10px', overflow: 'auto' }}>
+  return (
+    <nav className="app-dock" aria-label="Workspace">
+      <div className="app-dock-rail">
+        <button type="button" className="dock-button" onClick={() => onNavigate('dashboard')} aria-label="ClaimGuard AI, go to Overview">
+          <Sentinel state="idle" size={30} />
+        </button>
         {NAV_SECTIONS.map((section, si) => (
-          <div key={si} style={{ marginBottom: 18 }}>
-            {section.label && (
-              <div style={{ fontSize: '0.625rem', fontWeight: 700, letterSpacing: '0.14em', color: 'rgba(148,163,184,0.78)', textTransform: 'uppercase', padding: '0 10px', marginBottom: 8, marginTop: si > 0 ? 6 : 0 }}>
-                {section.label}
-              </div>
-            )}
+          <div key={si} style={{ display: 'contents' }}>
+            <div className="app-dock-divider" aria-hidden="true" />
             {section.items.map((item) => {
-              const isActive = currentPage === item.key;
+              const isActive = currentPage === item.key || (item.key === 'claims' && currentPage === 'claim-review');
+              const badge = item.key === 'review-queue' && reviewCount > 0 ? reviewCount : null;
               return (
-                <button key={item.key} onClick={() => onNavigate(item.key)} className={`nav-item ${isActive ? 'active' : ''}`} style={{ width: '100%', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, fontSize: '0.875rem', fontWeight: 500, transition: 'all 0.15s ease' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span className="nav-icon" style={{ opacity: isActive ? 1 : 0.5, display: 'flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
-                    {item.label}
-                  </div>
-                  {item.key === 'review-queue' && reviewCount > 0 && <span className="sc-badge" style={{ background: 'var(--status-fail-bg)', color: 'var(--status-fail-ink)', borderColor: 'var(--status-fail-border)' }}>{reviewCount}</span>}
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => onNavigate(item.key)}
+                  className={`dock-button${isActive ? ' is-active' : ''}`}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={badge ? `${item.label}, ${badge} claims need review` : item.label}
+                >
+                  {item.icon}
+                  {badge !== null && <span className="dock-badge" aria-hidden="true">{badge > 99 ? '99+' : badge}</span>}
+                  <span className="dock-tooltip" aria-hidden="true">{item.label}</span>
                 </button>
               );
             })}
           </div>
         ))}
-      </nav>
+        <div className="app-dock-divider" aria-hidden="true" />
 
-      {/* Profile */}
-      <div
-        ref={profileRef}
-        style={{ padding: '10px', borderTop: '1px solid rgba(255,255,255,0.06)', position: 'relative' }}
-      >
-        {/* Profile popover */}
-        {profileOpen && (
-          <div
-            className="popover-panel"
-            style={{
-              position: 'absolute',
-              bottom: 'calc(100% + 8px)',
-              left: 10,
-              right: 10,
-              background: 'var(--sidebar-bg)',
-              border: '1px solid var(--sidebar-border)',
-              borderRadius: 6,
-              overflow: 'hidden',
-              boxShadow: '0 12px 36px rgba(0,0,0,0.4)',
-              zIndex: 1000,
-            }}
+        <div ref={profileRef} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <button
+            type="button"
+            className="dock-avatar"
+            onClick={() => { setProfileOpen(!profileOpen); setShowAppearance(false); }}
+            aria-haspopup="menu"
+            aria-expanded={profileOpen}
+            aria-label="Account menu for Marwen Agrebi"
           >
-            {showAppearance ? (
-              <div style={{ padding: 12 }}>
-                <button
-                  onClick={() => setShowAppearance(false)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    color: 'var(--text-tertiary)',
-                    fontSize: '0.8125rem',
-                    fontFamily: 'inherit',
-                    padding: '0 0 8px',
-                    width: '100%',
-                  }}
-                >
-                  ← Appearance
-                </button>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            MA
+          </button>
+
+          {profileOpen && (
+            <div className="dock-popover popover-panel" role="menu">
+              {showAppearance ? (
+                <div style={{ padding: 12 }}>
+                  <button type="button" onClick={() => setShowAppearance(false)} style={{ ...menuItemStyle, padding: '0 0 8px', color: 'var(--text-tertiary)' }}>
+                    ← Appearance
+                  </button>
                   {(['light', 'dark', 'system'] as ThemeMode[]).map((m) => (
                     <button
                       key={m}
-                      onClick={() => { onSetTheme(m); }}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={theme === m}
+                      onClick={() => onSetTheme(m)}
                       style={{
+                        ...menuItemStyle,
+                        borderRadius: 8,
                         background: theme === m ? 'var(--sidebar-active-bg)' : 'transparent',
-                        border: theme === m ? '1px solid color-mix(in srgb, var(--sidebar-accent) 32%, transparent)' : '1px solid transparent',
-                        borderRadius: 4,
-                        padding: '8px 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        fontSize: '0.875rem',
-                        fontWeight: 500,
                         color: theme === m ? 'var(--sidebar-accent)' : 'var(--sidebar-text)',
-                        width: '100%',
+                        textTransform: 'capitalize',
                       }}
                     >
-                      <span style={{ textTransform: 'capitalize' }}>{m}</span>
+                      {m}
                       {theme === m && (
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                          <path d="M2 7l3.5 3.5 6.5-7" stroke="var(--sidebar-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                          <path d="M2 7l3.5 3.5 6.5-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       )}
                     </button>
                   ))}
                 </div>
-              </div>
-            ) : (
-              <>
-                <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--sidebar-text-active)' }}>Marwen Agrebi</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--sidebar-text)', marginTop: 2 }}>marwen.agrebi@healthcorp.org</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--sidebar-text)', marginTop: 1 }}>Senior Reviewer · HealthCorp</div>
-                </div>
-                {[
-                  { label: 'Profile', action: () => { onNavigate('profile'); setProfileOpen(false); } },
-                  { label: 'Preferences', action: () => { onNavigate('profile'); setProfileOpen(false); } },
-                  { label: 'Appearance', action: () => setShowAppearance(true) },
-                  { label: 'Keyboard shortcuts', action: () => {} },
-                ].map((item) => (
-                  <button
-                    key={item.label}
-                    onClick={item.action}
-                    style={{
-                      width: '100%',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      fontSize: '0.875rem',
-                      color: 'var(--sidebar-text)',
-                      padding: '9px 14px',
-                      textAlign: 'left',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      transition: 'background 0.1s ease',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--sidebar-hover)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                  >
-                    {item.label}
-                    {item.label === 'Appearance' && (
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </button>
-                ))}
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <button
-                    onClick={onSignOut}
-                    style={{
-                      width: '100%',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      fontSize: '0.875rem',
-                      color: 'var(--sidebar-danger)',
-                      padding: '9px 14px',
-                      textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in srgb, var(--sidebar-danger) 12%, transparent)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                  >
-                    Sign out
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        <div
-          onClick={() => { setProfileOpen(!profileOpen); setShowAppearance(false); }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '8px 6px',
-            borderRadius: 8,
-            cursor: 'pointer',
-            transition: 'background 0.15s ease',
-            background: profileOpen ? 'var(--sidebar-hover)' : 'transparent',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--sidebar-hover)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = profileOpen ? 'var(--sidebar-hover)' : 'transparent')}
-        >
-          <div
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: '50%',
-              background: 'var(--accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              color: 'var(--card-bg)',
-              flexShrink: 0,
-            }}
-          >
-            MA
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--sidebar-text-active)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Marwen Agrebi
+              ) : (
+                <>
+                  <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--sidebar-text-active)' }}>Marwen Agrebi</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--sidebar-text)', marginTop: 2 }}>marwen.agrebi@healthcorp.org</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--sidebar-text)', marginTop: 1 }}>Senior Reviewer · HealthCorp</div>
+                  </div>
+                  {[
+                    { label: 'Profile', action: () => { onNavigate('profile'); setProfileOpen(false); } },
+                    { label: 'Preferences', action: () => { onNavigate('profile'); setProfileOpen(false); } },
+                    { label: 'Appearance', action: () => setShowAppearance(true) },
+                  ].map((item) => (
+                    <button key={item.label} type="button" role="menuitem" onClick={item.action} className="dock-menu-item" style={menuItemStyle}>
+                      {item.label}
+                      {item.label === 'Appearance' && (
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                          <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <button type="button" role="menuitem" onClick={onSignOut} className="dock-menu-item" style={{ ...menuItemStyle, color: 'var(--sidebar-danger)' }}>
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-            <div style={{ fontSize: '0.6875rem', color: 'var(--sidebar-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Senior Reviewer
-            </div>
-          </div>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: 'var(--sidebar-text)', flexShrink: 0, transform: profileOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
-            <path d="M3 5.5l4 4 4-4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          )}
         </div>
+
+        <div className="dock-theme" role="group" aria-label="Colour theme">
+          <button type="button" aria-pressed={!isDark} aria-label="Light theme" onClick={() => onSetTheme('light')}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <circle cx="7" cy="7" r="2.6" stroke="currentColor" strokeWidth="1.3" />
+              <path d="M7 1v1.4M7 11.6V13M1 7h1.4M11.6 7H13M2.8 2.8l1 1M10.2 10.2l1 1M2.8 11.2l1-1M10.2 3.8l1-1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button type="button" aria-pressed={isDark} aria-label="Dark theme" onClick={() => onSetTheme('dark')}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M11.8 8.6A5 5 0 015.4 2.2a5 5 0 106.4 6.4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+
+        <button type="button" className="dock-button dock-logout" onClick={onSignOut} aria-label="Sign out">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M6 2.5H3.5a1 1 0 00-1 1v9a1 1 0 001 1H6M10.5 11l3-3-3-3M13.5 8H6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="dock-tooltip" aria-hidden="true">Sign out</span>
+        </button>
       </div>
-    </aside>
+    </nav>
   );
 }
 
@@ -610,8 +530,10 @@ function TopBar({
         position: 'relative',
       }}
     >
-      {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+      {/* Breadcrumb: group / page */}
+      <nav aria-label="Breadcrumb" className="topbar-crumbs" style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+        <span className="crumb-root">{BREADCRUMB_ROOTS[page] ?? 'Workspace'}</span>
+        <span className="crumb-root" aria-hidden="true">/</span>
         {crumbs.map((crumb, i) => (
           <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {i < crumbs.length - 1 ? (
@@ -619,16 +541,14 @@ function TopBar({
                 <button onClick={() => onNavigate(crumb.page)} style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem', padding: 0, fontWeight: 500 }}>
                   {crumb.label}
                 </button>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M4 2l4 4-4 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                <span className="crumb-root" aria-hidden="true">/</span>
               </>
             ) : (
-              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{crumb.label}</span>
+              <span aria-current="page" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{crumb.label}</span>
             )}
           </span>
         ))}
-      </div>
+      </nav>
 
       {/* Search bar */}
       <button
@@ -643,39 +563,27 @@ function TopBar({
           <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.2" />
           <path d="M9 9l2.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
-        <span style={{ flex: 1, textAlign: 'left' }}>Search claims, rules, runs…</span>
+        <span className="search-label" style={{ flex: 1, textAlign: 'left' }}>Search claims, rules, runs…</span>
         <kbd>⌘K</kbd>
       </button>
 
       {/* Right actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {/* Notifications */}
         <div ref={notifRef} style={{ position: 'relative' }}>
           <button
+            type="button"
+            className="topbar-icon-button"
+            aria-label="Notifications"
+            aria-expanded={notifOpen}
             onClick={() => { setNotifOpen(!notifOpen); setHelpOpen(false); }}
-            style={{
-              background: notifOpen ? 'var(--canvas-bg)' : 'transparent',
-              border: notifOpen ? '1px solid var(--card-border)' : '1px solid transparent',
-              cursor: 'pointer',
-              width: 34,
-              height: 34,
-              borderRadius: 7,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-secondary)',
-              position: 'relative',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => { if (!notifOpen) e.currentTarget.style.background = 'var(--canvas-bg)'; }}
-            onMouseLeave={(e) => { if (!notifOpen) e.currentTarget.style.background = 'transparent'; }}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <path d="M9 2a5 5 0 00-5 5v3L2.5 12.5h13L14 10V7a5 5 0 00-5-5z" stroke="currentColor" strokeWidth="1.3" />
               <path d="M7 14a2 2 0 004 0" stroke="currentColor" strokeWidth="1.3" />
             </svg>
             {unreadCount > 0 && (
-              <div style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: '50%', background: 'var(--status-fail)', border: '1.5px solid var(--topbar-bg)' }} />
+              <div style={{ position: 'absolute', top: 7, right: 7, width: 8, height: 8, borderRadius: '50%', background: 'var(--status-fail)', border: '1.5px solid var(--card-bg)' }} />
             )}
           </button>
 
@@ -773,22 +681,11 @@ function TopBar({
         {/* Help */}
         <div ref={helpRef} style={{ position: 'relative' }}>
           <button
+            type="button"
+            className="topbar-icon-button"
+            aria-label="Help"
+            aria-expanded={helpOpen}
             onClick={() => { setHelpOpen(!helpOpen); setNotifOpen(false); }}
-            style={{
-              background: helpOpen ? 'var(--canvas-bg)' : 'transparent',
-              border: helpOpen ? '1px solid var(--card-border)' : '1px solid transparent',
-              cursor: 'pointer',
-              width: 34,
-              height: 34,
-              borderRadius: 7,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--text-secondary)',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => { if (!helpOpen) e.currentTarget.style.background = 'var(--canvas-bg)'; }}
-            onMouseLeave={(e) => { if (!helpOpen) e.currentTarget.style.background = 'transparent'; }}
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <circle cx="9" cy="9" r="7" stroke="currentColor" strokeWidth="1.3" />
@@ -890,15 +787,6 @@ function TopBar({
           )}
         </div>
 
-        <div style={{ width: 1, height: 20, background: 'var(--card-border)' }} />
-
-        {/* Profile chip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 7, cursor: 'pointer' }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6875rem', fontWeight: 700, color: 'var(--card-bg)' }}>
-            MA
-          </div>
-          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Marwen Agrebi</span>
-        </div>
       </div>
     </header>
   );
@@ -1066,7 +954,7 @@ function WorkspaceLayout({
     <>
       <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} onNavigate={onNavigate} />
       <div
-        className={currentPage === 'claim-review' ? 'workspace-shell claim-review-workspace' : 'workspace-shell'}
+        className={currentPage === 'claim-review' ? 'workspace-shell dock-shell claim-review-workspace' : 'workspace-shell dock-shell'}
         style={{
           display: 'flex',
           height: '100vh',
@@ -1075,7 +963,7 @@ function WorkspaceLayout({
           background: 'var(--canvas-bg)',
         }}
       >
-        <Sidebar
+        <Dock
           currentPage={currentPage}
           onNavigate={(page) => onNavigate(page)}
           theme={theme}
@@ -1091,14 +979,7 @@ function WorkspaceLayout({
               onSearchOpen={() => setSearchOpen(true)}
             />
           )}
-          <main
-            style={{
-              flex: 1,
-              overflow: 'auto',
-              background:
-                'radial-gradient(1100px 520px at 12% -8%, rgba(56,189,248,0.10), transparent 60%), radial-gradient(900px 460px at 96% 0%, rgba(79,172,254,0.10), transparent 58%), var(--canvas-bg)',
-            }}
-          >
+          <main style={{ flex: 1, overflow: 'auto', background: 'var(--canvas-bg)' }}>
             <Outlet />
           </main>
         </div>

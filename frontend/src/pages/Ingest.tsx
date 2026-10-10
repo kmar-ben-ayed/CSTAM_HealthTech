@@ -87,36 +87,16 @@ const FORMAT_CARDS = [
     label: 'CSV',
     desc: 'Tabular claim dataset',
     ext: '.csv',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <rect x="2" y="2" width="18" height="18" rx="3" stroke="#1d5c8a" strokeWidth="1.4"/>
-        <path d="M2 7h18M7 7v13" stroke="#1d5c8a" strokeWidth="1.4"/>
-        <path d="M5 11h2M11 11h4M5 14.5h2M11 14.5h4" stroke="#1d5c8a" strokeWidth="1.2" strokeLinecap="round"/>
-      </svg>
-    ),
   },
   {
     label: 'JSON',
     desc: 'Structured claim data',
     ext: '.json, .jsonl',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path d="M6 4C4.5 4 4 4.5 4 6v3c0 1-1 2-1 2s1 1 1 2v3c0 1.5.5 2 2 2" stroke="#1d5c8a" strokeWidth="1.4" strokeLinecap="round"/>
-        <path d="M16 4c1.5 0 2 .5 2 2v3c0 1 1 2 1 2s-1 1-1 2v3c0 1.5-.5 2-2 2" stroke="#1d5c8a" strokeWidth="1.4" strokeLinecap="round"/>
-        <circle cx="11" cy="11" r="1.5" fill="#1d5c8a"/>
-      </svg>
-    ),
   },
   {
     label: 'FHIR',
     desc: 'FHIR Claim resource',
     ext: '.json, .jsonl',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-        <path d="M11 2l8 4v5c0 4.5-3.5 8-8 9-4.5-1-8-4.5-8-9V6l8-4z" stroke="#1f7a5c" strokeWidth="1.4" strokeLinejoin="round"/>
-        <path d="M8 11l2 2 4-4" stroke="#1f7a5c" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
   },
 ];
 
@@ -250,21 +230,23 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
   return (
     <div className="page-shell">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', color: '#0f172a', marginBottom: 4 }}>Ingest Data</h1>
-          <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Import claim data into ClaimGuard for validation and review.</p>
+          <h1 className="page-title" style={{ margin: '0 0 6px' }}>Ingest data</h1>
+          <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
+            Upload a batch: every record is normalised, checked against the active rules and turned into findings.
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginRight: 4 }}>Supported formats:</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginRight: 4 }}>Supported formats</span>
           {['CSV', 'JSONL', 'JSON', 'FHIR'].map(f => (
-            <span key={f} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '3px 9px' }}>{f}</span>
+            <span key={f} className="rule-chip">{f}</span>
           ))}
         </div>
       </div>
 
       {error && (
-        <div style={{ background: '#fbefee', border: '1px solid #e9c8c7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: '#8c322f', fontSize: '0.8125rem' }}>
+        <div style={{ background: 'var(--status-fail-bg)', border: '1px solid var(--status-fail-border)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, color: 'var(--status-fail-ink)', fontSize: '0.8125rem' }}>
           <strong>Ingestion failed:</strong> {error}
         </div>
       )}
@@ -272,36 +254,36 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
       {/* COMPLETE STATE */}
       {step === 'complete' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ background: '#fff', border: '1px solid #c4e1d1', borderRadius: 10, padding: '28px 32px', boxShadow: 'var(--card-shadow)', display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--status-pass-border)', borderRadius: 16, padding: '28px 32px', boxShadow: 'var(--card-shadow)', display: 'flex', gap: 20, alignItems: 'flex-start' }}>
             <Sentinel state="pass" size={64} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '1.125rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 6 }}>Ingestion complete</div>
-              <div style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: 20 }}>{acceptedCount} claims processed · Backend evaluation complete</div>
+              <div style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 6 }}>Ingestion complete</div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 20 }}>{acceptedCount} claims processed · Backend evaluation complete</div>
               {ingestionResult?.authorization_warning && (
-                <div style={{ background: '#fff8e6', border: '1px solid #ead39a', borderRadius: 7, padding: '10px 12px', marginBottom: 16, color: '#765b12', fontSize: '0.8125rem' }}>
+                <div style={{ background: 'var(--status-uta-bg)', border: '1px solid var(--status-uta-border)', borderRadius: 7, padding: '10px 12px', marginBottom: 16, color: 'var(--status-uta-ink)', fontSize: '0.8125rem' }}>
                   <strong>FHIR limitation:</strong> {ingestionResult.authorization_warning}
                 </div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, auto)', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Accepted claims', value: String(acceptedCount), color: 'var(--accent)' },
-                  { label: 'Rejected records', value: String(rejectedCount), color: '#b4403f' },
+                  { label: 'Rejected records', value: String(rejectedCount), color: 'var(--status-fail-ink)' },
                   { label: 'Require review', value: String(reviewCount), color: 'var(--status-review)' },
                 ].map(s => (
-                  <div key={s.label} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', textAlign: 'center' }}>
+                  <div key={s.label} style={{ background: 'var(--canvas-bg)', border: '1px solid var(--card-border)', borderRadius: 8, padding: '12px 16px', textAlign: 'center' }}>
                     <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.5rem', fontWeight: 700, color: s.color, letterSpacing: '-0.03em' }}>{s.value}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3 }}>{s.label}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 3 }}>{s.label}</div>
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => onNavigate('claims')} style={{ background: '#0f172a', border: 'none', borderRadius: 7, padding: '9px 20px', color: '#fff', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button onClick={() => onNavigate('claims')} className="btn btn-primary">
                   View claims
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7h9M8 4l3.5 3L8 10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
-                <button onClick={() => onNavigate('runs')} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '9px 20px', color: '#475569', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>View runs</button>
-                <button onClick={() => onNavigate('audit')} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '9px 20px', color: '#475569', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>View audit event</button>
-                <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, padding: '9px 12px' }}>Ingest another file</button>
+                <button onClick={() => onNavigate('runs')} className="btn btn-secondary">View runs</button>
+                <button onClick={() => onNavigate('audit')} className="btn btn-secondary">View audit event</button>
+                <button onClick={handleReset} className="btn btn-ghost">Ingest another file</button>
               </div>
             </div>
           </div>
@@ -310,11 +292,11 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
 
       {/* PROCESSING STATE */}
       {step === 'processing' && (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '40px', boxShadow: 'var(--card-shadow)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28 }}>
+        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 16, padding: '40px', boxShadow: 'var(--card-shadow)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 28 }}>
           <Sentinel state="scanning" size={80} />
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 4 }}>Processing claims…</div>
-            <div style={{ fontSize: '0.875rem', color: '#94a3b8' }}>{fileName} · {recordCount} records</div>
+            <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>Processing claims…</div>
+            <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>{fileName} · {recordCount} records</div>
           </div>
           <div style={{ width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 0 }}>
             {PROCESSING_STEPS.map((s, i) => {
@@ -328,27 +310,27 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                     gap: 12,
                     padding: '10px 14px',
                     borderRadius: 8,
-                    background: isActive ? 'rgba(15,122,130,0.05)' : 'transparent',
-                    border: isActive ? '1px solid rgba(15,122,130,0.15)' : '1px solid transparent',
+                    background: isActive ? 'color-mix(in srgb, var(--accent) 6%, transparent)' : 'transparent',
+                    border: isActive ? '1px solid color-mix(in srgb, var(--accent) 20%, transparent)' : '1px solid transparent',
                     transition: 'all 0.2s ease',
                   }}>
                     <div style={{ width: 24, height: 24, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDone ? 'var(--status-pass-bg)' : isActive ? 'var(--accent-subtle)' : 'var(--canvas-bg)', border: `1.5px solid ${isDone ? 'var(--status-pass)' : isActive ? 'var(--accent)' : 'var(--border)'}`, transition: 'all 0.2s ease' }}>
                       {isDone ? (
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6l2.5 2.5 4.5-5" stroke="#1f7a5c" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6l2.5 2.5 4.5-5" stroke="var(--status-pass-ink)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                       ) : isActive ? (
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', animation: 'sentinel-pulse 1s ease-in-out infinite' }} />
                       ) : (
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#e2e8f0' }} />
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--border-strong)' }} />
                       )}
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: isDone ? '#1a6a4f' : isActive ? '#0f172a' : '#94a3b8', transition: 'color 0.2s ease' }}>{s.label}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 1 }}>{s.detail}</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: isDone ? 'var(--status-pass-ink)' : isActive ? 'var(--text-primary)' : 'var(--text-tertiary)', transition: 'color 0.2s ease' }}>{s.label}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 1 }}>{s.detail}</div>
                     </div>
                   </div>
                   {i < PROCESSING_STEPS.length - 1 && (
                     <div style={{ display: 'flex', justifyContent: 'center', paddingLeft: 23 }}>
-                      <div style={{ width: 1, height: 10, background: isDone ? '#c4e1d1' : '#f1f5f9' }} />
+                      <div style={{ width: 1, height: 10, background: isDone ? 'var(--status-pass-border)' : 'var(--border)' }} />
                     </div>
                   )}
                 </div>
@@ -362,52 +344,52 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
       {step === 'validated' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* File info row */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '16px 20px', boxShadow: 'var(--card-shadow)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 16, padding: '16px 20px', boxShadow: 'var(--card-shadow)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 8, background: '#e9f5ef', border: '1px solid #c4e1d1', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 2h8l4 4v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="#1f7a5c" strokeWidth="1.3" strokeLinejoin="round"/><path d="M11 2v4h4" stroke="#1f7a5c" strokeWidth="1.3"/></svg>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--status-pass-bg)', border: '1px solid var(--status-pass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 2h8l4 4v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="var(--status-pass-ink)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M11 2v4h4" stroke="var(--status-pass-ink)" strokeWidth="1.3"/></svg>
               </div>
               <div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', fontFamily: "var(--font-sans)" }}>
+                <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "var(--font-sans)" }}>
                   {isCsvMode ? `${CSV_PACK_FILES.length} CSV files` : fileName}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 2 }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>
                   {formatLabel}{fileSize ? ` · ${fileSize}` : ''} · {recordCount} records
                 </div>
               </div>
             </div>
-            <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500 }}>Remove</button>
+            <button onClick={handleReset} className="btn btn-ghost btn-sm">Remove</button>
           </div>
 
           {/* Validation result */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Ingestion validation</h3>
-                <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Format validation complete. Review issues before processing.</p>
+                <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 2 }}>Ingestion validation</h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Format validation complete. Review issues before processing.</p>
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 {[
-                  { label: `${acceptedCount} valid`, color: '#1f7a5c', bg: '#e9f5ef', border: '#c4e1d1' },
-                  { label: `${rejectedCount} invalid`, color: '#b4403f', bg: '#fbefee', border: '#e9c8c7' },
-                  { label: `${validationIssues.filter(i => i.severity === 'WARNING').length} warnings`, color: '#96650f', bg: '#f8f1e3', border: '#e8d6ac' },
+                  { label: `${acceptedCount} valid`, color: 'var(--status-pass-ink)', bg: 'var(--status-pass-bg)', border: 'var(--status-pass-border)' },
+                  { label: `${rejectedCount} invalid`, color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
+                  { label: `${validationIssues.filter(i => i.severity === 'WARNING').length} warnings`, color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
                 ].map(s => (
                   <span key={s.label} style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}`, borderRadius: 6, padding: '4px 10px', fontSize: '0.75rem', fontWeight: 700, fontFamily: "var(--font-sans)" }}>{s.label}</span>
                 ))}
               </div>
             </div>
             <div style={{ padding: '16px 20px' }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Issues requiring attention</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Issues requiring attention</div>
               <table className="data-table" style={{ marginBottom: 0 }}>
                 <thead><tr><th>Row</th><th>Field</th><th>Issue</th><th>Severity</th></tr></thead>
                 <tbody>
                   {validationIssues.map((issue, i) => (
                     <tr key={i}>
-                      <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{issue.row}</span></td>
-                      <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#475569' }}>{issue.field}</span></td>
-                      <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{issue.issue}</span></td>
+                      <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{issue.row}</span></td>
+                      <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{issue.field}</span></td>
+                      <td><span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{issue.issue}</span></td>
                       <td>
-                        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', borderRadius: 4, padding: '2px 8px', background: issue.severity === 'ERROR' ? '#fbefee' : '#f8f1e3', color: issue.severity === 'ERROR' ? '#9a3433' : '#7d540f', border: `1px solid ${issue.severity === 'ERROR' ? '#e9c8c7' : '#e8d6ac'}` }}>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', borderRadius: 4, padding: '2px 8px', background: issue.severity === 'ERROR' ? 'var(--status-fail-bg)' : 'var(--status-uta-bg)', color: issue.severity === 'ERROR' ? 'var(--status-fail-ink)' : 'var(--status-uta-ink)', border: `1px solid ${issue.severity === 'ERROR' ? 'var(--status-fail-border)' : 'var(--status-uta-border)'}` }}>
                           {issue.severity}
                         </span>
                       </td>
@@ -419,10 +401,10 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
           </div>
 
           {/* Data preview */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #f1f5f9' }}>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 2 }}>Data preview</h3>
-              <p style={{ fontSize: '0.8125rem', color: '#94a3b8' }}>Showing first 5 of {recordCount} records</p>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 2 }}>Data preview</h3>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Showing first 5 of {recordCount} records</p>
             </div>
             <table className="data-table">
               <thead><tr><th>Claim ID</th><th>Provider</th><th>Service code</th><th>Amount</th><th>Service date</th><th>Policy</th></tr></thead>
@@ -430,10 +412,10 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                 {previewRows.map(row => (
                   <tr key={row.id}>
                     <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)' }}>{row.id}</span></td>
-                    <td><span style={{ fontSize: '0.875rem', color: '#334155' }}>{row.provider}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', color: '#475569' }}>{row.service}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: '#0f172a' }}>{row.amount}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: '#64748b' }}>{row.dos}</span></td>
+                    <td><span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{row.provider}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{row.service}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{row.amount}</span></td>
+                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{row.dos}</span></td>
                     <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: row.policy === 'EDU-BASIC' ? 'var(--accent)' : 'var(--status-review)', background: row.policy === 'EDU-BASIC' ? 'var(--accent-subtle)' : 'var(--status-review-bg)', border: `1px solid ${row.policy === 'EDU-BASIC' ? 'var(--status-pass-border)' : 'var(--status-review-border)'}`, borderRadius: 4, padding: '2px 7px' }}>{row.policy}</span></td>
                   </tr>
                 ))}
@@ -443,8 +425,8 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button onClick={handleReset} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '9px 20px', color: '#475569', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
-            <button onClick={handleProcess} style={{ background: 'var(--accent)', border: 'none', borderRadius: 5, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7 }}>
+            <button onClick={handleReset} className="btn btn-secondary">Cancel</button>
+            <button onClick={handleProcess} className="btn btn-primary">
               Start processing
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l6 4-6 4V3z" fill="currentColor"/></svg>
             </button>
@@ -456,18 +438,18 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
       {step === 'selected' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* File card */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '20px 24px', boxShadow: 'var(--card-shadow)' }}>
+          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 16, padding: '20px 24px', boxShadow: 'var(--card-shadow)' }}>
 
             {isCsvMode ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                   <div>
-                    <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', marginBottom: 3 }}>CSV claim pack</div>
-                    <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                    <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3 }}>CSV claim pack</div>
+                    <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
                       {Object.keys(csvFiles).length} of {CSV_PACK_FILES.length} required files attached
                     </div>
                   </div>
-                  <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500, padding: '4px 8px' }}>Remove</button>
+                  <button onClick={handleReset} className="btn btn-ghost btn-sm">Remove</button>
                 </div>
 
                 {/* Required CSV pack checklist */}
@@ -476,14 +458,14 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                     const present = Boolean(csvFiles[name]);
                     return (
                       <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: present ? '#e9f5ef' : '#f8f1e3', border: `1px solid ${present ? '#c4e1d1' : '#e8d6ac'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: present ? 'var(--status-pass-bg)' : 'var(--status-uta-bg)', border: `1px solid ${present ? 'var(--status-pass-border)' : 'var(--status-uta-border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           {present ? (
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5 4-4" stroke="#1f7a5c" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5 4-4" stroke="var(--status-pass-ink)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                           ) : (
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1l4 7H1L5 1z" stroke="#96650f" strokeWidth="1"/><path d="M5 4v2M5 7.5v.3" stroke="#96650f" strokeWidth="1" strokeLinecap="round"/></svg>
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 1l4 7H1L5 1z" stroke="var(--status-uta-ink)" strokeWidth="1"/><path d="M5 4v2M5 7.5v.3" stroke="var(--status-uta-ink)" strokeWidth="1" strokeLinecap="round"/></svg>
                           )}
                         </div>
-                        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: present ? '#334155' : '#6b4a0f', fontWeight: present ? 400 : 500 }}>
+                        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: present ? 'var(--text-primary)' : 'var(--status-uta-ink)', fontWeight: present ? 400 : 500 }}>
                           {name} {present ? '' : '— missing'}
                         </span>
                       </div>
@@ -491,7 +473,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                   })}
                 </div>
                 {csvUnrecognized.length > 0 && (
-                  <div style={{ fontSize: '0.75rem', color: '#8c322f', marginBottom: 10 }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--status-fail-ink)', marginBottom: 10 }}>
                     Not recognized (expected one of {CSV_PACK_FILES.join(', ')}): {csvUnrecognized.join(', ')}
                   </div>
                 )}
@@ -507,7 +489,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                     />
                     <button
                       onClick={() => addMoreInputRef.current?.click()}
-                      style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 14px', fontSize: '0.8125rem', color: '#334155', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+                      className="btn btn-secondary btn-sm"
                     >
                       + Add the missing CSV files
                     </button>
@@ -518,18 +500,18 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 9, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 9, background: 'var(--canvas-bg)', border: '1px solid var(--card-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 3h8l5 5v9a1 1 0 01-1 1H4a1 1 0 01-1-1V4a1 1 0 011-1z" stroke="var(--accent)" strokeWidth="1.3" strokeLinejoin="round"/><path d="M12 3v5h5" stroke="var(--accent)" strokeWidth="1.3"/></svg>
                     </div>
                     <div>
-                      <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', fontFamily: "var(--font-sans)", marginBottom: 3 }}>{fileName}</div>
+                      <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "var(--font-sans)", marginBottom: 3 }}>{fileName}</div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-subtle)', border: '1px solid var(--status-pass-border)', borderRadius: 4, padding: '1px 7px' }}>{formatLabel}</span>
-                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>{fileSize}</span>
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{fileSize}</span>
                       </div>
                     </div>
                   </div>
-                  <button onClick={handleReset} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.8125rem', fontFamily: 'inherit', fontWeight: 500, padding: '4px 8px' }}>Remove</button>
+                  <button onClick={handleReset} className="btn btn-ghost btn-sm">Remove</button>
                 </div>
               </>
             )}
@@ -537,12 +519,12 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button onClick={handleReset} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '9px 20px', color: '#475569', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>Cancel</button>
+            <button onClick={handleReset} className="btn btn-secondary">Cancel</button>
 
             <button
               onClick={handleValidate}
               disabled={isCsvMode && !csvReady}
-              style={{ background: (isCsvMode && !csvReady) ? '#94a3b8' : '#0f172a', border: 'none', borderRadius: 7, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: (isCsvMode && !csvReady) ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+              className="btn btn-primary"
             >
               Validate & Preview →
             </button>
@@ -554,7 +536,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
       {step === 'idle' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Source selector */}
-          <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', borderRadius: 8, padding: 3, width: 'fit-content' }}>
+          <div className="segmented" role="tablist" aria-label="Import source" style={{ width: 'fit-content' }}>
             {[
               { key: 'upload' as const, label: 'Upload file' },
               { key: 'paste' as const, label: 'Paste JSON' },
@@ -562,8 +544,10 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
             ].map(s => (
               <button
                 key={s.key}
+                type="button"
+                role="tab"
+                aria-selected={selectedFormat === s.key}
                 onClick={() => setSelectedFormat(s.key)}
-                style={{ background: selectedFormat === s.key ? '#fff' : 'transparent', border: selectedFormat === s.key ? '1px solid #e2e8f0' : '1px solid transparent', borderRadius: 6, padding: '6px 16px', fontSize: '0.875rem', color: selectedFormat === s.key ? '#0f172a' : '#64748b', cursor: 'pointer', fontFamily: 'inherit', fontWeight: selectedFormat === s.key ? 600 : 400, transition: 'all 0.15s ease', boxShadow: selectedFormat === s.key ? '0 1px 3px rgba(0,0,0,0.06)' : 'none' }}
               >
                 {s.label}
               </button>
@@ -579,77 +563,54 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                 onDragOver={e => e.preventDefault()}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                style={{
-                  background: dragging ? 'rgba(15,122,130,0.04)' : '#fff',
-                  border: `2px dashed ${dragging ? 'var(--accent)' : 'var(--border)'}`,
-                  borderRadius: 12,
-                  padding: '64px 40px',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 16,
-                }}
+                className={`dropzone${dragging ? ' is-dragging' : ''}`}
               >
                 <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} accept=".csv,.json,.jsonl" onChange={e => selectFiles(e.target.files)} />
-                <div style={{ width: 56, height: 56, borderRadius: 12, background: dragging ? 'rgba(15,122,130,0.1)' : '#f8fafc', border: `1.5px solid ${dragging ? 'rgba(15,122,130,0.3)' : '#e2e8f0'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s ease' }}>
+                <div className="dropzone-icon" aria-hidden="true">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 3v12M8 9l4-6 4 6" stroke={dragging ? 'var(--accent)' : '#74847c'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2" stroke={dragging ? 'var(--accent)' : '#74847c'} strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M12 16V5M7.5 9.5L12 5l4.5 4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M5 19h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 4 }}>
-                    Drop your claim file(s) here
-                  </div>
-                  <div style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: 16 }}>a JSON/JSONL claim or FHIR Bundle file, or all five .csv pack files at once</div>
+                  <div className="dropzone-title">Drop your claim file(s) here</div>
+                  <div className="dropzone-caption">A JSON/JSONL claim or FHIR Bundle file, or all five .csv pack files at once</div>
                   <button
+                    type="button"
+                    className="btn btn-primary"
                     onClick={e => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                    style={{ background: 'var(--accent)', border: 'none', borderRadius: 5, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
                   >
                     Browse files
                   </button>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-                  <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Supported:</span>
-                  {['.csv', '.json', '.jsonl'].map(f => (
-                    <span key={f} style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: '#94a3b8', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '1px 7px' }}>{f}</span>
-                  ))}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Supported</span>
+                  {['.csv', '.json', '.jsonl'].map(f => <span key={f} className="rule-chip">{f}</span>)}
                 </div>
               </div>
-              <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>
-                CSV uploads require all five pack files selected together: <span style={{ fontFamily: "var(--font-sans)" }}>{CSV_PACK_FILES.join(', ')}</span>.
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                CSV uploads require all five pack files selected together: <span className="mono-id" style={{ fontWeight: 500, whiteSpace: 'normal' }}>{CSV_PACK_FILES.join(', ')}</span>.
               </div>
 
               {/* Format cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
                 {FORMAT_CARDS.map(fc => (
-                  <div
-                    key={fc.label}
-                    style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 9, padding: '16px 18px', display: 'flex', gap: 14, alignItems: 'flex-start', transition: 'all 0.15s ease', cursor: 'default' }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = 'var(--card-shadow-md)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; }}
-                  >
-                    <div style={{ width: 40, height: 40, borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {fc.icon}
+                  <div key={fc.label} className="format-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                      <span className="format-card-title">{fc.label}</span>
+                      <span className="rule-chip">{fc.ext}</span>
                     </div>
-                    <div>
-                      <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.01em', marginBottom: 3 }}>{fc.label}</div>
-                      <div style={{ fontSize: '0.8125rem', color: '#64748b' }}>{fc.desc}</div>
-                      <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: '#94a3b8', marginTop: 6 }}>{fc.ext}</div>
-                    </div>
+                    <div className="format-card-desc">{fc.desc}</div>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '20px 24px', boxShadow: 'var(--card-shadow)' }}>
-              <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+            <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 16, padding: '20px 24px', boxShadow: 'var(--card-shadow)' }}>
+              <div style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
                 {selectedFormat === 'fhir' ? 'Paste a FHIR Bundle (JSON)' : 'Paste JSON, a JSON array, or JSONL'}
               </div>
-              <div style={{ fontSize: '0.8125rem', color: '#64748b', marginBottom: 12 }}>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: 12 }}>
                 {selectedFormat === 'fhir'
                   ? 'One FHIR Bundle per line (JSONL), or a single Bundle / array of Bundles.'
                   : 'One normalized claim per line (JSONL), or a single claim / array of claims.'}
@@ -661,13 +622,13 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                 rows={12}
                 style={{
                   width: '100%',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
+                  background: 'var(--canvas-bg)',
+                  border: '1px solid var(--card-border)',
                   borderRadius: 8,
                   padding: '12px 14px',
                   fontSize: '0.8125rem',
-                  fontFamily: "var(--font-sans)",
-                  color: '#0f172a',
+                  fontFamily: "var(--font-mono)",
+                  color: 'var(--text-primary)',
                   outline: 'none',
                   resize: 'vertical',
                   marginBottom: 14,
@@ -677,7 +638,7 @@ const selectFiles = useCallback((fileList?: FileList | File[] | null) => {
                 <button
                   onClick={usePastedText}
                   disabled={!pasteText.trim()}
-                  style={{ background: pasteText.trim() ? 'var(--accent)' : '#94a3b8', border: 'none', borderRadius: 5, padding: '9px 24px', color: '#fff', fontSize: '0.875rem', cursor: pasteText.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit', fontWeight: 600 }}
+                  className="btn btn-primary"
                 >
                   Use this input →
                 </button>

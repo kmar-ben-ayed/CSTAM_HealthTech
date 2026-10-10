@@ -1,5 +1,7 @@
 ﻿import React, { useState, useEffect, useCallback } from "react";
+import { adminHeaders, getAdminActor, getAdminToken, setAdminActor, setAdminToken } from "../api/admin";
 import { apiFetch } from "../api/client";
+import RuleManager from "../components/RuleManager";
 
 const ICON_PATHS: Record<string, React.ReactNode> = {
   "rules.json": (
@@ -209,16 +211,6 @@ function NumberInput({
   );
 }
 
-function SelectInput({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
-  return (
-    <Field label={label}>
-      <select style={{ ...INPUT_STYLE, cursor: "pointer" }} value={value ?? ""} onChange={e => onChange(e.target.value)}>
-        {options.map(o => <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>)}
-      </select>
-    </Field>
-  );
-}
-
 /**
  * Comma-separated list field.
  *
@@ -311,19 +303,28 @@ function KVMapInput({ label, value, onChange, valueType = "text" }: {
   );
 }
 
-function RuleForm({ item, onChange }: { item: any; onChange: (f: string, v: any) => void }) {
+/**
+ * Admin access for this browser tab. Changes to rules and reference data
+ * take effect immediately, so the server requires its admin token for them.
+ */
+function AdminAccessBar() {
+  const [token, setToken] = useState(getAdminToken());
+  const [actor, setActor] = useState(getAdminActor());
   return (
-    <>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <TextInput label="Rule ID" value={item.rule_id} onChange={v => onChange("rule_id", v)} />
-        <TextInput label="Version" value={item.version} onChange={v => onChange("version", v)} />
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-end", padding: "10px 14px", borderRadius: 10, border: "1px solid var(--card-border)", background: "var(--card-bg)" }}>
+      <div style={{ flex: 2 }}>
+        <label style={LABEL_STYLE} htmlFor="admin-token">Admin token</label>
+        <input id="admin-token" type="password" style={INPUT_STYLE} value={token} autoComplete="off"
+          onChange={e => { setToken(e.target.value); setAdminToken(e.target.value); }} />
       </div>
-      <TextInput label="Title" value={item.title} onChange={v => onChange("title", v)} />
-      <SelectInput label="Severity" value={item.severity} options={["low", "medium", "high"]} onChange={v => onChange("severity", v)} />
-      <TextInput label="Source Reference" value={item.source} onChange={v => onChange("source", v)} />
-      <Textarea label="Logic / Condition" value={item.logic} onChange={v => onChange("logic", v)} rows={5} />
-      <Textarea label="Corrective Action" value={item.corrective_action} onChange={v => onChange("corrective_action", v)} rows={3} />
-    </>
+      <div style={{ flex: 1 }}>
+        <label style={LABEL_STYLE} htmlFor="admin-actor">Your name (audit log)</label>
+        <input id="admin-actor" style={INPUT_STYLE} value={actor} onChange={e => { setActor(e.target.value); setAdminActor(e.target.value); }} />
+      </div>
+      <div style={{ flex: 2, fontSize: "0.76rem", color: "var(--text-tertiary)", paddingBottom: 6 }}>
+        Kept for this tab only. Required to save changes and to draft, confirm or deactivate rules.
+      </div>
+    </div>
   );
 }
 
@@ -383,7 +384,6 @@ function ServiceForm({ item, onChange }: { item: any; onChange: (f: string, v: a
 
 function blankItem(file: string): any {
   switch (file) {
-    case "rules.json": return { rule_id: "R-NEW", title: "New Rule", severity: "medium", logic: "", corrective_action: "", version: "1.0.0", source: "" };
     case "policies.json": return { policy_id: "NEW-POLICY", version: "1.0.0", payer_id: "", currency: "SAR", submission_window_days: 30, allowed_providers: [], auth_required_services: [], required_documents: {}, max_unit_price: {}, max_quantity_per_line: {} };
     case "diagnoses.json": return { code: "DX-NEW", display: "" };
     case "providers.json": return { provider_id: "NEW-PROV", display: "" };
@@ -405,7 +405,10 @@ export default function AdminPanel() {
     setTimeout(() => setToast(null), 3500);
   };
 
+  const managesRules = activeFile === "rules.json";
+
   const loadData = useCallback(() => {
+    if (activeFile === "rules.json") return; // rules have their own manager
     apiFetch<any>(`${API}/${activeFile}`)
       .then(json => {
         let arr: any[] = [];
@@ -441,7 +444,7 @@ export default function AdminPanel() {
     setSaving(true);
     apiFetch<{ status: string; message: string }>(`${API}/${activeFile}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...adminHeaders() },
       body: JSON.stringify(buildPayload()),
     })
       .then(response => { showToast("success", response.message || "Saved successfully"); setDirty(false); })
@@ -488,7 +491,6 @@ export default function AdminPanel() {
   const renderForm = () => {
     if (!selectedItem) return null;
     switch (activeFile) {
-      case "rules.json":     return <RuleForm      item={selectedItem} onChange={updateField} />;
       case "policies.json":  return <PolicyForm    item={selectedItem} onChange={updateField} />;
       case "diagnoses.json": return <DiagnosisForm item={selectedItem} onChange={updateField} />;
       case "providers.json": return <ProviderForm  item={selectedItem} onChange={updateField} />;
@@ -525,7 +527,7 @@ export default function AdminPanel() {
             System Rules Admin
           </h1>
           <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-            Manage core configurations. Changes are written directly to the backend JSON files.
+            Manage core configurations. Rules are written in plain English and checked before they run.
           </p>
         </div>
         {dirty && (
@@ -534,6 +536,8 @@ export default function AdminPanel() {
           </div>
         )}
       </div>
+
+      <AdminAccessBar />
 
       <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0 }}>
         <div style={{ width: 230, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -569,6 +573,7 @@ export default function AdminPanel() {
           })}
         </div>
 
+        {managesRules ? <RuleManager /> : (
         <div style={{ flex: 1, display: "flex", gap: 0, background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: 12, boxShadow: "var(--card-shadow)", overflow: "hidden" }}>
           <div style={{ width: 240, borderRight: "1px solid var(--card-border)", display: "flex", flexDirection: "column", background: "var(--canvas-bg)" }}>
             <div style={{ padding: "13px 15px", borderBottom: "1px solid var(--card-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -626,6 +631,7 @@ export default function AdminPanel() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

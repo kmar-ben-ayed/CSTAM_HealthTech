@@ -123,14 +123,41 @@ const AUDIT_EVENTS = [
   },
 ];
 
-const EVENT_CONFIG: Record<string, { color: string; bg: string }> = {
-  CLAIM_RECEIVED: { color: 'var(--accent)', bg: 'var(--accent-subtle)' },
-  RUN_STARTED: { color: 'var(--status-review-ink)', bg: 'var(--status-review-bg)' },
-  RUN_COMPLETED: { color: 'var(--status-pass-ink)', bg: 'var(--status-pass-bg)' },
-  RULE_EVALUATED: { color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)' },
-  REVIEW_OPENED: { color: 'var(--status-na-ink)', bg: 'var(--status-na-bg)' },
-  REVIEW_ACTION: { color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)' },
+const EVENT_LABELS: Record<string, string> = {
+  CLAIM_RECEIVED: 'Claim received',
+  RUN_STARTED: 'Run started',
+  RUN_COMPLETED: 'Run completed',
+  RULE_EVALUATED: 'Rule evaluated',
+  REVIEW_OPENED: 'Review opened',
+  REVIEW_ACTION: 'Review decision',
+  AI_EXPLANATION: 'AI explanation',
 };
+
+// A rule event takes the tone of its result; the rest by kind.
+const RESULT_PILL: Record<string, string> = {
+  FAIL: 'is-fail',
+  PASS: 'is-pass',
+  UNABLE_TO_ASSESS: 'is-uta',
+  NOT_APPLICABLE: 'is-na',
+};
+
+function eventLabel(event: string): string {
+  const fallback = event.replaceAll('_', ' ').toLowerCase();
+  return EVENT_LABELS[event] ?? fallback.charAt(0).toUpperCase() + fallback.slice(1);
+}
+
+function eventPill(event: AuditEvent): string {
+  if (event.event === 'RULE_EVALUATED') return RESULT_PILL[event.result ?? ''] ?? 'is-na';
+  if (event.event === 'REVIEW_ACTION') return 'is-pass';
+  if (event.event === 'AI_EXPLANATION') return 'is-review';
+  return 'is-na';
+}
+
+function initials(name: string): string {
+  const words = name.replace(/[^A-Za-z ]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '··';
+  return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
+}
 
 const RESULT_COLOR: Record<string, string> = {
   FAIL: 'var(--status-fail)',
@@ -150,6 +177,7 @@ type AuditEvent = {
   runId: string | null;
   ruleId: string | null;
   ruleVersion: string | null;
+  result: string | null;
   detail: string;
   reason: string | null;
   note: string | null;
@@ -187,6 +215,7 @@ function toAuditEvent(event: BackendAuditEvent): AuditEvent {
     runId: null,
     ruleId,
     ruleVersion,
+    result: event.event_type === 'rule_execution' ? status : null,
     detail,
     reason: null,
     note: null,
@@ -249,75 +278,38 @@ export default function AuditTrail() {
   return (
     <div className="page-shell">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
         <div>
-          <span className="sc-eyebrow"> Tamper-evident log</span>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', margin: '12px 0 4px' }}>
-            Audit Trail
-          </h1>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+          <h1 className="page-title" style={{ margin: '0 0 6px' }}>Audit trail</h1>
+          <p style={{ color: 'var(--text-secondary)' }}>
             Trace system and reviewer actions across every claim.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Chain integrity indicator */}
           {verified && !verifying && (
-            <div className="chain-verified">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <circle cx="6" cy="6" r="5" fill="var(--status-pass)"/>
-                <path d="M3.5 6l2 2 3-4" stroke="var(--card-bg)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Audit chain verified
-            </div>
+            <span className="status-pill is-pass">Chain verified · {events.length.toLocaleString()} events</span>
           )}
-          <button
-            onClick={handleVerify}
-            disabled={verifying}
-            style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 7,
-              padding: '7px 14px',
-              fontSize: '0.8125rem',
-              color: 'var(--text-secondary)',
-              cursor: verifying ? 'not-allowed' : 'pointer',
-              fontFamily: 'inherit',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              opacity: verifying ? 0.7 : 1,
-            }}
-          >
+          {verified === false && !verifying && (
+            <span className="status-pill is-fail">Chain verification failed</span>
+          )}
+          <button type="button" className="btn btn-secondary" onClick={handleVerify} disabled={verifying}>
             {verifying ? (
               <>
-                <div style={{ width: 12, height: 12, border: '1.5px solid var(--accent-ink)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sentinel-orbit 0.8s linear infinite' }} />
-                Verifying...
+                <span style={{ width: 12, height: 12, border: '1.5px solid var(--accent-ink)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'sentinel-orbit 0.8s linear infinite' }} />
+                Verifying…
               </>
             ) : (
               <>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                   <path d="M7 1l6 2.5v4.5C13 11 10 13.5 7 14 4 13.5 1 11 1 8V3.5L7 1z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
                 </svg>
                 Verify chain
               </>
             )}
           </button>
-          <button style={{
-            background: 'var(--card-bg)',
-            border: '1px solid var(--border)',
-            borderRadius: 7,
-            padding: '7px 14px',
-            fontSize: '0.8125rem',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <button type="button" className="btn btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <path d="M7 2v7M4 6l3 3 3-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M2 11h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
             </svg>
@@ -327,297 +319,167 @@ export default function AuditTrail() {
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, alignItems: 'center' }}>
-        <div style={{ position: 'relative' }}>
-          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <circle cx="6" cy="6" r="4.5" stroke="var(--text-tertiary)" strokeWidth="1.3"/>
-            <path d="M9.5 9.5l3 3" stroke="var(--text-tertiary)" strokeWidth="1.3" strokeLinecap="round"/>
+      <div className="audit-filters">
+        <div className="claims-search">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
+            <path d="M9.5 9.5l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
           </svg>
           <input
             type="text"
-            placeholder="Filter by claim ID..."
+            placeholder="Claim ID, e.g. CLM-10481"
+            aria-label="Filter by claim ID"
             value={filterClaim}
             onChange={e => setFilterClaim(e.target.value)}
-            style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 7,
-              padding: '7px 12px 7px 32px',
-              fontSize: '0.875rem',
-              color: 'var(--text-primary)',
-              fontFamily: 'inherit',
-              outline: 'none',
-              width: 200,
-            }}
           />
         </div>
 
-        <select
-          value={filterActor}
-          onChange={e => setFilterActor(e.target.value)}
-          style={{
-            background: 'var(--card-bg)',
-            border: '1px solid var(--border)',
-            borderRadius: 7,
-            padding: '7px 12px',
-            fontSize: '0.875rem',
-            color: filterActor ? 'var(--text-primary)' : 'var(--text-tertiary)',
-            fontFamily: 'inherit',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
-        >
+        <select className="form-select" aria-label="Filter by actor" value={filterActor} onChange={e => setFilterActor(e.target.value)}>
           <option value="">All actors</option>
           <option value="human">Human</option>
           <option value="system">System</option>
         </select>
 
-        <select
-          value={filterEvent}
-          onChange={e => setFilterEvent(e.target.value)}
-          style={{
-            background: 'var(--card-bg)',
-            border: '1px solid var(--border)',
-            borderRadius: 7,
-            padding: '7px 12px',
-            fontSize: '0.875rem',
-            color: filterEvent ? 'var(--text-primary)' : 'var(--text-tertiary)',
-            fontFamily: 'inherit',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
-        >
+        <select className="form-select" aria-label="Filter by event type" value={filterEvent} onChange={e => setFilterEvent(e.target.value)}>
           <option value="">All event types</option>
-          {uniqueEvents.map(e => <option key={e} value={e}>{e}</option>)}
+          {uniqueEvents.map(e => <option key={e} value={e}>{eventLabel(e)}</option>)}
         </select>
 
         {(filterClaim || filterActor || filterEvent) && (
           <button
+            type="button"
+            className="btn btn-ghost btn-sm"
             onClick={() => { setFilterClaim(''); setFilterActor(''); setFilterEvent(''); }}
-            style={{ background: 'transparent', border: 'none', fontSize: '0.8125rem', color: 'var(--text-tertiary)', cursor: 'pointer', fontFamily: 'inherit' }}
           >
             Clear
           </button>
         )}
 
-        <div style={{ marginLeft: 'auto', fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-          {filtered.length} events
-        </div>
+        <span className="audit-filter-count">{filtered.length} events</span>
       </div>
 
-      {/* Timeline */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {filtered.map((event, i) => {
-          const cfg = EVENT_CONFIG[event.event] || EVENT_CONFIG.CLAIM_RECEIVED;
-          const isExpanded = expandedEvent === event.id;
+      {loading && <div className="audit-empty">Loading audit history…</div>}
+      {loadError && (
+        <div className="audit-empty">
+          <strong>Unable to load the audit trail</strong>
+          <span>{loadError}</span>
+        </div>
+      )}
 
-          return (
-            <div key={event.id} className="audit-event" style={{ display: 'flex', gap: 16, position: 'relative' }}>
-              {/* Timeline line */}
-              {i < filtered.length - 1 && (
-                <div style={{
-                  position: 'absolute',
-                  left: 19,
-                  top: 36,
-                  bottom: 0,
-                  width: 1,
-                  background: 'var(--canvas-bg-secondary)',
-                  zIndex: 0,
-                }} />
-              )}
+      {/* Event list */}
+      {filtered.length > 0 && (
+        <div className="audit-list">
+          {filtered.map(event => {
+            const isExpanded = expandedEvent === event.id;
+            const toggle = () => setExpandedEvent(isExpanded ? null : event.id);
 
-              {/* Event dot */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 1, flexShrink: 0 }}>
-                <div style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: '50%',
-                  background: cfg.bg,
-                  border: `1.5px solid color-mix(in srgb, ${cfg.color} 18%, transparent)`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.color }} />
-                </div>
-              </div>
-
-              {/* Event card */}
-              <div style={{ flex: 1, marginBottom: 12 }}>
+            return (
+              <div key={event.id} className={`audit-row${isExpanded ? ' is-open' : ''}`}>
                 <div
-                  style={{
-                    background: isExpanded ? 'var(--canvas-bg)' : 'transparent',
-                    border: '0',
-                    borderBottom: '1px solid var(--border)',
-                    borderRadius: 0,
-                    padding: '12px 10px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    boxShadow: 'none',
+                  className="audit-row-head"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  onClick={toggle}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      toggle();
+                    }
                   }}
-                  onClick={() => setExpandedEvent(isExpanded ? null : event.id)}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{
-                        fontFamily: "var(--font-sans)",
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                        color: cfg.color,
-                        background: cfg.bg,
-                        border: `1px solid color-mix(in srgb, ${cfg.color} 15%, transparent)`,
-                        borderRadius: 4,
-                        padding: '2px 7px',
-                        letterSpacing: '0.04em',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {event.event}
-                      </span>
+                  <span className="activity-avatar" aria-hidden="true">{initials(event.actor)}</span>
 
-                      {event.ruleId && (
-                        <span style={{
-                          fontFamily: "var(--font-sans)",
-                          fontSize: '0.6875rem',
-                          color: 'var(--accent-ink)',
-                          background: 'var(--accent-subtle)',
-                          border: '1px solid var(--status-review-border)',
-                          borderRadius: 4,
-                          padding: '2px 7px',
-                          fontWeight: 600,
-                        }}>
-                          {event.ruleId}
-                        </span>
-                      )}
-
-                      <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{event.detail}</span>
+                  <div className="audit-row-main">
+                    <div className="audit-row-title">
+                      <span>{event.detail}</span>
+                      <span className={`status-pill ${eventPill(event)}`}>{eventLabel(event.event)}</span>
                     </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 12 }}>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>{event.time}</div>
-                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{event.date}</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <div style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: '50%',
-                          background: event.actorType === 'human' ? 'var(--status-uta-bg)' : 'var(--status-pass-bg)',
-                          border: event.actorType === 'human' ? '1px solid var(--status-uta-border)' : '1px solid var(--status-pass-border)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          {event.actorType === 'human' ? (
-                            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                              <circle cx="5.5" cy="3.5" r="2" stroke="var(--status-uta-ink)" strokeWidth="1.1"/>
-                              <path d="M1 10c0-2.5 2-4.5 4.5-4.5S10 7.5 10 10" stroke="var(--status-uta-ink)" strokeWidth="1.1" strokeLinecap="round"/>
-                            </svg>
-                          ) : (
-                            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                              <rect x="1.5" y="2" width="8" height="7" rx="1.5" stroke="var(--status-pass-ink)" strokeWidth="1.1"/>
-                              <path d="M3.5 5h4M3.5 7h2" stroke="var(--status-pass-ink)" strokeWidth="1.1" strokeLinecap="round"/>
-                            </svg>
-                          )}
-                        </div>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{event.actor}</span>
-                      </div>
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 14 14"
-                        fill="none"
-                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease', color: 'var(--text-tertiary)', flexShrink: 0 }}
-                      >
-                        <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                    <div className="audit-row-meta">
+                      <span>{event.actor}</span>
+                      {event.claimId && <span className="audit-mono">{event.claimId}</span>}
+                      {event.ruleId && <span className="rule-chip">{event.ruleId}</span>}
                     </div>
                   </div>
 
-                  {/* Expanded detail */}
-                  {isExpanded && (
-                    <div style={{
-                      marginTop: 14,
-                      paddingTop: 14,
-                      borderTop: '1px solid var(--border)',
-                      animation: 'fade-in 0.2s ease-out',
-                    }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 14 }}>
-                        {[
-                          { label: 'Event ID', value: event.id, mono: true },
-                          { label: 'Timestamp', value: `${event.date} ${event.time}`, mono: true },
-                          { label: 'Actor', value: event.actor },
-                          { label: 'Claim ID', value: event.claimId || '–', mono: true },
-                          { label: 'Run ID', value: event.runId || '–', mono: true },
-                          { label: 'Rule / version', value: event.ruleId ? `${event.ruleId} · ${event.ruleVersion}` : '–', mono: true },
-                        ].map(f => (
-                          <div key={f.label}>
-                            <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>
-                              {f.label}
-                            </div>
-                            <div style={{
-                              fontSize: '0.8125rem',
-                              color: 'var(--text-primary)',
-                              fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
-                              fontWeight: f.mono ? 500 : 400,
-                            }}>
-                              {f.value}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="audit-row-when">
+                    <span className="audit-mono">{event.time}</span>
+                    <span>{event.date}</span>
+                  </div>
 
-                      {event.reason && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Reason</div>
-                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{event.reason}</div>
-                        </div>
-                      )}
-
-                      {event.note && (
-                        <div style={{ marginBottom: 12 }}>
-                          <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Reviewer note</div>
-                          <div style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', fontStyle: 'italic' }}>{event.note}</div>
-                        </div>
-                      )}
-
-                      {/* Hash chain */}
-                      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '12px 14px' }}>
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                            <path d="M6 1l5 2v3c0 3-2.5 5.5-5 6C3.5 11.5 1 9 1 6V3L6 1z" stroke="var(--accent-ink)" strokeWidth="1.1" strokeLinejoin="round"/>
-                          </svg>
-                          <span style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--accent-ink)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Hash chain</span>
-                          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-pass)' }} />
-                            <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--status-pass-ink)' }}>Verified</span>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <div>
-                            <div style={{ fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Previous hash</div>
-                            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: 'var(--text-secondary)', wordBreak: 'break-all', lineHeight: 1.4 }}>{event.prevHash}</div>
-                          </div>
-                          <div style={{ height: 1, background: 'var(--canvas-bg-secondary)' }} />
-                          <div>
-                            <div style={{ fontSize: '0.6rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Event hash</div>
-                            <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: 'var(--text-primary)', wordBreak: 'break-all', lineHeight: 1.4, fontWeight: 600 }}>{event.eventHash}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <svg
+                    className="audit-row-chevron"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 14 14"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
-      {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '64px 24px' }}>
-          <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>No audit events found</div>
-          <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>Try adjusting your filters</div>
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className="audit-row-detail">
+                    <dl className="audit-facts">
+                      {[
+                        { label: 'Event ID', value: event.id, mono: true },
+                        { label: 'Timestamp', value: `${event.date} ${event.time}`, mono: true },
+                        { label: 'Actor', value: event.actor },
+                        { label: 'Claim ID', value: event.claimId || '–', mono: true },
+                        { label: 'Run ID', value: event.runId || '–', mono: true },
+                        { label: 'Rule / version', value: event.ruleId ? [event.ruleId, event.ruleVersion].filter(Boolean).join(' · ') : '–', mono: true },
+                      ].map(f => (
+                        <div key={f.label}>
+                          <dt>{f.label}</dt>
+                          <dd className={f.mono ? 'audit-mono' : undefined}>{f.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+
+                    {event.reason && (
+                      <div className="audit-note">
+                        <div className="audit-label">Reason</div>
+                        <p>{event.reason}</p>
+                      </div>
+                    )}
+
+                    {event.note && (
+                      <div className="audit-note">
+                        <div className="audit-label">Reviewer note</div>
+                        <p style={{ fontStyle: 'italic' }}>{event.note}</p>
+                      </div>
+                    )}
+
+                    {/* Hash chain */}
+                    <div className="audit-label">Hash chain</div>
+                    <div className="audit-hash-label">Previous hash</div>
+                    <div className="evidence-dark audit-hash">{event.prevHash}</div>
+                    <div className="audit-hash-arrow" aria-hidden="true">↓</div>
+                    <div className="audit-hash-label">Event hash</div>
+                    <div className="evidence-dark audit-hash is-current">{event.eventHash}</div>
+                    {verified && (
+                      <div className="audit-verified">
+                        <svg width="14" height="14" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                          <path d="M6 1l5 2v3c0 3-2.5 5.5-5 6C3.5 11.5 1 9 1 6V3L6 1z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
+                          <path d="M4 6l1.5 1.5L8 5" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        Verified with the rest of the chain
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading && !loadError && filtered.length === 0 && (
+        <div className="audit-empty">
+          <strong>No audit events found</strong>
+          <span>Try adjusting your filters</span>
         </div>
       )}
     </div>

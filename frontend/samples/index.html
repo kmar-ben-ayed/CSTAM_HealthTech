@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClaimGuard UI concepts</title>
+<style>
+  :root { --bg: #f4f3ef; --tx: #1b1a17; --tx-2: #5c5850; --line: #d6d1c4; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--tx); font: 15px/1.5 system-ui, sans-serif; padding: 48px 32px; max-width: 1200px; margin: 0 auto; }
+  h1 { font: 600 28px Georgia, serif; letter-spacing: -0.01em; }
+  .lede { color: var(--tx-2); margin: 6px 0 32px; max-width: 60ch; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  a.card { color: inherit; text-decoration: none; border-top: 2px solid var(--tx); padding-top: 12px; display: block; }
+  .frame { aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid var(--line); background: #fff; margin-bottom: 12px; position: relative; }
+  .frame iframe { width: 1440px; height: 900px; border: 0; transform: scale(.25); transform-origin: 0 0; pointer-events: none; position: absolute; }
+  h2 { font-size: 17px; font-weight: 600; }
+  p { color: var(--tx-2); font-size: 14px; margin-top: 4px; }
+  .k { font: 12px ui-monospace, monospace; color: var(--tx-2); }
+  @media (max-width: 900px) { body { padding: 24px 16px; } .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <h1>ClaimGuard — three directions</h1>
+  <p class="lede">The same synthetic claim (CG-2D966B65D1A1: two fails, one "unable to assess") shown three ways. Click a card to open it full size. Rationale is in README.md.</p>
+  <div class="grid">
+    <a class="card" href="a-ledger.html">
+      <div class="frame"><iframe src="a-ledger.html" title="Ledger preview" loading="lazy" scrolling="no" onload="fit(this)"></iframe></div>
+      <span class="k">A</span><h2>Ledger</h2>
+      <p>The claim as an audited document. Serif headings, findings as margin notes, one oxblood accent.</p>
+    </a>
+    <a class="card" href="b-console.html">
+      <div class="frame"><iframe src="b-console.html" title="Console preview" loading="lazy" scrolling="no" onload="fit(this)"></iframe></div>
+      <span class="k">B</span><h2>Console</h2>
+      <p>Dense, dark, keyboard-first. Queue, claim and finding on one screen. Try j / k / Tab.</p>
+    </a>
+    <a class="card" href="c-casework.html">
+      <div class="frame"><iframe src="c-casework.html" title="Casework preview" loading="lazy" scrolling="no" onload="fit(this)"></iframe></div>
+      <span class="k">C</span><h2>Casework</h2>
+      <p>Guided. A plain-sentence summary, then one finding at a time. You can't sign until each has a reason.</p>
+    </a>
+  </div>
+<script>
+  function fit(f) { const w = f.parentElement.clientWidth; f.style.transform = `scale(${w / 1440})`; }
+  addEventListener('resize', () => document.querySelectorAll('iframe').forEach(fit));
+</script>
+</body>
+</html>

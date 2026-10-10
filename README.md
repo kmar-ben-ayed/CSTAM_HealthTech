@@ -11,7 +11,7 @@ ClaimGuard AI ingests **synthetic** healthcare claim packages (FHIR R4 JSON, CSV
 | Requirement (points) | Where |
 |---|---|
 | Data ingestion & normalisation (15) | `backend/src/normalisation/`, `api_app/services.py` -> [docs/INGESTION.md](docs/INGESTION.md) |
-| Deterministic & AI rule engine (15) | `backend/src/rule_engine/`, `backend/src/AI_agent/` -> [docs/RULES_CATALOGUE.md](docs/RULES_CATALOGUE.md) |
+| Deterministic & AI rule engine (15) | `backend/src/rule_engine/`, `backend/src/rule_authoring/`, `backend/src/AI_agent/` -> [docs/RULES_CATALOGUE.md](docs/RULES_CATALOGUE.md), [docs/RULE_ENGINE.md](docs/RULE_ENGINE.md) |
 | Explainability & structured output (10) | [docs/FINDINGS_SCHEMA.md](docs/FINDINGS_SCHEMA.md) |
 | Audit log engine (10) | `backend/src/audit/` -> [docs/AUDIT_LOG.md](docs/AUDIT_LOG.md) |
 | Architecture & data flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DATA_FLOW.md](docs/DATA_FLOW.md) |
@@ -30,6 +30,8 @@ flowchart LR
 ```
 
 Key idea: **rules decide, AI explains.** The LLM cannot change a verdict, severity or the human-review flag; invalid output is replaced by a deterministic fallback.
+
+Rules are data, not code: each one is a JSON spec evaluated by the server. New rules are written in English. A drafting agent proposes a spec, and code checks it against an independent reading and generated edge cases before the rule can run ([docs/RULE_ENGINE.md](docs/RULE_ENGINE.md)).
 
 ## Tech stack
 
@@ -66,6 +68,10 @@ Without `OPENAI_API_KEY` the explanation layer uses the deterministic mock provi
 | `OPENAI_MODEL` | Model name |
 | `CLAIMGUARD_AUDIT_LOG` | Audit log path (default `outputs/audit_log.jsonl`) |
 | `CLAIMGUARD_CORS_ORIGINS` | Comma-separated allowed origins |
+| `CLAIMGUARD_ADMIN_TOKEN` | Admin token (16+ characters) required to change rules or reference data; unset = admin changes disabled |
+| `RULE_DRAFTER_MODEL`, `RULE_ORACLE_MODEL` | Models for rule drafting and the independent reading (default `OPENAI_MODEL`; use two different models) |
+| `RULE_REQUIRE_AUTHOR_CONFIRMATION` | `true` (default): a checked rule waits for the author to confirm its readback |
+| `RULE_DRAFTS_PER_HOUR` | Rate limit on rule drafts (default 20) |
 
 ### Frontend
 
@@ -86,14 +92,17 @@ python src/run_baseline.py --input data/development/claims.jsonl --output output
 python src/evaluate.py --help
 python src/AI_agent/explain_rule_results.py --input outputs/predictions.jsonl --output outputs/explanations.jsonl
 python src/audit/audit.py --log outputs/audit_log.jsonl      # verify audit chain
+python src/run_rule_benchmark.py --set all                    # rule-authoring reliability (uses model calls)
 ```
 
 ### Tests
 
 ```bash
 cd backend
-python -m pytest tests
+python -m pytest tests          # or: python -m unittest discover -s tests -t .
 ```
+
+The tests never call a real model (they use scripted ones) and never modify `backend/rules/`.
 
 ## Quick check
 
@@ -111,11 +120,14 @@ backend/
     api.py                 # uvicorn launcher
     api_app/               # FastAPI app, routes, schemas, services
     normalisation/         # fhir_adapter, csv_to_jsonl, schema_subset
-    rule_engine/           # engine_core (R001-R015)
+    rule_engine/           # rule language, checks, interpreter, spec store, engine_core
+    rule_authoring/        # drafter agent, edge cases, oracle, checks, workflow
+    rule_benchmark/        # authoring reliability benchmark (+ run_rule_benchmark.py)
     AI_agent/              # llm_adapter, confidence, explain_rule_results
     audit/                 # hash-chained audit log
     run_baseline.py, evaluate.py, make_review.py
-  rules/  schemas/  data/  # rule catalogue, claim schema, datasets
+  rules/  schemas/  data/  # rule catalogue + reference_specs.json, claim schema, datasets
+  outputs/                 # runtime state: rules.sqlite3 (rule specs, drafts), audit log, ingestion
   tests/
 frontend/
   src/{api,components,hooks,pages}
@@ -126,7 +138,7 @@ docs/
 
 - Rules are deterministic only; AI explains but does not detect.
 - Confidence scores are heuristic, not calibrated.
-- No authentication yet (reviewer id taken from `X-Actor` / request body) - planned for Phase 2 with RBAC.
+- No user authentication yet (reviewer id taken from `X-Actor` / request body) - planned for Phase 2 with RBAC. Rule and reference-data changes are protected by a single shared admin token.
 - Audit chain is tamper-evident, not tamper-proof.
 
 ## Team

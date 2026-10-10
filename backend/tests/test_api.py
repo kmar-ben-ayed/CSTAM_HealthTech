@@ -12,7 +12,18 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT / "src"))
 
 from src.api_app.main import create_app
-from src.rule_engine.engine_core import load_jsonl
+from src.rule_engine.engine_core import active_rules, config, load_jsonl
+
+ADMIN_TOKEN = "test-admin-token-0123456789"
+
+
+def isolated_backend(temp_dir: str) -> Path:
+    """A copy of the rule files, so tests that change rules never touch the repository."""
+    root = Path(temp_dir) / "backend"
+    shutil.copytree(BACKEND_ROOT / "rules", root / "rules")
+    shutil.copytree(BACKEND_ROOT / "schemas", root / "schemas")
+    shutil.copytree(BACKEND_ROOT / "data" / "development", root / "data" / "development")
+    return root
 
 
 class ApiRouteTests(unittest.TestCase):
@@ -20,7 +31,7 @@ class ApiRouteTests(unittest.TestCase):
     def setUpClass(cls):
         cls.claim = load_jsonl(BACKEND_ROOT / "data" / "development" / "claims.jsonl")[0]
         cls.bundle = load_jsonl(BACKEND_ROOT / "data" / "development" / "fhir_bundles.jsonl")[0]
-        cls.rule_count = len(json.loads((BACKEND_ROOT / "rules" / "rules.json").read_text(encoding="utf-8")))
+        cls.rule_count = len(active_rules(config(BACKEND_ROOT)))
 
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -49,54 +60,39 @@ class ApiRouteTests(unittest.TestCase):
         self.assertNotIn("invoice_number", json.dumps(events))
         self.assertNotIn("patient_id", json.dumps(events))
 
-    def test_deleted_rule_is_removed_from_live_claim_evaluation(self):
-        isolated_root = Path(self.temp_dir.name) / "backend"
-        shutil.copytree(BACKEND_ROOT / "rules", isolated_root / "rules")
-        shutil.copytree(BACKEND_ROOT / "schemas", isolated_root / "schemas")
-        isolated_audit_path = isolated_root / "audit.jsonl"
-        original_rules = json.loads(
-            (isolated_root / "rules" / "rules.json").read_text(encoding="utf-8")
-        )
-        original_rules = [
-            rule for rule in original_rules if rule["rule_id"] != "R016"
-        ]
-        deleted_rule = {
-            "rule_id": "R016",
-            "title": "Temporary rule",
-            "severity": "medium",
-            "logic": "If provider is EDU-PROV-02 pass, missing and other prov is fail",
-            "corrective_action": "Reject the claim.",
-            "version": "1.0.0",
-            "source": "fictional-rulebook/R016@1.0.0",
-        }
-        with TestClient(
-            create_app(backend_root=isolated_root, audit_log_path=isolated_audit_path)
-        ) as client:
-            self.assertEqual(
-                client.post(
-                    "/api/v1/config/rules.json",
-                    json=original_rules + [deleted_rule],
-                ).status_code,
-                200,
-            )
-            with_rule = client.post(
-                "/api/v1/claims/evaluate",
-                json={"claim": self.claim},
-            ).json()["results"]
-            self.assertIn("R016", [result["rule_id"] for result in with_rule])
+    def test_config_changes_require_a_configured_admin_token(self):
+        root = isolated_backend(self.temp_dir.name)
+        policies = json.loads((root / "rules" / "policies.json").read_text(encoding="utf-8"))
 
-            self.assertEqual(
-                client.post(
-                    "/api/v1/config/rules.json",
-                    json=original_rules,
-                ).status_code,
-                200,
+        with TestClient(create_app(backend_root=root, audit_log_path=root / "audit.jsonl")) as client:
+            # No token configured on the server: admin changes are disabled.
+            self.assertEqual(client.post("/api/v1/config/policies.json", json=policies).status_code, 503)
+
+        with TestClient(
+            create_app(backend_root=root, audit_log_path=root / "audit.jsonl", admin_token=ADMIN_TOKEN)
+        ) as client:
+            self.assertEqual(client.post("/api/v1/config/policies.json", json=policies).status_code, 401)
+            wrong = {"X-Admin-Token": "not-the-token-at-all"}
+            self.assertEqual(client.post("/api/v1/config/policies.json", json=policies, headers=wrong).status_code, 401)
+            good = {"X-Admin-Token": ADMIN_TOKEN}
+            self.assertEqual(client.post("/api/v1/config/policies.json", json=policies, headers=good).status_code, 200)
+
+    def test_rules_catalogue_is_read_only_through_config_routes(self):
+        root = isolated_backend(self.temp_dir.name)
+        with TestClient(
+            create_app(backend_root=root, audit_log_path=root / "audit.jsonl", admin_token=ADMIN_TOKEN)
+        ) as client:
+            rules = client.get("/api/v1/config/rules.json").json()
+            response = client.post(
+                "/api/v1/config/rules.json", json=rules, headers={"X-Admin-Token": ADMIN_TOKEN}
             )
-            without_rule = client.post(
-                "/api/v1/claims/evaluate",
-                json={"claim": self.claim},
-            ).json()["results"]
-            self.assertNotIn("R016", [result["rule_id"] for result in without_rule])
+            self.assertEqual(response.status_code, 409)
+
+    def test_inactive_rules_are_not_evaluated(self):
+        results = self.client.post("/api/v1/claims/evaluate", json={"claim": self.claim}).json()["results"]
+        rule_ids = [result["rule_id"] for result in results]
+        self.assertEqual(len(rule_ids), self.rule_count)
+        self.assertNotIn("R017", rule_ids)
 
     def test_invalid_claim_returns_structured_422(self):
         response = self.client.post("/api/v1/claims/evaluate", json={"claim": {"claim_id": "bad"}})
@@ -247,11 +243,23 @@ class ApiRouteTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/v1/audit/events").json()["total_count"], 1)
 
     def test_explanation_rejects_rule_outside_engine_catalogue(self):
-        response = self.client.post(
+        unknown = self.client.post(
             "/api/v1/explanations",
             json={"claim": self.claim, "rule_id": "R999", "provider": "mock"},
         )
-        self.assertEqual(response.status_code, 422)
+        self.assertEqual(unknown.status_code, 404)
+        malformed = self.client.post(
+            "/api/v1/explanations",
+            json={"claim": self.claim, "rule_id": "R1; DROP", "provider": "mock"},
+        )
+        self.assertEqual(malformed.status_code, 422)
+
+    def test_explanation_of_inactive_rule_is_404_not_500(self):
+        response = self.client.post(
+            "/api/v1/explanations",
+            json={"claim": self.claim, "rule_id": "R017", "provider": "mock"},
+        )
+        self.assertEqual(response.status_code, 404)
 
     def test_review_reason_is_hashed_not_returned(self):
         review = {

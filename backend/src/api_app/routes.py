@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api_app.schemas import (
     ClaimRequest,
@@ -14,14 +14,8 @@ from api_app.schemas import (
     ReviewDecisionRequest,
     TextIngestRequest,
 )
-from api_app.services import BACKEND_ROOT, DATASET_SPLITS, load_claim_file
-from rule_engine.generator import (
-    generate_missing_specs,
-    verify as verify_rule_generation,
-    write_specs,
-)
-from rule_engine.implementation_schema import SpecificationError
-from rule_engine.engine_core import config as load_rules_config
+from api_app.security import require_admin
+from api_app.services import DATASET_SPLITS, load_claim_file
 
 
 v1_router = APIRouter(prefix="/api/v1")
@@ -29,9 +23,9 @@ legacy_router = APIRouter()
 
 ALLOWED_CONFIG_FILES = {"rules.json", "policies.json", "diagnoses.json", "providers.json", "services.json"}
 
-# The config documents live in backend/rules/. Kept as a module constant so the
-# config routes and the cross-file validator read the same directory.
-RULES_DIR = BACKEND_ROOT / "rules"
+# rules.json can be read here, but rules are created, changed and switched off
+# through /api/v1/rules, which drafts and checks an implementation first.
+READ_ONLY_CONFIG_FILES = {"rules.json"}
 
 MAX_ACTOR_LENGTH = 128
 
@@ -40,26 +34,27 @@ def _service(request: Request, name: str) -> Any:
     return getattr(request.app.state, name)
 
 
-def _load_rules_data(filename: str, overrides: dict[str, Any] | None = None):
+def _rules_dir(request: Request) -> Path:
+    """The config documents live in <backend root>/rules of this app instance."""
+    return request.app.state.backend_root / "rules"
+
+
+def _load_rules_data(rules_dir: Path, filename: str, overrides: dict[str, Any] | None = None):
     """Load a config file from disk, return parsed data (list or dict)."""
     if overrides and filename in overrides:
         return overrides[filename]
-    path = RULES_DIR / filename
+    path = rules_dir / filename
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _refresh_runtime_config(request: Request) -> None:
-    """Make successful Admin Panel saves visible to the running API process."""
-    rules_config = load_rules_config(RULES_DIR.parent)
-    request.app.state.claim_service.rules_config = rules_config
-    request.app.state.explanation_service.rules = {
-        rule["rule_id"]: rule for rule in rules_config["rules"]
-    }
-
-
-def _validate_config(filename: str, data: Any, overrides: dict[str, Any] | None = None) -> list[str]:
+def _validate_config(
+    rules_dir: Path,
+    filename: str,
+    data: Any,
+    overrides: dict[str, Any] | None = None,
+) -> list[str]:
     """
     Cross-file integrity checks.
     Returns a list of human-readable error strings (empty = all good).
@@ -68,50 +63,23 @@ def _validate_config(filename: str, data: Any, overrides: dict[str, Any] | None 
 
     # ── Helpers to load reference sets ───────────────────────────────────────
     def svc_codes() -> set[str]:
-        raw = _load_rules_data("services.json", overrides) or {}
+        raw = _load_rules_data(rules_dir, "services.json", overrides) or {}
         return set(raw.keys())
 
     def provider_ids() -> set[str]:
-        raw = _load_rules_data("providers.json", overrides) or []
+        raw = _load_rules_data(rules_dir, "providers.json", overrides) or []
         return {p["provider_id"] for p in raw if isinstance(p, dict) and "provider_id" in p}
 
     def diagnosis_codes() -> set[str]:
-        raw = _load_rules_data("diagnoses.json", overrides) or []
+        raw = _load_rules_data(rules_dir, "diagnoses.json", overrides) or []
         return {d["code"] for d in raw if isinstance(d, dict) and "code" in d}
 
     def policy_ids() -> set[str]:
-        raw = _load_rules_data("policies.json", overrides) or {}
+        raw = _load_rules_data(rules_dir, "policies.json", overrides) or {}
         return set(raw.keys())
 
-    # ── rules.json ────────────────────────────────────────────────────────────
-    if filename == "rules.json":
-        if not isinstance(data, list):
-            errors.append("rules.json must be a JSON array.")
-            return errors
-        seen_ids: set[str] = set()
-        for i, rule in enumerate(data):
-            if not isinstance(rule, dict):
-                errors.append(f"Rule #{i}: must be an object.")
-                continue
-            rid = rule.get("rule_id", "")
-            if not rid:
-                errors.append(f"Rule #{i}: missing rule_id.")
-            elif rid in seen_ids:
-                errors.append(f"Rule #{i}: duplicate rule_id '{rid}'.")
-            else:
-                seen_ids.add(rid)
-            if not rule.get("title", "").strip():
-                errors.append(f"Rule '{rid}': title is required.")
-            for field in ("logic", "corrective_action", "source"):
-                if not isinstance(rule.get(field), str) or not rule[field].strip():
-                    errors.append(f"Rule '{rid}': {field} is required.")
-            if rule.get("severity") not in ("low", "medium", "high"):
-                errors.append(f"Rule '{rid}': severity must be low / medium / high (got {rule.get('severity')!r}).")
-            if not rule.get("version", "").strip():
-                errors.append(f"Rule '{rid}': version is required.")
-
     # ── policies.json ─────────────────────────────────────────────────────────
-    elif filename == "policies.json":
+    if filename == "policies.json":
         if not isinstance(data, dict):
             errors.append("policies.json must be a JSON object keyed by policy_id.")
             return errors
@@ -233,52 +201,40 @@ def _validate_config(filename: str, data: Any, overrides: dict[str, Any] | None 
 
 
 @v1_router.get("/config/{filename}", tags=["config"])
-def get_config(filename: str):
+def get_config(filename: str, request: Request):
     if filename not in ALLOWED_CONFIG_FILES:
         raise HTTPException(status_code=400, detail="Invalid config file")
-    file_path = RULES_DIR / filename
+    file_path = _rules_dir(request) / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return json.loads(file_path.read_text(encoding="utf-8"))
 
-@v1_router.post("/config/{filename}", tags=["config"])
+@v1_router.post("/config/{filename}", tags=["config"], dependencies=[Depends(require_admin)])
 async def save_config(filename: str, request: Request):
     if filename not in ALLOWED_CONFIG_FILES:
         raise HTTPException(status_code=400, detail="Invalid config file")
+    if filename in READ_ONLY_CONFIG_FILES:
+        raise HTTPException(
+            status_code=409,
+            detail={"errors": ["Rules are managed through /api/v1/rules, which checks an implementation before it runs."]},
+        )
     data = await request.json()
+    rules_dir = _rules_dir(request)
 
-    errors = _validate_config(filename, data, {filename: data})
+    errors = _validate_config(rules_dir, filename, data, {filename: data})
     # Provider and service edits can invalidate references from existing policies.
     if filename in {"providers.json", "services.json"}:
-        policies = _load_rules_data("policies.json")
-        errors.extend(_validate_config("policies.json", policies, {filename: data}))
+        policies = _load_rules_data(rules_dir, "policies.json")
+        errors.extend(_validate_config(rules_dir, "policies.json", policies, {filename: data}))
     if errors:
         raise HTTPException(status_code=422, detail={"errors": errors})
 
-    if filename == "rules.json":
-        try:
-            generated_specs = generate_missing_specs(data)
-            verify_rule_generation(data, generated_specs)
-            write_specs(generated_specs)
-        except (SpecificationError, SystemExit) as exc:
-            message = str(exc) or "Rule generation failed."
-            raise HTTPException(
-                status_code=422,
-                detail={"errors": [f"Rule generation failed: {message}"]},
-            ) from exc
-
-    file_path = RULES_DIR / filename
+    file_path = rules_dir / filename
     temporary_path = file_path.with_suffix(f"{file_path.suffix}.tmp")
     temporary_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     temporary_path.replace(file_path)
-    _refresh_runtime_config(request)
-    response = {"status": "ok", "message": f"{filename} saved successfully."}
-    if filename == "rules.json":
-        response["generation"] = {
-            "status": "verified",
-            "message": "Rule catalog saved and deterministic implementations verified.",
-        }
-    return response
+    request.app.state.reload_rules()
+    return {"status": "ok", "message": f"{filename} saved successfully."}
 
 
 @v1_router.get("/health", tags=["system"])

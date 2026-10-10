@@ -11,6 +11,11 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api_app.routes import legacy_router, v1_router
+from api_app.rule_routes import router as rule_router
+from api_app.security import configured_admin_token
+from rule_authoring.drafts import DraftStore
+from rule_authoring.llm import AuthoringModels, models_from_environment
+from rule_authoring.service import AuthoringError, AuthoringSettings, RuleAuthoringService
 from api_app.services import (
     BACKEND_ROOT,
     ApiProblem,
@@ -24,6 +29,7 @@ from api_app.services import (
 from audit.logger import AuditLogger
 from audit.store import AuditStore
 from rule_engine.engine_core import config as load_rules_config
+from rule_engine.spec_store import default_database
 
 
 MAX_REQUEST_BODY_BYTES = 5 * 1024 * 1024
@@ -86,7 +92,13 @@ class MaxBodySizeMiddleware:
 def create_app(
     backend_root: Path = BACKEND_ROOT,
     audit_log_path: Path | None = None,
+    admin_token: str | None = None,
+    authoring_models: AuthoringModels | None = None,
+    authoring_settings: AuthoringSettings | None = None,
+    load_models_from_environment: bool = True,
 ) -> FastAPI:
+    """Build the API. Tests pass their own models and load_models_from_environment=False,
+    so they never reach a real model endpoint."""
     backend_root = Path(backend_root)
     load_dotenv(backend_root / ".env.local", override=False)
     load_dotenv(backend_root / ".env", override=False)
@@ -94,10 +106,19 @@ def create_app(
         os.getenv("CLAIMGUARD_AUDIT_LOG", str(backend_root / "outputs" / "audit_log.jsonl"))
     )
     resolved_audit_path = Path(configured_audit_path)
+    # Rule specs and rule drafts share one database. An app built with its own
+    # audit log (as tests do) keeps it next to that log, isolated from the real one.
+    rules_db = (
+        default_database(backend_root)
+        if audit_log_path is None
+        else str(Path(audit_log_path).with_name("rules.sqlite3"))
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        rules_config = load_rules_config(backend_root)
+        app.state.backend_root = backend_root
+        app.state.admin_token = admin_token or configured_admin_token()
+        rules_config = load_rules_config(backend_root, rules_db)
         claim_schema = json.loads((backend_root / "schemas" / "claim.schema.json").read_text(encoding="utf-8"))
         audit_store = AuditStore(resolved_audit_path)
         audit_logger = AuditLogger(audit_store)
@@ -114,7 +135,25 @@ def create_app(
             claim_service, backend_root, IngestionStore(ingestion_path)
         )
         app.state.explanation_service = ExplanationService(rules_config, claim_service, audit_logger)
+
+        def reload_rules() -> None:
+            """Make rule and reference-data changes visible without a restart."""
+            fresh = load_rules_config(backend_root, rules_db)
+            app.state.claim_service.rules_config = fresh
+            app.state.explanation_service.rules = {rule["rule_id"]: rule for rule in fresh["rules"]}
+
+        app.state.reload_rules = reload_rules
+        app.state.rule_authoring = RuleAuthoringService(
+            backend_root=backend_root,
+            rules_db=rules_db,
+            drafts=DraftStore(Path(rules_db)),
+            audit_logger=audit_logger,
+            models=authoring_models or (models_from_environment() if load_models_from_environment else None),
+            on_rules_changed=reload_rules,
+            settings=authoring_settings or AuthoringSettings.from_environment(),
+        )
         yield
+        app.state.rule_authoring.close()
 
     app = FastAPI(
         title="ClaimGuard AI API",
@@ -130,11 +169,18 @@ def create_app(
         ).split(",")
         if origin.strip()
     ]
-    app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-Actor"])
+    app.add_middleware(CORSMiddleware, allow_origins=cors_origins, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "Authorization", "X-Request-ID", "X-Actor", "X-Admin-Token"])
     app.add_middleware(MaxBodySizeMiddleware, max_bytes=MAX_REQUEST_BODY_BYTES)
 
     @app.exception_handler(ApiProblem)
     async def handle_api_problem(request: Request, error: ApiProblem):
+        return JSONResponse(
+            {"error": error.message, "code": error.code},
+            status_code=error.status_code,
+        )
+
+    @app.exception_handler(AuthoringError)
+    async def handle_authoring_error(request: Request, error: AuthoringError):
         return JSONResponse(
             {"error": error.message, "code": error.code},
             status_code=error.status_code,
@@ -176,6 +222,7 @@ def create_app(
             status_code=500,
         )
 
+    app.include_router(rule_router)
     app.include_router(v1_router)
     app.include_router(legacy_router)
     return app
