@@ -61,9 +61,30 @@ export default function Login({ onLogin }: LoginProps) {
         className="auth-brand"
       >
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative', zIndex: 1 }}>
-          <Sentinel state="idle" size={28} />
-          <span className="auth-wordmark">ClaimGuard AI</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 1 }}>
+          <Sentinel state="idle" size={36} />
+          <div>
+            <div
+              style={{
+                fontSize: '1.25rem',
+                fontWeight: 800,
+                color: 'var(--sidebar-text-active)',
+                lineHeight: 1,
+              }}
+            >
+              ClaimGuard
+            </div>
+            <div
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: 'var(--sidebar-accent)',
+                textTransform: 'uppercase',
+              }}
+            >
+              AI
+            </div>
+          </div>
         </div>
 
         {/* Center content */}
@@ -73,33 +94,78 @@ export default function Login({ onLogin }: LoginProps) {
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
-            alignItems: 'flex-start',
+            alignItems: 'center',
+            gap: 40,
             position: 'relative',
             zIndex: 1,
           }}
         >
-          <Sentinel state="idle" size={72} showLabel={false} />
-          <div className="auth-headline">
-            Evidence before
-            <br />
-            decisions.
+          <div style={{ textAlign: 'center' }}>
+            <Sentinel state="idle" size={72} showLabel={false} />
+            <div
+              style={{
+                marginTop: 32,
+                fontSize: '1.75rem',
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.03em',
+                lineHeight: 1.2,
+              }}
+            >
+              Evidence before
+              <br />
+              decisions.
+            </div>
+            <div
+              style={{
+                marginTop: 12,
+                fontSize: '0.9375rem',
+                color: 'rgba(148,163,184,0.8)',
+                lineHeight: 1.6,
+                maxWidth: 340,
+              }}
+            >
+              Deterministic checks surface the finding. Source evidence
+              explains why. A reviewer remains responsible for the decision.
+            </div>
           </div>
-          <p className="auth-lede">
-            Deterministic checks surface the finding. Source evidence
-            explains why. A reviewer remains responsible for the decision.
-          </p>
-        </div>
 
-        {/* Footer: feature bullets */}
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <ul className="auth-bullets">
+          {/* Feature bullets */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%', maxWidth: 360 }}>
             {[
               '15 deterministic validation rules',
               'Evidence paths preserved for review',
               'Reviewer actions recorded to audit',
-            ].map((label) => <li key={label}>{label}</li>)}
-          </ul>
-          <p className="auth-copyright">© 2026 ClaimGuard AI · Enterprise Edition</p>
+            ].map((label) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: 'var(--sidebar-active-bg)',
+                    border: '1px solid var(--sidebar-border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 5l2.5 2.5 3.5-4" stroke="var(--sidebar-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <span style={{ fontSize: '0.875rem', color: 'var(--sidebar-text)', fontWeight: 500 }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <p style={{ fontSize: '0.75rem', color: 'rgba(71,85,105,0.7)', letterSpacing: '0.02em' }}>
+            © 2026 ClaimGuard AI · Enterprise Edition
+          </p>
         </div>
       </div>
 
@@ -118,8 +184,7 @@ export default function Login({ onLogin }: LoginProps) {
         <div style={{ width: '100%', maxWidth: 420 }} className="auth-content">
           {loginState !== 'forgot' && loginState !== 'forgot-loading' && !forgotSent ? (
             <>
-              <div style={{ marginBottom: 28 }}>
-                <div className="auth-kicker">Reviewer sign-in</div>
+              <div style={{ marginBottom: 36 }}>
                 <h1
                   style={{
                     fontSize: '1.75rem',
@@ -242,20 +307,45 @@ export default function Login({ onLogin }: LoginProps) {
                 </div>
 
                 {/* Remember me */}
-                <label className="auth-remember">
+                <label
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+                >
                   <input
                     type="checkbox"
                     checked={remember}
                     onChange={(e) => setRemember(e.target.checked)}
+                    style={{ width: 18, height: 18, margin: 0, accentColor: 'var(--accent)', cursor: 'pointer', flexShrink: 0 }}
                   />
-                  <span>Remember me</span>
+                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Remember me</span>
                 </label>
 
                 {/* Submit */}
                 <button
                   type="submit"
-                  className="btn btn-primary btn-lg auth-submit"
                   disabled={loginState === 'loading'}
+                  style={{
+                    width: '100%',
+                    background: loginState === 'loading' ? 'var(--accent-hover)' : 'var(--accent-ink)',
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '11px 0',
+                    fontSize: '0.9375rem',
+                    fontWeight: 600,
+                    color: 'var(--card-bg)',
+                    cursor: loginState === 'loading' ? 'default' : 'pointer',
+                    fontFamily: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    transition: 'background 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (loginState !== 'loading') (e.currentTarget.style.background = 'var(--accent-hover)');
+                  }}
+                  onMouseLeave={(e) => {
+                    if (loginState !== 'loading') (e.currentTarget.style.background = 'var(--accent-ink)');
+                  }}
                 >
                   {loginState === 'loading' ? (
                     <>

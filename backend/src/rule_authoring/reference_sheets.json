@@ -1,0 +1,425 @@
+{
+ "_comment": "Sheets for the catalogue rules. Each compiles to a spec that gives the same outcome as the verified reference spec on every benchmark claim (tests/test_rule_sheet.py). The drafter is shown the sheets of similar rules as examples.",
+ "sheets": {
+  "R001": {
+   "checks": [
+    {
+     "value": "/invoice_number",
+     "is": "present"
+    },
+    {
+     "value": "/member_id",
+     "is": "present"
+    },
+    {
+     "value": "/diagnosis_code",
+     "is": "present"
+    },
+    {
+     "value": "/lines/*/service_date",
+     "is": "present"
+    },
+    {
+     "value": "/lines/*/service_code",
+     "is": "present"
+    },
+    {
+     "value": "/lines/*/quantity",
+     "is": "present"
+    },
+    {
+     "value": "/lines/*/unit_price",
+     "is": "present"
+    },
+    {
+     "value": "/lines/*/net_amount",
+     "is": "present"
+    }
+   ]
+  },
+  "R002": {
+   "checks": [
+    {
+     "value": "/lines/*/service_date",
+     "is": "on_or_before",
+     "to": "/submission_date"
+    }
+   ]
+  },
+  "R003": {
+   "checks": [
+    {
+     "value": "/coverage/status",
+     "is": "equals",
+     "to": "active"
+    },
+    {
+     "value": "/lines/*/service_date",
+     "is": "between",
+     "to": [
+      "/coverage/start_date",
+      "/coverage/end_date"
+     ]
+    }
+   ]
+  },
+  "R004": {
+   "checks": [
+    {
+     "value": "/member_id",
+     "is": "equals",
+     "to": "/coverage/member_id"
+    },
+    {
+     "value": "/patient_id",
+     "is": "equals",
+     "to": "/coverage/beneficiary_patient_id"
+    }
+   ]
+  },
+  "R005": {
+   "checks": [
+    {
+     "value": "/provider_id",
+     "is": "one_of",
+     "to": {
+      "policy": "allowed_providers"
+     }
+    }
+   ]
+  },
+  "R006": {
+   "checks": [
+    {
+     "value": [
+      "/lines/*/service_code",
+      "/lines/*/service_date",
+      {
+       "first_present": [
+        "/lines/*/modifier",
+        "(none)"
+       ]
+      }
+     ],
+     "is": "unique"
+    }
+   ]
+  },
+  "R007": {
+   "checks": [
+    {
+     "value": {
+      "multiply": [
+       "/lines/*/quantity",
+       "/lines/*/unit_price"
+      ]
+     },
+     "is": "same_amount",
+     "to": "/lines/*/net_amount"
+    }
+   ]
+  },
+  "R008": {
+   "needs": [
+    {
+     "policy": "auth_required_services"
+    },
+    {
+     "catalogue": "services",
+     "for": "/lines/*/service_code"
+    }
+   ],
+   "applies_if": [
+    {
+     "value": "/lines/*/service_code",
+     "is": "one_of",
+     "to": {
+      "policy": "auth_required_services"
+     }
+    }
+   ],
+   "checks": [
+    {
+     "value": "/lines/*/authorization_id",
+     "is": "present"
+    }
+   ]
+  },
+  "R009": {
+   "needs": [
+    {
+     "policy": "auth_required_services"
+    },
+    {
+     "catalogue": "services",
+     "for": "/lines/*/service_code"
+    }
+   ],
+   "applies_if": [
+    {
+     "value": "/lines/*/service_code",
+     "is": "one_of",
+     "to": {
+      "policy": "auth_required_services"
+     }
+    }
+   ],
+   "checks": [
+    {
+     "is": "has_match",
+     "in": "/authorizations",
+     "needs": [
+      "/lines/*/authorization_id"
+     ],
+     "where": [
+      {
+       "value": "/authorizations/*/authorization_id",
+       "is": "equals",
+       "to": "/lines/*/authorization_id"
+      }
+     ],
+     "then": [
+      {
+       "value": "/authorizations/*/patient_id",
+       "is": "equals",
+       "to": "/patient_id"
+      },
+      {
+       "value": "/authorizations/*/service_code",
+       "is": "equals",
+       "to": "/lines/*/service_code"
+      },
+      {
+       "value": "/authorizations/*/status",
+       "is": "equals",
+       "to": "approved"
+      },
+      {
+       "value": "/lines/*/service_date",
+       "is": "between",
+       "to": [
+        "/authorizations/*/valid_from",
+        "/authorizations/*/valid_to"
+       ]
+      },
+      {
+       "value": {
+        "sum": "/lines/*/quantity",
+        "where": [
+         {
+          "value": "/lines/*/authorization_id",
+          "is": "equals",
+          "to": "/authorizations/*/authorization_id"
+         }
+        ]
+       },
+       "is": "at_most",
+       "to": "/authorizations/*/max_quantity"
+      }
+     ]
+    }
+   ]
+  },
+  "R010": {
+   "needs": [
+    {
+     "policy": "required_documents"
+    },
+    {
+     "catalogue": "services",
+     "for": "/lines/*/service_code"
+    }
+   ],
+   "applies_if": [
+    {
+     "value": {
+      "policy": "required_documents",
+      "for": "/lines/*/service_code"
+     },
+     "is": "present"
+    }
+   ],
+   "checks": [
+    {
+     "is": "has_match",
+     "in": "/attachments",
+     "where": [
+      {
+       "value": "/attachments/*/type",
+       "is": "equals",
+       "to": {
+        "policy": "required_documents",
+        "for": "/lines/*/service_code"
+       }
+      },
+      {
+       "value": "/attachments/*/patient_id",
+       "is": "equals",
+       "to": "/patient_id"
+      },
+      {
+       "value": "/attachments/*/service_code",
+       "is": "equals",
+       "to": "/lines/*/service_code"
+      },
+      {
+       "value": "/attachments/*/service_date",
+       "is": "same_day",
+       "to": "/lines/*/service_date"
+      }
+     ],
+     "needs": [
+      "/lines/*/service_date"
+     ]
+    },
+    {
+     "is": "has_match",
+     "in": "/attachments",
+     "otherwise": "UNABLE_TO_ASSESS",
+     "where": [
+      {
+       "value": "/attachments/*/type",
+       "is": "equals",
+       "to": {
+        "policy": "required_documents",
+        "for": "/lines/*/service_code"
+       }
+      },
+      {
+       "value": "/attachments/*/patient_id",
+       "is": "equals",
+       "to": "/patient_id"
+      },
+      {
+       "value": "/attachments/*/service_code",
+       "is": "equals",
+       "to": "/lines/*/service_code"
+      },
+      {
+       "value": "/attachments/*/service_date",
+       "is": "same_day",
+       "to": "/lines/*/service_date"
+      },
+      {
+       "value": "/attachments/*/document_status",
+       "is": "equals",
+       "to": "final"
+      }
+     ]
+    }
+   ]
+  },
+  "R011": {
+   "checks": [
+    {
+     "value": "/lines/*/service_code",
+     "is": "one_of",
+     "to": {
+      "catalogue": "services"
+     }
+    }
+   ]
+  },
+  "R012": {
+   "checks": [
+    {
+     "value": "/total_amount",
+     "is": "same_amount",
+     "to": {
+      "sum": "/lines/*/net_amount"
+     }
+    }
+   ]
+  },
+  "R013": {
+   "checks": [
+    {
+     "value": "/lines/*/quantity",
+     "is": "whole_number"
+    },
+    {
+     "value": "/lines/*/quantity",
+     "is": "greater_than",
+     "to": 0
+    },
+    {
+     "value": "/lines/*/unit_price",
+     "is": "greater_than",
+     "to": 0
+    },
+    {
+     "value": "/lines/*/unit_price",
+     "is": "at_most",
+     "to": {
+      "policy": "max_unit_price",
+      "for": "/lines/*/service_code"
+     }
+    },
+    {
+     "value": "/lines/*/quantity",
+     "is": "at_most",
+     "to": {
+      "policy": "max_quantity_per_line",
+      "for": "/lines/*/service_code"
+     }
+    }
+   ]
+  },
+  "R014": {
+   "needs": [
+    {
+     "policy": "submission_window_days"
+    },
+    {
+     "days_between": [
+      {
+       "latest": "/lines/*/service_date"
+      },
+      "/submission_date"
+     ]
+    }
+   ],
+   "applies_if": [
+    {
+     "value": {
+      "days_between": [
+       {
+        "latest": "/lines/*/service_date"
+       },
+       "/submission_date"
+      ]
+     },
+     "is": "at_least",
+     "to": 0
+    }
+   ],
+   "checks": [
+    {
+     "value": {
+      "days_between": [
+       {
+        "latest": "/lines/*/service_date"
+       },
+       "/submission_date"
+      ]
+     },
+     "is": "at_most",
+     "to": {
+      "policy": "submission_window_days"
+     }
+    }
+   ]
+  },
+  "R015": {
+   "checks": [
+    {
+     "value": "/currency",
+     "is": "equals",
+     "to": {
+      "policy": "currency"
+     }
+    }
+   ]
+  }
+ }
+}

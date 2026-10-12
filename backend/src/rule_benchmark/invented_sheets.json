@@ -1,0 +1,28 @@
+{
+  "_comment": "Sheets for the invented benchmark rules, proven equal to their reference specs by tests/test_rule_sheet.py. INV-07 cannot be expressed at all.",
+  "sheets": {
+    "INV-01": {"checks": [{"value": "/diagnosis_code", "is": "one_of", "to": {"catalogue": "diagnoses"}}]},
+    "INV-02": {"checks": [{"value": "/lines/*/quantity", "is": "at_most", "to": 5}]},
+    "INV-03": {
+      "applies_if": [{"value": "/lines/*/service_code", "is": "equals", "to": "SVC-PHARM"}],
+      "checks": [{"value": "/lines/*/quantity", "is": "between", "to": [1, 10]}]},
+    "INV-04": {"checks": [{"value": "/submission_date", "is": "between", "to": ["2026-01-01", "2026-12-31"]}]},
+    "INV-05": {"checks": [{"value": {"count": "/lines"}, "is": "at_most", "to": 5}]},
+    "INV-06": {"checks": [{"value": "/invoice_number", "is": "present"}]},
+    "INV-08": {"checks": [{"value": "/coverage/start_date", "is": "present"}, {"value": "/coverage/end_date", "is": "present"}]},
+    "INV-09": {"checks": [{"value": "/lines/*/net_amount", "is": "at_most", "to": 5000}]},
+    "INV-10": {"checks": [{"value": "/attachments/*/document_status", "is": "equals", "to": "final"}]},
+    "INV-11": {"checks": [{"value": "/authorizations/*/status", "is": "equals", "to": "approved"}]},
+    "INV-12": {"checks": [{"value": "/total_amount", "is": "greater_than", "to": 0}]},
+    "INV-13": {"checks": [{"value": "/lines/*/unit_price", "is": "at_least", "to": {"catalogue": "services", "for": "/lines/*/service_code", "get": "base_price"}}]},
+    "INV-14": {"checks": [{"value": "/provider_id", "is": "one_of", "to": ["EDU-PROV-01", "EDU-PROV-02"]}]},
+    "INV-15": {"checks": [{"value": "/attachments/*/patient_id", "is": "equals", "to": "/patient_id"}]},
+    "INV-16": {"checks": [{"value": ["/lines/*/service_code"], "is": "unique"}]},
+    "INV-17": {"checks": [{"value": {"days_between": ["/lines/*/service_date", "/submission_date"]}, "is": "at_most", "to": 90}]},
+    "INV-18": {"checks": [{"value": "/member_id", "is": "equals", "to": "/coverage/member_id"}]},
+    "INV-19": {
+      "applies_if": [{"value": "/lines/*/service_code", "is": "equals", "to": "SVC-IMAGE"}],
+      "checks": [{"value": "/lines/*/authorization_id", "is": "present"}]},
+    "INV-20": {"checks": [{"value": {"subtract": ["/total_amount", {"sum": {"multiply": ["/lines/*/quantity", "/lines/*/unit_price"]}}]}, "is": "at_most", "to": 1}]}
+  }
+}

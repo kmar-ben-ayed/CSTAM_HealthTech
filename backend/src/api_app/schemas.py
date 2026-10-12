@@ -73,6 +73,13 @@ class ReviewDecisionRequest(StrictModel):
         return value
 
 
+class ExampleClaim(StrictModel):
+    """A claim (in the claim format) and the outcome the author expects the rule to give it."""
+
+    claim: dict[str, Any]
+    expected_status: Literal["PASS", "FAIL", "UNABLE_TO_ASSESS", "NOT_APPLICABLE"]
+
+
 class RuleDraftRequest(StrictModel):
     """A rule in English. Leave rule_id empty for a new rule; give it to revise an existing one."""
 
@@ -81,6 +88,8 @@ class RuleDraftRequest(StrictModel):
     severity: Literal["low", "medium", "high"]
     logic: str = Field(min_length=10, max_length=2000)
     corrective_action: str = Field(min_length=3, max_length=500)
+    # Optional: claims with the outcome the rule must give them, shown to the drafter from the start.
+    examples: list[ExampleClaim] = Field(default_factory=list, max_length=10)
 
     @field_validator("title", "logic", "corrective_action")
     @classmethod
@@ -94,6 +103,23 @@ class RuleDraftRequest(StrictModel):
 class DraftAnswerRequest(StrictModel):
     question_id: str = Field(min_length=1, max_length=32)
     answer: str = Field(min_length=1, max_length=1000)
+
+
+class CaseVerdict(StrictModel):
+    case_id: str = Field(min_length=1, max_length=64)
+    expected_status: Literal["PASS", "FAIL", "UNABLE_TO_ASSESS", "NOT_APPLICABLE"]
+
+
+class DraftCorrectionsRequest(StrictModel):
+    """The author's verdicts on a draft's generated test claims."""
+
+    corrections: list[CaseVerdict] = Field(min_length=1, max_length=100)
+
+
+class DraftExamplesRequest(StrictModel):
+    """Example claims answering a stuck drafter's request."""
+
+    examples: list[ExampleClaim] = Field(min_length=1, max_length=10)
 
 
 class AuditVerificationResponse(BaseModel):

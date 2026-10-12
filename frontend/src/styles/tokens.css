@@ -1,0 +1,161 @@
+/* ══════════════════════════════════════════════════════════════════════
+   Design foundations (claimguard-implementation-prompt.md, section 2)
+   ──────────────────────────────────────────────────────────────────────
+   Loaded right after index.css. New components use only these tokens;
+   the older pages keep working on the index.css tokens they already use.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Typefaces: Geist for all UI text, Geist Mono for IDs, codes and dates,
+     Newsreader only for large headings. */
+  --font-sans: 'Geist', 'Segoe UI', system-ui, sans-serif;
+  --font-display: var(--font-sans);
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+
+  --canvas: #f3f4f6;
+  --ink: #0f172a;
+  --muted: #475569;
+  --faint: #64748b; /* AA on --surface; use --muted for small text on --canvas */
+  --surface: #ffffff;
+  --solid: #ffffff;
+  --row: rgba(15, 23, 42, 0.04);
+  --border: rgba(15, 23, 42, 0.09);
+  --border2: rgba(15, 23, 42, 0.16);
+  --accent: #0e7490;
+  --on-accent: #ffffff;
+  --accent-soft: rgba(14, 116, 144, 0.08);
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 18px 40px -20px rgba(15, 23, 42, 0.18);
+  --code: #0f172a;
+  --code-text: #e2e8f0;
+
+  /* Status: the base colour fills strips, the text colour carries the word. */
+  --pass: #10b981;
+  --pass-text: #047857;
+  --fail: #ef4444;
+  --fail-text: #b91c1c;
+  --unable: #f59e0b;
+  --unable-text: #b45309;
+  --review: #0891b2;
+  --review-text: #0e7490;
+  --na: #cbd5e1;
+  --na-text: #64748b;
+  --strip-ink: #0b1220; /* status word on the amber, cyan and green strips */
+
+  /* Motion: a strong ease-out for anything responding to the user. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* Decision fills for the hold buttons. */
+  --reject-fill: #b91c1c;
+  --approve-fill: #047857;
+
+  /* Glass: only for chrome that content scrolls under (top bar, sticky
+     controls, menus, search). A bright top edge reads as light on the material. */
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --glass-line: rgba(15, 23, 42, 0.08);
+  --glass-blur: blur(20px) saturate(180%);
+  --glass-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), 0 12px 32px -18px rgba(15, 23, 42, 0.25);
+
+  /* The canvas carries two faint teal light pools so the glass has something to refract. */
+  --canvas-atmosphere:
+    radial-gradient(1100px 620px at 92% -12%, rgba(34, 211, 238, 0.11), transparent 62%),
+    radial-gradient(900px 640px at -8% 108%, rgba(14, 116, 144, 0.08), transparent 60%),
+    var(--canvas);
+
+  /* Dock */
+  --dock-bg: rgba(15, 23, 42, 0.84);
+  --dock-icon: #b8c2d0;
+  --dock-active-bg: rgba(255, 255, 255, 0.08);
+  --dock-active-icon: #67e8f9;
+
+  /* Aliases still read by the interim stylesheet (claimguard-design.css). */
+  --canvas-bg: var(--canvas);
+  --evidence-bg: var(--code);
+  --evidence-text: var(--code-text);
+  --segment-track: rgba(15, 23, 42, 0.06);
+  --strip-text: #ffffff;
+}
+
+[data-theme='dark'] {
+  --canvas: #0b1220;
+  --ink: #e2e8f0;
+  --muted: #a3b1c6;
+  --faint: #8b9bb2;
+  --surface: #0f1729;
+  --solid: #111b30;
+  --row: rgba(148, 163, 184, 0.06);
+  --border: rgba(148, 163, 184, 0.12);
+  --border2: rgba(148, 163, 184, 0.24);
+  --accent: #22d3ee;
+  --on-accent: #06202a;
+  --accent-soft: rgba(34, 211, 238, 0.1);
+  --shadow: 0 24px 48px -24px rgba(0, 0, 0, 0.7);
+  --code: #060b16;
+
+  --pass-text: #34d399;
+  --fail-text: #f87171;
+  --unable-text: #fbbf24;
+  --review-text: #22d3ee;
+  --na-text: #94a3b8;
+
+  --reject-fill: #dc2626;
+  --approve-fill: #059669;
+
+  --dock-bg: rgba(6, 11, 22, 0.78);
+
+  --glass-bg: rgba(15, 23, 41, 0.62);
+  --glass-edge: rgba(255, 255, 255, 0.07);
+  --glass-line: rgba(148, 163, 184, 0.12);
+  --glass-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 16px 36px -18px rgba(0, 0, 0, 0.7);
+  --canvas-atmosphere:
+    radial-gradient(1100px 620px at 92% -12%, rgba(34, 211, 238, 0.09), transparent 62%),
+    radial-gradient(900px 640px at -8% 108%, rgba(14, 116, 144, 0.1), transparent 60%),
+    var(--canvas);
+  --segment-track: rgba(148, 163, 184, 0.1);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Browser surfaces carry the palette too. */
+:root {
+  caret-color: var(--accent);
+  accent-color: var(--accent);
+  scrollbar-color: var(--border2) transparent;
+  scrollbar-width: thin;
+}
+::selection {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--ink);
+}
+table,
+.mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reusable glass material. */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--glass-shadow);
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-bg: var(--surface);
+    --glass-blur: none;
+  }
+}
+
+/* Text for screen readers only. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

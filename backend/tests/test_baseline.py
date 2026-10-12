@@ -99,6 +99,17 @@ class StarterTests(unittest.TestCase):
         claim['lines'][1]['line_id']=claim['lines'][0]['line_id']
         with self.assertRaises(ValueError):
             validate_transport(claim)
+    def test_validate_transport_checks_every_field_against_the_schema(self):
+        validate_transport(copy.deepcopy(self.example))
+        breaks=[lambda c:c.update(total_amount='330'),lambda c:c.update(total_amount=float('nan')),
+                lambda c:c['coverage'].update(start_date='20260101'),lambda c:c['lines'][0].update(service_date='2026-W21-1'),
+                lambda c:c['authorizations'].append({'authorization_id':'A1'}),lambda c:c['lines'][0].update(quantity=True)]
+        for brk in breaks:
+            claim=copy.deepcopy(self.example);brk(claim)
+            with self.assertRaises(ValueError):validate_transport(claim)
+    def test_a_fractional_quantity_is_valid_input_that_r013_fails(self):
+        self.c['lines'][0]['quantity']=1.5;validate_transport(self.c)
+        self.assertEqual(self.result('R013')['status'],'FAIL')
     def test_mock_explanation_validates(self):
         self.c['invoice_number']=None
         r=self.result('R001');out=MockExplanationProvider().explain(r,{});self.assertIn('recommendation', out)

@@ -151,6 +151,16 @@ export async function getIngestedClaims(limit?: number, signal?: AbortSignal): P
 export async function getIngestedClaim(claimId: string, signal?: AbortSignal): Promise<IngestedClaimResponse> {
   return apiFetch<IngestedClaimResponse>(`/api/v1/claims/${encodeURIComponent(claimId)}`, { signal });
 }
+/** Runs the active rules on a claim again. The run is recorded in the audit log. */
+export async function reevaluateClaim(claim: BackendClaim, signal?: AbortSignal): Promise<RuleResult[]> {
+  const evaluation = await apiFetch<{ results: RuleResult[] }>('/api/v1/claims/evaluate', {
+    method: 'POST',
+    body: JSON.stringify({ claim }),
+    signal,
+  });
+  return evaluation.results;
+}
+
 export async function exportFhirPayload(claim: BackendClaim, signal?: AbortSignal): Promise<FhirPayload> {
   return apiFetch<FhirPayload>('/api/v1/fhir/export', {
     method: 'POST',

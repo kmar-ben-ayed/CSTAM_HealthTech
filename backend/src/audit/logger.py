@@ -20,7 +20,9 @@ class AuditLogger:
     def __init__(self, store: AuditStore):
         self.store = store
         self._lock = threading.Lock()
-        entries = self.store.all_entries()
+        with self.store.locked():
+            entries = self.store.all_entries()
+            self._known_size = self.store.size()
         valid, broken_index = verify_chain(entries)
         if not valid:
             raise AuditIntegrityError(f"Existing audit chain is invalid at index {broken_index}")
@@ -36,25 +38,30 @@ class AuditLogger:
         if not events:
             return []
         with self._lock:
-            previous = self._last_entry
-            new_entries = []
-            for event_type, claim_id, actor, payload in events:
-                entry = AuditEntry(
-                    index=previous.index + 1 if previous else 0,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
-                    event_type=event_type,
-                    claim_id=claim_id,
-                    actor=actor,
-                    payload=payload,
-                    prev_hash=previous.entry_hash if previous else GENESIS_HASH,
-                    entry_hash="",
-                )
-                entry.entry_hash = compute_hash(entry)
-                new_entries.append(entry)
-                previous = entry
-
             try:
-                self.store.append_many(new_entries)
+                with self.store.locked():
+                    # Another process, or another logger on this file, may have written since
+                    # our last entry: chain onto the entry that is really last, never fork.
+                    if self.store.size() != self._known_size:
+                        self._last_entry = self.store.get_last_entry()
+                    previous = self._last_entry
+                    new_entries = []
+                    for event_type, claim_id, actor, payload in events:
+                        entry = AuditEntry(
+                            index=previous.index + 1 if previous else 0,
+                            timestamp=datetime.now(timezone.utc).isoformat(),
+                            event_type=event_type,
+                            claim_id=claim_id,
+                            actor=actor,
+                            payload=payload,
+                            prev_hash=previous.entry_hash if previous else GENESIS_HASH,
+                            entry_hash="",
+                        )
+                        entry.entry_hash = compute_hash(entry)
+                        new_entries.append(entry)
+                        previous = entry
+                    self.store.append_many(new_entries)
+                    self._known_size = self.store.size()
             except OSError as exc:
                 raise AuditWriteError("Could not persist audit events") from exc
             self._last_entry = new_entries[-1]

@@ -165,6 +165,29 @@ class EvaluationTests(unittest.TestCase):
             self.assertEqual(self.status(require(equals(P("/diagnosis_code"), V("DX-EDU-02")))), "UNABLE_TO_ASSESS")
             self.assertEqual(self.status(require({"op": "is_present", "value": P("/diagnosis_code")})), "FAIL")
 
+    def test_a_blank_default_written_in_the_rule_is_a_value(self):
+        # R006: "Normalize null modifier to an empty string" written as the text says.
+        key = [P("$line/service_code"), P("$line/service_date"), {"first_present": [P("$line/modifier"), V("")]}]
+        no_duplicates = require({"op": "unique", "collection": P("/lines"), "as": "line", "by": key})
+        claim = copy.deepcopy(self.claim)
+        claim["lines"] = [dict(claim["lines"][0], line_id=f"L{n}", modifier=None) for n in (1, 2)]
+        claim["lines"][1]["service_code"] = "SVC-OTHER"
+        self.assertEqual(self.status(no_duplicates, claim=claim), "PASS")
+        claim["lines"][1]["service_code"] = claim["lines"][0]["service_code"]
+        self.assertEqual(self.status(no_duplicates, claim=claim), "FAIL")
+        claim["lines"][1]["modifier"] = "EDU-SEPARATE"
+        self.assertEqual(self.status(no_duplicates, claim=claim), "PASS")
+        # A blank value in the claim itself is still missing.
+        self.claim["diagnosis_code"] = ""
+        self.assertEqual(self.status(require(equals(P("/diagnosis_code"), V("")))), "UNABLE_TO_ASSESS")
+
+    def test_dates_are_year_month_day_only(self):
+        before_submission = require({"op": "on_or_before", "left": P("/coverage/start_date"), "right": P("/submission_date")})
+        self.assertEqual(self.status(before_submission), "PASS")
+        for other_form in ("20260101", "2026-W01-1", "2026-02-30"):
+            self.claim["coverage"]["start_date"] = other_form
+            self.assertEqual(self.status(before_submission), "UNABLE_TO_ASSESS", other_form)
+
     def test_need_and_only_if(self):
         check = require(equals(P("/currency"), V("SAR")))
         self.claim["member_id"] = None

@@ -74,7 +74,7 @@ Each value is an object with exactly one of these keys.
 | `{"find": V, "as": "x", "where": C}` | The first element where C is true, or missing if none. |
 | `{"multiply": [A, B]}`, `{"add": [A, B, ...]}`, `{"subtract": [A, B]}` | Arithmetic. Unknown if an operand is missing. |
 | `{"days_between": [FROM, TO]}` | Whole days from FROM to TO (negative if TO is earlier). |
-| `{"first_present": [A, B]}` | A, or B when A is missing (a default value). |
+| `{"first_present": [A, B]}` | A, or B when A is missing. A value written in the rule (`""`, `0`) is a default that always counts as present. |
 
 ## Conditions
 

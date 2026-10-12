@@ -5,12 +5,14 @@ Rules run from data: each active rule has a spec in the rule database
 """
 import json
 import logging
-from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
+from functools import lru_cache
 from pathlib import Path
 
+from normalisation.schema_subset import validate as validate_claim_schema
+
 from .catalogue import FieldCatalogue, ReferenceData
-from .interpreter import Outcome, evaluate_rule
+from .interpreter import Outcome, evaluate_rule, iso_date
 from .spec_store import SpecStore, default_database, reference_seed_file
 
 logger = logging.getLogger(__name__)
@@ -27,9 +29,10 @@ def pointer(obj,path):
         part=part.replace('~1','/').replace('~0','~')
         obj=obj[int(part)] if isinstance(obj,list) else obj[part]
     return obj
-def valid_date(v):
-    try:return date.fromisoformat(v)
-    except (ValueError,TypeError):return None
+def valid_date(v):return iso_date(v)  # YYYY-MM-DD only, like the claim schema and the rule engine
+CLAIM_SCHEMA=Path(__file__).resolve().parents[2]/'schemas'/'claim.schema.json'
+@lru_cache(maxsize=1)
+def claim_schema():return json.loads(CLAIM_SCHEMA.read_text(encoding='utf-8'))
 def money(v):return Decimal(str(v)).quantize(Decimal('.01'),rounding=ROUND_HALF_UP)
 def empty(v):return v is None or (isinstance(v,str) and not v.strip())
 def make_result(c,r,status,paths,message,line_ids=None):
@@ -128,3 +131,6 @@ def validate_transport(c):
             if l[k] is not None and (isinstance(l[k],bool) or not isinstance(l[k],(int,float))):raise ValueError('Line number '+k)
     if len(ids)!=len(set(ids)):raise ValueError('Duplicate line ID')
     if not isinstance(c['coverage'],dict) or not isinstance(c['authorizations'],list) or not isinstance(c['attachments'],list):raise ValueError('Expected context structures')
+    # Every field's type and date format, as the API checks on upload (total_amount, coverage,
+    # authorizations and attachments included; no NaN or Infinity amounts).
+    validate_claim_schema(c,claim_schema())

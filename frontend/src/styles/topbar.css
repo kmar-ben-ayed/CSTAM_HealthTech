@@ -1,0 +1,186 @@
+/* Quiet top bar above each workspace page: breadcrumb, search and help. */
+
+/* Sticky glass: the page scrolls under it, so the blur has something to do.
+   It separates by blur and a soft edge rather than a hard rule. */
+.app-topbar {
+  position: sticky !important;
+  top: 0;
+  z-index: 30 !important;
+  height: 64px !important;
+  padding: 0 40px 0 0 !important;
+  margin-bottom: 8px;
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: var(--glass-blur) !important;
+  backdrop-filter: var(--glass-blur) !important;
+  border-bottom: 1px solid var(--glass-line) !important;
+  box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.45) !important;
+}
+/* Extend the glass across the gap beside the dock. */
+.app-topbar::before {
+  content: '';
+  position: absolute;
+  inset: 0 100% -1px auto;
+  width: 153px;
+  background: inherit;
+  -webkit-backdrop-filter: inherit;
+  backdrop-filter: inherit;
+  border-bottom: inherit;
+  pointer-events: none;
+}
+.crumb-root {
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+}
+.topbar-search {
+  background: color-mix(in srgb, var(--surface) 70%, transparent) !important;
+  min-height: 40px;
+  border-radius: 10px !important;
+}
+.topbar-icon-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.topbar-icon-button:hover,
+.topbar-icon-button[aria-expanded='true'] {
+  border-color: var(--card-border-hover);
+  color: var(--text-primary);
+}
+
+/* Phones */
+@media (max-width: 760px) {
+  .app-topbar {
+    padding: 0 14px !important;
+  }
+  .app-topbar::before {
+    display: none;
+  }
+  .topbar-search {
+    width: auto !important;
+    flex: 1;
+    min-width: 0;
+  }
+  .topbar-search .search-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Only the page name fits beside the search on a phone. */
+  .topbar-crumbs > .crumb-root {
+    display: none;
+  }
+  .topbar-crumbs [aria-current='page'] {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Notifications: recent audit activity, plain rows. */
+.notifications {
+  position: relative;
+}
+.notifications-count {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+.notifications-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1000;
+  width: 340px;
+  padding: 6px 0 0;
+  border: 1px solid var(--glass-line);
+  border-radius: 12px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--glass-shadow);
+  transform-origin: top right;
+}
+.notifications-heading {
+  padding: 8px 16px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.notifications-panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.notifications-panel li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+.notifications-title {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.notifications-panel li.is-new .notifications-title {
+  color: var(--ink);
+  font-weight: 600;
+}
+.notifications-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+.notifications-meta .mono {
+  font-family: var(--font-mono);
+}
+.notifications-empty {
+  margin: 0;
+  padding: 12px 16px 16px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.notifications-all {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.notifications-all:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

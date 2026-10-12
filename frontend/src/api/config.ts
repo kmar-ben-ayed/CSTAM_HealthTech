@@ -23,6 +23,15 @@ export interface ConfigPolicy {
   max_quantity_per_line: Record<string, number>;
 }
 
-export function getConfig<T>(filename: 'rules.json' | 'policies.json', signal?: AbortSignal): Promise<T> {
+export interface ConfigProvider {
+  provider_id: string;
+  display: string;
+}
+
+export type ConfigServices = Record<string, { description: string }>;
+
+export type ConfigFile = 'rules.json' | 'policies.json' | 'providers.json' | 'services.json';
+
+export function getConfig<T>(filename: ConfigFile, signal?: AbortSignal): Promise<T> {
   return apiFetch<T>(`/api/v1/config/${filename}`, { signal });
 }

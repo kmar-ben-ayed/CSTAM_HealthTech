@@ -5,6 +5,11 @@ means the claim does not hold enough valid information to decide, for example
 a missing field or a date that does not parse. Unknown never silently becomes
 PASS: it surfaces as UNABLE_TO_ASSESS, which sends the result to a human.
 
+A claim value is missing when it is absent, null or blank text. A value the rule
+writes itself is never missing, even an empty text: in {"first_present": [modifier, ""]}
+the "" is the rule's own default ("treat a null modifier as an empty string").
+Dates are YYYY-MM-DD text, the claim schema's format.
+
 Steps run in order inside a block and leave a tally:
 
 - need     not true  -> UNABLE_TO_ASSESS, stop the block
@@ -23,6 +28,7 @@ from __future__ import annotations
 
 import decimal
 import math
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
@@ -73,6 +79,12 @@ NOT_APPLICABLE = "NOT_APPLICABLE"
 MAX_OPERATIONS = 200_000
 MAX_EVIDENCE = 40
 CENT = Decimal("0.01")
+# Python also reads "20260525" and "2026-W21-1" as ISO dates; the claim schema does not.
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+class _Blank(str):
+    """An empty text the rule wrote itself (a default), which is a value, not a missing one."""
 
 
 class EvaluationLimitExceeded(RuntimeError):
@@ -282,6 +294,8 @@ class _Run:
         if isinstance(node, PathValue):
             return self.path(node.path, scope)
         if isinstance(node, LiteralValue):
+            if isinstance(node.value, str) and not node.value.strip():
+                return _Bound(_Blank(node.value))
             return _Bound(node.value)
         if isinstance(node, ConfigValue):
             return _Bound(self.config(node, scope))
@@ -403,7 +417,7 @@ def _any_of(results: list[bool | None]) -> bool | None:
 
 
 def _missing(value: Any) -> bool:
-    return value is None or (isinstance(value, str) and not value.strip())
+    return value is None or (isinstance(value, str) and not isinstance(value, _Blank) and not value.strip())
 
 
 def _number(value: Any) -> Decimal | None:
@@ -418,15 +432,20 @@ def _number(value: Any) -> Decimal | None:
     return None
 
 
+def iso_date(value: Any) -> date | None:
+    """The date in a YYYY-MM-DD text, or None (missing, another format, or no such day)."""
+    if not isinstance(value, str) or not ISO_DATE.fullmatch(value):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def _date(value: Any) -> date | None:
     if isinstance(value, date):
         return value
-    if isinstance(value, str):
-        try:
-            return date.fromisoformat(value)
-        except ValueError:
-            return None
-    return None
+    return iso_date(value)
 
 
 def _same(left: Any, right: Any) -> bool | None:

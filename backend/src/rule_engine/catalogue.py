@@ -7,10 +7,14 @@ the available fields to the drafting agent. Array elements are written with
 
 from __future__ import annotations
 
+import difflib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+# The reference data files in rules/, which rules read through {"config": ...}.
+DATA_FILES = ("policies.json", "services.json", "providers.json", "diagnoses.json")
 
 # Value types used across the rule language checks.
 TEXT = "text"
@@ -53,6 +57,19 @@ class FieldCatalogue:
 
     def get(self, path: str) -> FieldInfo | None:
         return self.fields.get(path)
+
+    def unknown_field(self, path: str, shown_as: str | None = None) -> str:
+        """The message for a path that is not a claim field, naming the fields it may have
+        meant: those with the same name elsewhere ("/lines/*/patient_id" -> "/patient_id"),
+        else the closest spellings. A bare "not a claim field" made a drafter rewrite a sheet
+        that was right apart from that one path."""
+        name = path.rstrip("/").rsplit("/", 1)[-1]
+        same_name = [field for field in self.fields if field.rsplit("/", 1)[-1] == name and field != path]
+        candidates = same_name or difflib.get_close_matches(path, list(self.fields), n=3, cutoff=0.75)
+        message = f'"{shown_as or path}" is not a claim field'
+        if candidates:
+            message += "; the claim has " + ", ".join(f'"{field}"' for field in candidates[:4])
+        return message
 
     def describe(self) -> list[dict[str, Any]]:
         """A compact list for prompts and the UI."""
@@ -125,19 +142,22 @@ class ReferenceData:
     services: dict[str, dict[str, Any]]
     provider_ids: list[str]
     diagnosis_codes: list[str]
+    # The four data files as written, for the rule drafter to read (never the rule
+    # catalogue or the reference specs, which would hand it the answers).
+    files: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def load(cls, rules_dir: Path) -> "ReferenceData":
         def read(name: str) -> Any:
             return json.loads((Path(rules_dir) / name).read_text(encoding="utf-8"))
 
-        providers = read("providers.json")
-        diagnoses = read("diagnoses.json")
+        files = {name: read(name) for name in DATA_FILES}
         return cls(
-            policies=read("policies.json"),
-            services=read("services.json"),
-            provider_ids=[item["provider_id"] for item in providers if isinstance(item, dict)],
-            diagnosis_codes=[item["code"] for item in diagnoses if isinstance(item, dict)],
+            policies=files["policies.json"],
+            services=files["services.json"],
+            provider_ids=[item["provider_id"] for item in files["providers.json"] if isinstance(item, dict)],
+            diagnosis_codes=[item["code"] for item in files["diagnoses.json"] if isinstance(item, dict)],
+            files=files,
         )
 
     def summary(self) -> dict[str, Any]:

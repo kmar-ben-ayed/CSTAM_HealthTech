@@ -531,30 +531,6 @@
                 "note": "the line has an authorization reference (checked by R008)"
               },
               {
-                "need": {
-                  "op": "at_most",
-                  "left": {
-                    "count": {
-                      "path": "/authorizations"
-                    },
-                    "as": "candidate",
-                    "where": {
-                      "op": "equals",
-                      "left": {
-                        "path": "$candidate/authorization_id"
-                      },
-                      "right": {
-                        "path": "$line/authorization_id"
-                      }
-                    }
-                  },
-                  "right": {
-                    "value": 1
-                  }
-                },
-                "note": "the reference is unambiguous (no two authorization records share this id)"
-              },
-              {
                 "let": "auth",
                 "be": {
                   "find": {
@@ -571,6 +547,120 @@
                     }
                   }
                 }
+              },
+              {
+                "need": {
+                  "op": "any_of",
+                  "items": [
+                    {
+                      "op": "at_most",
+                      "left": {
+                        "count": {
+                          "path": "/authorizations"
+                        },
+                        "as": "candidate",
+                        "where": {
+                          "op": "equals",
+                          "left": {
+                            "path": "$candidate/authorization_id"
+                          },
+                          "right": {
+                            "path": "$line/authorization_id"
+                          }
+                        }
+                      },
+                      "right": {
+                        "value": 1
+                      }
+                    },
+                    {
+                      "op": "equals",
+                      "left": {
+                        "count": {
+                          "path": "/authorizations"
+                        },
+                        "as": "copy",
+                        "where": {
+                          "op": "all_of",
+                          "items": [
+                            {
+                              "op": "equals",
+                              "left": {
+                                "path": "$copy/authorization_id"
+                              },
+                              "right": {
+                                "path": "$line/authorization_id"
+                              }
+                            },
+                            {
+                              "op": "any_of",
+                              "items": [
+                                {
+                                  "op": "not_equals",
+                                  "left": {
+                                    "path": "$copy/patient_id"
+                                  },
+                                  "right": {
+                                    "path": "$auth/patient_id"
+                                  }
+                                },
+                                {
+                                  "op": "not_equals",
+                                  "left": {
+                                    "path": "$copy/service_code"
+                                  },
+                                  "right": {
+                                    "path": "$auth/service_code"
+                                  }
+                                },
+                                {
+                                  "op": "not_equals",
+                                  "left": {
+                                    "path": "$copy/status"
+                                  },
+                                  "right": {
+                                    "path": "$auth/status"
+                                  }
+                                },
+                                {
+                                  "op": "not_equals",
+                                  "left": {
+                                    "path": "$copy/valid_from"
+                                  },
+                                  "right": {
+                                    "path": "$auth/valid_from"
+                                  }
+                                },
+                                {
+                                  "op": "not_equals",
+                                  "left": {
+                                    "path": "$copy/valid_to"
+                                  },
+                                  "right": {
+                                    "path": "$auth/valid_to"
+                                  }
+                                },
+                                {
+                                  "op": "not_equals",
+                                  "left": {
+                                    "path": "$copy/max_quantity"
+                                  },
+                                  "right": {
+                                    "path": "$auth/max_quantity"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "right": {
+                        "value": 0
+                      }
+                    }
+                  ]
+                },
+                "note": "the reference is unambiguous: records sharing this id agree (an identical copy is the same record)"
               },
               {
                 "require": {
@@ -942,140 +1032,84 @@
         "language_version": 2,
         "steps": [
           {
-            "need": {
-              "op": "is_present",
-              "value": {
-                "config": "policy",
-                "get": []
-              }
-            },
-            "note": "the claim's policy is known"
-          },
-          {
             "for_each": {
               "path": "/lines"
             },
             "as": "line",
             "steps": [
               {
-                "need": {
-                  "op": "in",
+                "require": {
+                  "op": "is_whole_number",
                   "value": {
-                    "path": "$line/service_code"
-                  },
-                  "collection": {
-                    "config": "services",
-                    "get": []
+                    "path": "$line/quantity"
                   }
                 },
-                "note": "the service code is known"
-              },
-              {
-                "let": "max_price",
-                "be": {
-                  "config": "policy",
-                  "get": [
-                    "max_unit_price",
-                    {
-                      "path": "$line/service_code"
-                    }
-                  ]
-                }
-              },
-              {
-                "let": "max_quantity",
-                "be": {
-                  "config": "policy",
-                  "get": [
-                    "max_quantity_per_line",
-                    {
-                      "path": "$line/service_code"
-                    }
-                  ]
-                }
-              },
-              {
-                "need": {
-                  "op": "all_of",
-                  "items": [
-                    {
-                      "op": "is_present",
-                      "value": {
-                        "path": "$line/quantity"
-                      }
-                    },
-                    {
-                      "op": "is_present",
-                      "value": {
-                        "path": "$line/unit_price"
-                      }
-                    },
-                    {
-                      "op": "is_present",
-                      "value": {
-                        "path": "$max_price"
-                      }
-                    },
-                    {
-                      "op": "is_present",
-                      "value": {
-                        "path": "$max_quantity"
-                      }
-                    }
-                  ]
-                },
-                "note": "quantity, unit price and the policy limits are known"
+                "otherwise": "FAIL",
+                "note": "the quantity is a whole number (needs nothing else)"
               },
               {
                 "require": {
-                  "op": "all_of",
-                  "items": [
-                    {
-                      "op": "is_whole_number",
-                      "value": {
-                        "path": "$line/quantity"
-                      }
-                    },
-                    {
-                      "op": "greater_than",
-                      "left": {
-                        "path": "$line/quantity"
-                      },
-                      "right": {
-                        "value": 0
-                      }
-                    },
-                    {
-                      "op": "greater_than",
-                      "left": {
-                        "path": "$line/unit_price"
-                      },
-                      "right": {
-                        "value": 0
-                      }
-                    },
-                    {
-                      "op": "at_most",
-                      "left": {
-                        "path": "$line/unit_price"
-                      },
-                      "right": {
-                        "path": "$max_price"
-                      }
-                    },
-                    {
-                      "op": "at_most",
-                      "left": {
-                        "path": "$line/quantity"
-                      },
-                      "right": {
-                        "path": "$max_quantity"
-                      }
-                    }
-                  ]
+                  "op": "greater_than",
+                  "left": {
+                    "path": "$line/quantity"
+                  },
+                  "right": {
+                    "value": 0
+                  }
                 },
                 "otherwise": "FAIL",
-                "note": "quantity is a positive whole number within the limit, and unit price is positive and within the limit"
+                "note": "the quantity is positive (needs nothing else)"
+              },
+              {
+                "require": {
+                  "op": "greater_than",
+                  "left": {
+                    "path": "$line/unit_price"
+                  },
+                  "right": {
+                    "value": 0
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the unit price is positive (needs nothing else)"
+              },
+              {
+                "require": {
+                  "op": "at_most",
+                  "left": {
+                    "path": "$line/unit_price"
+                  },
+                  "right": {
+                    "config": "policy",
+                    "get": [
+                      "max_unit_price",
+                      {
+                        "path": "$line/service_code"
+                      }
+                    ]
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the unit price is within the policy limit for the service (unknown without the policy or service)"
+              },
+              {
+                "require": {
+                  "op": "at_most",
+                  "left": {
+                    "path": "$line/quantity"
+                  },
+                  "right": {
+                    "config": "policy",
+                    "get": [
+                      "max_quantity_per_line",
+                      {
+                        "path": "$line/service_code"
+                      }
+                    ]
+                  }
+                },
+                "otherwise": "FAIL",
+                "note": "the quantity is within the policy limit for the service (unknown without the policy or service)"
               }
             ]
           }

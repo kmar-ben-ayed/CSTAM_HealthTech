@@ -54,14 +54,28 @@ export interface RuleText {
 
 export interface Question {
   question_id: string;
-  kind: 'clarification' | 'case';
+  /** 'situation': what missing or unknown data gives, one outcome for several test claims (or "It depends").
+   *  'choice': drafting stopped; use a draft that passed every check, keep drafting, or cancel. */
+  kind: 'clarification' | 'case' | 'example' | 'situation' | 'choice';
   text: string;
+  /** For a clarification, a situation or a choice: the answers to pick from, each complete on its own. */
+  options?: string[];
+  /** For a choice: what each option does, in the same order. */
+  choice?: null | { action: 'use' | 'more' | 'examples' | 'cancel'; draft?: number }[];
+  /** For a situation: the test claims one answer covers, and what the draft gives each. */
+  situation?: null | {
+    text: string;
+    cases: { description: string; claim: Record<string, unknown>; drafted_rule_says: Outcome }[];
+  };
   case: null | {
     description: string;
     claim: Record<string, unknown>;
-    drafted_rule_says: Outcome;
-    independent_reading_says: Outcome | null;
-    independent_reading_reason: string;
+    /** A disagreement with the independent reading (second model). */
+    drafted_rule_says?: Outcome;
+    independent_reading_says?: Outcome | null;
+    independent_reading_reason?: string;
+    /** A disagreement between independent drafts: outcome -> how many drafts give it. */
+    drafts_say?: Partial<Record<Outcome, number>>;
     options: Outcome[];
   };
   answer: string | null;
@@ -70,12 +84,24 @@ export interface Question {
 
 export interface CheckReport {
   passed: boolean;
+  /** Every code check passed; only the independent reading (advice) may differ. */
+  code_checks_passed?: boolean;
   checks: { name: string; passed: boolean; detail: string }[];
   readback: string;
-  cases: { case_id: string; description: string; spec_status: string; oracle_status: string | null; oracle_reason: string }[];
+  cases: {
+    case_id: string;
+    description: string;
+    spec_status: string;
+    oracle_status: string | null;
+    oracle_reason: string;
+    /** False when no second reading was made; oracle_status then holds the author's own verdict, if any. */
+    oracle_used?: boolean;
+  }[];
   disagreements: CheckReport['cases'];
   example_mismatches: string[];
   impact: { claims?: number; errors?: number; statuses?: Record<string, number> };
+  /** Advice for the author, e.g. a value the rule names that the draft never uses. Never blocks. */
+  notes?: string[];
 }
 
 export interface Draft {
@@ -121,6 +147,10 @@ export const answerQuestion = (draftId: string, questionId: string, answer: stri
   post<Draft>(`/api/v1/rules/drafts/${draftId}/answers`, { question_id: questionId, answer });
 
 export const confirmDraft = (draftId: string) => post<Draft>(`/api/v1/rules/drafts/${draftId}/confirm`);
+
+/** The author's verdicts on test claims. Any change sends the draft back to the drafter. */
+export const correctDraft = (draftId: string, corrections: { case_id: string; expected_status: Outcome }[]) =>
+  post<Draft>(`/api/v1/rules/drafts/${draftId}/corrections`, { corrections });
 
 export const cancelDraft = (draftId: string) => post<Draft>(`/api/v1/rules/drafts/${draftId}/cancel`);
 

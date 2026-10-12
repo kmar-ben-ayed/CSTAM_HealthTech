@@ -135,21 +135,12 @@
     "source": "fictional-rulebook/R015@1.0.0"
   },
   {
-    "rule_id": "R016",
-    "title": "New Rule",
-    "severity": "medium",
-    "logic": "If provider is EDU-PROV-01 pass, else fail  ",
-    "corrective_action": "All claims coming from edu 1 are rejected",
-    "version": "1.0.0",
-    "source": "test"
-  },
-  {
     "rule_id": "R017",
-    "title": "New Rule",
+    "title": "NEW",
     "severity": "medium",
-    "logic": "If diagnosis is DX-EDU-02 pass, is missing or other fail",
-    "corrective_action": "Please work",
+    "logic": "if provider is EDU-PROV-02 accept, if any else output reject",
+    "corrective_action": "reject all",
     "version": "1.0.0",
-    "source": "TEST"
+    "source": "rule-authoring/R017@1.0.0"
   }
 ]
