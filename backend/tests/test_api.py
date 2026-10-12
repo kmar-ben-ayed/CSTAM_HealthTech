@@ -1,9 +1,11 @@
 import json
+import os
 import shutil
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -64,7 +66,9 @@ class ApiRouteTests(unittest.TestCase):
         root = isolated_backend(self.temp_dir.name)
         policies = json.loads((root / "rules" / "policies.json").read_text(encoding="utf-8"))
 
-        with TestClient(create_app(backend_root=root, audit_log_path=root / "audit.jsonl")) as client:
+        # The real .env (loaded by other tests' apps) may hold a token: this test needs none.
+        environment = {key: value for key, value in os.environ.items() if key != "CLAIMGUARD_ADMIN_TOKEN"}
+        with mock.patch.dict(os.environ, environment, clear=True),                 TestClient(create_app(backend_root=root, audit_log_path=root / "audit.jsonl")) as client:
             # No token configured on the server: admin changes are disabled.
             self.assertEqual(client.post("/api/v1/config/policies.json", json=policies).status_code, 503)
 
