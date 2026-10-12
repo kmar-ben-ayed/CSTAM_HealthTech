@@ -1,0 +1,293 @@
+/* ClaimCard (claimguard-implementation-prompt.md, section 4.4). */
+
+.cg-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 20px;
+}
+@media (max-width: 520px) {
+  .cg-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cg-card {
+  --strip: var(--fail);
+  --strip-text: #ffffff;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  overflow: hidden;
+  transition: transform 180ms var(--ease-out);
+}
+/* White on red needs a deeper red than the base --fail to reach AA. */
+.cg-card.is-failed {
+  --strip: #dc2626;
+}
+.cg-card.is-unable {
+  --strip: var(--unable);
+  --strip-text: var(--strip-ink);
+}
+.cg-card.is-review {
+  --strip: var(--review);
+  --strip-text: var(--strip-ink);
+}
+.cg-card.is-passed {
+  --strip: var(--pass);
+  --strip-text: var(--strip-ink);
+}
+
+/* Pointer light: only the 1px edge, in the status colour. */
+.cg-card-light {
+  --proximity: 0;
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.cg-card-light::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: radial-gradient(260px circle at var(--pointer-x, -999px) var(--pointer-y, -999px), var(--strip), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: calc(var(--proximity) * 0.7);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cg-card:hover {
+    transform: translateY(-2px);
+  }
+}
+
+.cg-card-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--strip);
+  color: var(--strip-text);
+}
+.cg-card-strip span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cg-card-body {
+  display: flex;
+  flex-direction: column;
+  padding: 22px 22px 16px;
+  min-width: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.cg-card-provider {
+  margin: 4px 0 2px;
+  font-family: var(--font-serif);
+  font-size: 29px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.cg-card-service {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+/* Label, dotted leader, value. */
+.cg-card-details {
+  margin: 18px 0 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.cg-card-leader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 0.8125rem;
+}
+.cg-card-leader dt {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.cg-card-leader dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.cg-card-dots {
+  flex: 1;
+  min-width: 12px;
+  border-bottom: 1px dotted var(--border2);
+  transform: translateY(-3px);
+}
+
+.cg-card-findings {
+  margin-top: 14px;
+}
+.cg-card-findings h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-serif);
+  font-size: 1.0625rem;
+  font-style: italic;
+  font-weight: 400;
+  color: var(--ink);
+}
+.cg-card-findings ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cg-card-findings li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem;
+}
+.cg-card-rule {
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+.cg-card-text {
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cg-card-result {
+  font-weight: 600;
+}
+.cg-card-result.is-fail { color: var(--fail-text); }
+.cg-card-result.is-unable { color: var(--unable-text); }
+.cg-card-result.is-review { color: var(--review-text); }
+.cg-card-result.is-pass { color: var(--pass-text); }
+.cg-card-result.is-na { color: var(--na-text); }
+.cg-card-more {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.cg-card-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: auto;
+  padding: 10px 0 8px;
+  border-top: 1.5px solid var(--ink);
+}
+.cg-card-total-label {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 500;
+}
+.cg-card-total-count {
+  font-family: var(--font-serif);
+  font-size: 38px;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cg-card-total-count.has-failures {
+  color: var(--fail-text);
+}
+
+.cg-card-footer {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.cg-card-footer-line {
+  flex: 1;
+  border-bottom: 1px dotted var(--border2);
+  transform: translateY(-3px);
+  transition: border-color 180ms ease;
+}
+.cg-card-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-style: italic;
+  color: var(--ink);
+  transition: color 180ms ease;
+}
+.cg-card-chevron {
+  width: 6px;
+  height: 6px;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 180ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .cg-card:hover .cg-card-footer-line {
+    border-bottom-style: solid;
+    border-color: var(--accent);
+  }
+  .cg-card:hover .cg-card-open {
+    color: var(--accent);
+  }
+  .cg-card:hover .cg-card-chevron {
+    transform: translateX(4px) rotate(45deg);
+  }
+}
+
+/* The link covers the card; its focus ring outlines the whole sheet. */
+.cg-card-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+.cg-card-link:focus-visible {
+  outline: none;
+}
+.cg-card:has(.cg-card-link:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cg-card,
+  .cg-card-footer-line,
+  .cg-card-open,
+  .cg-card-chevron {
+    transition: none;
+  }
+  .cg-card:hover {
+    transform: none;
+  }
+}

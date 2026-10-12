@@ -1,0 +1,38 @@
+/* Custom cursor (claimguard-implementation-prompt.md, section 4.3). */
+
+.custom-cursor {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+.custom-cursor-circle,
+.custom-cursor-dot {
+  position: fixed;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+/* Hollow, so it never covers what is under it. */
+.custom-cursor-circle {
+  background: transparent;
+}
+
+/* The native pointer is replaced, except on text fields, which keep the caret. */
+html.has-custom-cursor,
+html.has-custom-cursor * {
+  cursor: none !important;
+}
+html.has-custom-cursor :is(
+  input:not([type='button'], [type='submit'], [type='reset'], [type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']),
+  textarea,
+  [contenteditable=''],
+  [contenteditable='true']
+) {
+  cursor: text !important;
+}
+html.has-custom-cursor select {
+  cursor: default !important;
+}

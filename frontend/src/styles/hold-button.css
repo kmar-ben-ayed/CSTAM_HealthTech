@@ -1,0 +1,108 @@
+/* HoldButton (claimguard-implementation-prompt.md, section 4.7). */
+
+.hold-button {
+  --hold-progress: 0;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  border: 1px solid var(--border2);
+  border-radius: var(--hold-radius);
+  background: var(--hold-bg);
+  color: var(--hold-text);
+  font: inherit;
+  font-weight: 600;
+  overflow: hidden;
+  user-select: none;
+  touch-action: none;
+  cursor: pointer;
+  transition: transform 120ms var(--ease-out), box-shadow 200ms var(--ease-out), opacity 150ms ease;
+}
+.hold-button.is-lg {
+  min-height: 48px;
+  padding: 0 22px;
+  font-size: 0.9375rem;
+}
+.hold-button.is-md {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 0.875rem;
+}
+.hold-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.hold-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.hold-button.is-done {
+  cursor: default;
+}
+.hold-button.is-glowing {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--hold-fill) 22%, transparent);
+}
+
+.hold-button-label {
+  position: relative;
+  white-space: nowrap;
+}
+
+/* The fill, and a copy of the label in the fill colour, clipped together. */
+.hold-button-fill {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--hold-fill);
+  color: var(--hold-fill-text);
+  pointer-events: none;
+}
+.hold-button.fill-right .hold-button-fill {
+  clip-path: inset(0 calc((1 - var(--hold-progress)) * 100%) 0 0);
+}
+.hold-button.fill-left .hold-button-fill {
+  clip-path: inset(0 0 0 calc((1 - var(--hold-progress)) * 100%));
+}
+
+/* A soft wave on the leading edge of the fill while it moves. */
+.hold-button-wave {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--hold-wave) * 2);
+  background: var(--hold-fill);
+  pointer-events: none;
+  /* Hidden at rest, visible as soon as the fill starts. */
+  opacity: min(1, calc(var(--hold-progress) * 40));
+  -webkit-mask: radial-gradient(var(--hold-wave) at 0 50%, #000 98%, transparent) 0 0 / 100% calc(var(--hold-wave) * 3) repeat-y;
+  mask: radial-gradient(var(--hold-wave) at 0 50%, #000 98%, transparent) 0 0 / 100% calc(var(--hold-wave) * 3) repeat-y;
+}
+.hold-button.fill-right .hold-button-wave {
+  left: calc(var(--hold-progress) * 100%);
+}
+.hold-button.fill-left .hold-button-wave {
+  right: calc(var(--hold-progress) * 100%);
+  transform: scaleX(-1);
+}
+.hold-button.is-done .hold-button-wave {
+  display: none;
+}
+
+/* Reduced motion: the fill fades in place instead of sweeping. */
+@media (prefers-reduced-motion: reduce) {
+  .hold-button {
+    transition: opacity 150ms ease-out;
+    transform: none !important;
+  }
+  .hold-button .hold-button-fill {
+    clip-path: none !important;
+    opacity: var(--hold-progress);
+  }
+  .hold-button-wave {
+    display: none;
+  }
+}

@@ -1,18 +1,20 @@
 // Rule management for the Admin Panel.
 //
 // Rules are not edited as raw JSON any more: an admin writes a rule in
-// English, the backend drafts an implementation, checks it against an
-// independent reading, asks the author about disagreements, and the rule goes
-// live only after every check passes (and, if required, the author confirms
-// the plain-English readback).
+// English, the backend drafts an implementation and checks it in code, and the
+// admin then checks the rule's outcome on generated test claims. Any outcome
+// the admin corrects becomes a permanent test and the rule is drafted again;
+// it goes live only when the admin confirms.
 
 import React, { useCallback, useEffect, useId, useState } from 'react';
+import ShieldLoader from './ShieldLoader';
 import {
   OUTCOMES,
   RUNNING_STATES,
   answerQuestion,
   cancelDraft,
   confirmDraft,
+  correctDraft,
   deactivateRule,
   getDraft,
   getRule,
@@ -235,7 +237,7 @@ function RuleView({ ruleId, openDraftId, onRevise, onOpenDraft, onChanged }: {
   };
 
   if (error) return <div style={{ color: 'var(--status-fail-ink)' }}>{error}</div>;
-  if (!detail) return <div style={{ color: 'var(--text-tertiary)' }}>Loading…</div>;
+  if (!detail) return <ShieldLoader label="Loading the rule…" inline />;
   const { rule, active } = detail;
 
   return (
@@ -348,7 +350,7 @@ function DraftView({ draftId, onChanged }: { draftId: string; onChanged: () => v
     action.then(updated => { setDraft(updated); onChanged(); }).catch(e => setError(e.message));
 
   if (error) return <div style={{ color: 'var(--status-fail-ink)' }}>{error}</div>;
-  if (!draft) return <div style={{ color: 'var(--text-tertiary)' }}>Loading…</div>;
+  if (!draft) return <ShieldLoader label="Loading the draft…" inline />;
   const label = STATE_LABEL[draft.state];
   const open = draft.questions.filter(question => question.answer === null);
 
@@ -386,7 +388,14 @@ function DraftView({ draftId, onChanged }: { draftId: string; onChanged: () => v
         </Section>
       )}
 
-      {draft.report && <ReportView report={draft.report} />}
+      {draft.report && (
+        <ReportView
+          report={draft.report}
+          onCorrect={draft.state === 'awaiting_confirmation'
+            ? corrections => act(correctDraft(draft.draft_id, corrections))
+            : undefined}
+        />
+      )}
 
       {draft.examples.length > 0 && (
         <Section title="Outcomes you confirmed (kept as permanent tests)">
@@ -400,7 +409,7 @@ function DraftView({ draftId, onChanged }: { draftId: string; onChanged: () => v
 
       <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
         {draft.state === 'awaiting_confirmation' && (
-          <button style={PRIMARY} onClick={() => act(confirmDraft(draft.draft_id))}>I confirm the readback: activate</button>
+          <button style={PRIMARY} onClick={() => act(confirmDraft(draft.draft_id))}>I checked the outcomes: activate the rule</button>
         )}
         {!['active', 'rejected', 'cancelled'].includes(draft.state) && (
           <button style={BUTTON} onClick={() => act(cancelDraft(draft.draft_id))}>Cancel draft</button>
@@ -415,24 +424,45 @@ function QuestionCard({ question, onAnswer }: { question: Question; onAnswer: (a
   const [showClaim, setShowClaim] = useState(false);
 
   if (question.kind === 'clarification' || !question.case) {
+    const options = question.options ?? [];
     return (
       <Section title="The drafter asks">
         <p style={{ margin: '0 0 10px', fontSize: '0.875rem' }}>{question.text}</p>
-        <textarea aria-label="Your answer" style={{ ...INPUT, minHeight: 60, marginBottom: 8 }} value={text} onChange={event => setText(event.target.value)} />
-        <button style={PRIMARY} disabled={!text.trim()} onClick={() => onAnswer(text)}>Send answer</button>
+        {options.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+            {options.map(option => (
+              <button key={option} style={{ ...BUTTON, textAlign: 'left' }} onClick={() => onAnswer(option)}>{option}</button>
+            ))}
+          </div>
+        )}
+        <label style={LABEL} htmlFor={`answer-${question.question_id}`}>{options.length ? 'Or answer in your own words' : 'Your answer'}</label>
+        <textarea id={`answer-${question.question_id}`} style={{ ...INPUT, minHeight: 50, marginBottom: 8 }} value={text} onChange={event => setText(event.target.value)} />
+        <button style={options.length ? BUTTON : PRIMARY} disabled={!text.trim()} onClick={() => onAnswer(text)}>Send this answer</button>
       </Section>
     );
   }
 
   const testCase = question.case;
+  const draftsSay = testCase.drafts_say ? Object.entries(testCase.drafts_say) : null;
   return (
-    <Section title="Two readings disagree: what is the right outcome?">
+    <Section title={draftsSay ? 'The drafts disagree: what is the right outcome?' : 'Two readings disagree: what is the right outcome?'}>
       <p style={{ margin: '0 0 8px', fontSize: '0.875rem' }}>{testCase.description}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 10px', fontSize: '0.82rem', marginBottom: 10 }}>
-        <span>Drafted rule says</span><span><OutcomePill outcome={testCase.drafted_rule_says} /></span>
-        <span>Independent reading says</span>
-        <span><OutcomePill outcome={testCase.independent_reading_says} /> <span style={{ color: 'var(--text-secondary)' }}>{testCase.independent_reading_reason}</span></span>
-      </div>
+      {draftsSay ? (
+        // Several independent drafts of the rule decide this claim differently; the answer picks the rule.
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.82rem', marginBottom: 10 }}>
+          {draftsSay.map(([outcome, count]) => (
+            <span key={outcome}>
+              <OutcomePill outcome={outcome} /> {count} draft{count === 1 ? '' : 's'}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 10px', fontSize: '0.82rem', marginBottom: 10 }}>
+          <span>Drafted rule says</span><span><OutcomePill outcome={testCase.drafted_rule_says ?? null} /></span>
+          <span>Independent reading says</span>
+          <span><OutcomePill outcome={testCase.independent_reading_says ?? null} /> <span style={{ color: 'var(--text-secondary)' }}>{testCase.independent_reading_reason}</span></span>
+        </div>
+      )}
       <button style={{ ...BUTTON, marginBottom: 10 }} onClick={() => setShowClaim(!showClaim)}>{showClaim ? 'Hide' : 'Show'} the test claim</button>
       {showClaim && <pre style={{ ...PRE, maxHeight: 260, overflow: 'auto', marginBottom: 10 }}>{JSON.stringify(testCase.claim, null, 2)}</pre>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -444,19 +474,54 @@ function QuestionCard({ question, onAnswer }: { question: Question; onAnswer: (a
   );
 }
 
-function ReportView({ report }: { report: CheckReport }) {
+// The independent reading is a second model's opinion: shown as advice, never a failure.
+const ADVISORY_CHECK = 'independent_reading';
+
+type Verdict = { case_id: string; expected_status: Outcome };
+
+function ReportView({ report, onCorrect }: { report: CheckReport; onCorrect?: (corrections: Verdict[]) => void }) {
   const statuses = report.impact.statuses ?? {};
+  const codeChecksPassed = report.passed || Boolean(report.code_checks_passed);
+  const secondReading = report.cases.some(testCase => testCase.oracle_used !== false);
   return (
     <>
-      <Section title={report.passed ? 'Checks: all passed' : 'Checks'}>
-        {report.checks.map(check => (
-          <div key={check.name} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: '0.82rem', marginBottom: 5 }}>
-            <Pill tone={check.passed ? 'pass' : 'fail'}>{check.passed ? 'passed' : 'failed'}</Pill>
-            <strong>{check.name.replace(/_/g, ' ')}</strong>
-            <span style={{ color: 'var(--text-secondary)' }}>{check.detail}</span>
-          </div>
-        ))}
+      <Section title={codeChecksPassed ? 'Code checks: all passed' : 'Checks'}>
+        {report.checks.map(check => {
+          const advisory = check.name === ADVISORY_CHECK && !check.passed;
+          return (
+            <div key={check.name} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: '0.82rem', marginBottom: 5 }}>
+              <Pill tone={check.passed ? 'pass' : advisory ? 'review' : 'fail'}>{check.passed ? 'passed' : advisory ? 'advice' : 'failed'}</Pill>
+              <strong>{check.name.replace(/_/g, ' ')}</strong>
+              <span style={{ color: 'var(--text-secondary)' }}>{check.detail}</span>
+            </div>
+          );
+        })}
       </Section>
+      {report.notes && report.notes.length > 0 && (
+        <Section title="Worth a look: part of the rule may be missing">
+          {report.notes.map(note => (
+            <div key={note} style={{ fontSize: '0.8rem', padding: '4px 0', color: 'var(--text-secondary)' }}>{note}</div>
+          ))}
+        </Section>
+      )}
+      {report.disagreements.length > 0 && (
+        <Section title={`Worth a look: ${report.disagreements.length} test claim${report.disagreements.length === 1 ? '' : 's'} read differently`}>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+            A second model read the English rule differently on these claims. It is often wrong, so check each one:
+            if the drafted rule is right, confirm; if not, cancel and reword the rule.
+          </div>
+          {report.disagreements.map(testCase => (
+            <div key={testCase.case_id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, fontSize: '0.78rem', padding: '5px 0', borderBottom: '1px solid var(--card-border)' }}>
+              <span>
+                {testCase.description}
+                {testCase.oracle_reason && <span style={{ display: 'block', color: 'var(--text-tertiary)' }}>Second reading: {testCase.oracle_reason}</span>}
+              </span>
+              <span title="The drafted rule"><OutcomePill outcome={testCase.spec_status} /></span>
+              <span title="The second reading"><OutcomePill outcome={testCase.oracle_status} /></span>
+            </div>
+          ))}
+        </Section>
+      )}
       {report.readback && <Section title="What the rule will do (generated from the implementation)"><pre style={PRE}>{report.readback}</pre></Section>}
       {report.impact.claims ? (
         <Section title={`Impact on ${report.impact.claims} development claims`}>
@@ -467,20 +532,83 @@ function ReportView({ report }: { report: CheckReport }) {
           </div>
         </Section>
       ) : null}
-      {report.cases.length > 0 && (
-        <Section title={`Generated test claims (${report.cases.length})`}>
-          <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-            {report.cases.map(testCase => (
-              <div key={testCase.case_id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, fontSize: '0.78rem', padding: '4px 0', borderBottom: '1px solid var(--card-border)' }}>
-                <span>{testCase.description}</span>
-                <OutcomePill outcome={testCase.spec_status} />
-                <OutcomePill outcome={testCase.oracle_status} />
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 6 }}>Columns: drafted rule, independent reading.</div>
-        </Section>
-      )}
+      {report.cases.length > 0 && (onCorrect
+        ? <CaseCheck key={report.readback} cases={report.cases} onCorrect={onCorrect} />
+        : (
+          <Section title={`Generated test claims (${report.cases.length})`}>
+            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+              {report.cases.map(testCase => (
+                <div key={testCase.case_id} style={{ display: 'grid', gridTemplateColumns: secondReading ? '1fr auto auto' : '1fr auto', gap: 8, fontSize: '0.78rem', padding: '4px 0', borderBottom: '1px solid var(--card-border)' }}>
+                  <span>{testCase.description}</span>
+                  <OutcomePill outcome={testCase.spec_status} />
+                  {secondReading && <OutcomePill outcome={testCase.oracle_status} />}
+                </div>
+              ))}
+            </div>
+            {secondReading && <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 6 }}>Columns: drafted rule, independent reading.</div>}
+          </Section>
+        ))}
     </>
+  );
+}
+
+// The author checks what the drafted rule decides on each generated test claim
+// and corrects any outcome. Corrections become permanent tests for the rule and
+// send it back to the drafter; the rule must then reproduce every one of them.
+function CaseCheck({ cases, onCorrect }: { cases: CheckReport['cases']; onCorrect: (corrections: Verdict[]) => void }) {
+  const [verdicts, setVerdicts] = useState<Record<string, Outcome>>({});
+  const changed = cases.filter(testCase => verdicts[testCase.case_id] && verdicts[testCase.case_id] !== testCase.spec_status);
+
+  return (
+    <Section title={`Check the outcomes (${cases.length} generated test claims)`}>
+      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+        This is what the drafted rule decides. Change any outcome that is wrong: your answer becomes a permanent
+        test and the rule is drafted again until it matches.
+      </div>
+      <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+        {cases.map(testCase => {
+          const verdict = verdicts[testCase.case_id] ?? testCase.spec_status;
+          const isChanged = verdict !== testCase.spec_status;
+          const flagged = testCase.oracle_used !== false && testCase.oracle_status && testCase.oracle_status !== testCase.spec_status;
+          return (
+            <div key={testCase.case_id} style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr auto',
+              gap: 10,
+              alignItems: 'center',
+              fontSize: '0.8rem',
+              padding: '6px 8px',
+              borderBottom: '1px solid var(--card-border)',
+              background: isChanged ? 'var(--status-uta-bg)' : 'transparent',
+            }}>
+              <span>
+                {testCase.description}
+                {flagged && <span style={{ display: 'block', color: 'var(--text-tertiary)' }}>Second reading says {testCase.oracle_status}: worth a look</span>}
+              </span>
+              <select
+                aria-label={`Outcome for: ${testCase.description}`}
+                value={verdict}
+                onChange={event => setVerdicts(current => ({ ...current, [testCase.case_id]: event.target.value as Outcome }))}
+                style={{ ...INPUT, width: 'auto', padding: '5px 8px', fontWeight: isChanged ? 700 : 500 }}
+              >
+                {OUTCOMES.map((outcome: Outcome) => <option key={outcome} value={outcome}>{outcome}</option>)}
+              </select>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+        <button
+          style={changed.length ? PRIMARY : BUTTON}
+          disabled={!changed.length}
+          onClick={() => onCorrect(changed.map(testCase => ({ case_id: testCase.case_id, expected_status: verdicts[testCase.case_id] })))}
+        >
+          {changed.length ? `Send ${changed.length} correction${changed.length === 1 ? '' : 's'} and redraft` : 'No corrections'}
+        </button>
+        {changed.length > 0 && (
+          <button style={BUTTON} onClick={() => setVerdicts({})}>Undo changes</button>
+        )}
+      </div>
+    </Section>
   );
 }

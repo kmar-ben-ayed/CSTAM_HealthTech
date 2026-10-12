@@ -9,7 +9,13 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Path, Request
 
-from api_app.schemas import RULE_ID_PATTERN, DraftAnswerRequest, RuleDraftRequest
+from api_app.schemas import (
+    RULE_ID_PATTERN,
+    DraftAnswerRequest,
+    DraftCorrectionsRequest,
+    DraftExamplesRequest,
+    RuleDraftRequest,
+)
 from api_app.security import acting_admin, require_admin
 from rule_authoring.drafts import QUEUED, Draft
 from rule_authoring.service import RuleAuthoringService
@@ -57,7 +63,9 @@ def submit_draft(
     actor: str = Depends(acting_admin),
 ):
     service = _service(request)
-    draft = service.submit(payload.model_dump(exclude={"rule_id"}), actor, rule_id=payload.rule_id)
+    examples = [(item.claim, item.expected_status) for item in payload.examples]
+    draft = service.submit(payload.model_dump(exclude={"rule_id", "examples"}), actor, rule_id=payload.rule_id,
+                           examples=examples)
     background.add_task(service.run, draft.draft_id)
     return draft.to_json()
 
@@ -80,6 +88,47 @@ def answer_question(
     if draft.state == QUEUED:
         background.add_task(service.run, draft.draft_id)
     return draft.to_json()
+
+
+@router.post("/drafts/{draft_id}/corrections", dependencies=admin_only)
+def correct_draft(
+    payload: DraftCorrectionsRequest,
+    draft_id: DraftId,
+    request: Request,
+    background: BackgroundTasks,
+    actor: str = Depends(acting_admin),
+):
+    """The author's verdicts on the test claims; any correction sends the draft back to the drafter."""
+    service = _service(request)
+    verdicts = [(item.case_id, item.expected_status) for item in payload.corrections]
+    draft = service.correct(draft_id, verdicts, actor)
+    if draft.state == QUEUED:
+        background.add_task(service.run, draft.draft_id)
+    return draft.to_json()
+
+
+@router.post("/drafts/{draft_id}/examples", dependencies=admin_only)
+def give_examples(
+    payload: DraftExamplesRequest,
+    draft_id: DraftId,
+    request: Request,
+    background: BackgroundTasks,
+    actor: str = Depends(acting_admin),
+):
+    """Example claims (picked from the claims the admin knows) answering a stuck drafter's request."""
+    service = _service(request)
+    draft = service.add_examples(draft_id, [(item.claim, item.expected_status) for item in payload.examples], actor)
+    if draft.state == QUEUED:
+        background.add_task(service.run, draft.draft_id)
+    return draft.to_json()
+
+
+@router.post("/drafts/{draft_id}/escalate", dependencies=admin_only)
+def escalate_draft(request: Request, draft_id: DraftId, actor: str = Depends(acting_admin)):
+    """A rule that could not be generated, for a technical manager: the pre-filled email
+    (to, subject, body, mailto) opens in the admin's own mail app; nothing is sent here."""
+    draft, email = _service(request).escalate(draft_id, actor)
+    return {"draft": draft.to_json(), "email": email}
 
 
 @router.post("/drafts/{draft_id}/confirm", dependencies=admin_only)

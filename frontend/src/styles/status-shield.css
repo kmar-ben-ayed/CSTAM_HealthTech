@@ -1,0 +1,109 @@
+/* Status shield (the Sentinel mark, "Six states, one shield"). */
+
+.status-shield {
+  --shield: var(--na-text);
+  flex-shrink: 0;
+  overflow: visible;
+}
+.status-shield.is-idle { --shield: #64748b; }
+.status-shield.is-scanning { --shield: #0891b2; }
+.status-shield.is-pass { --shield: var(--pass); }
+.status-shield.is-fail { --shield: var(--fail); }
+.status-shield.is-uncertain { --shield: var(--unable); }
+.status-shield.is-review { --shield: #0e7490; }
+[data-theme='dark'] .status-shield.is-review { --shield: #22d3ee; }
+
+.shield-body {
+  fill: color-mix(in srgb, var(--shield) 12%, var(--surface));
+  stroke: var(--shield);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  transition: fill 300ms ease, stroke 300ms ease;
+}
+.shield-core {
+  fill: color-mix(in srgb, var(--shield) 24%, transparent);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.shield-orbit {
+  stroke: color-mix(in srgb, var(--shield) 40%, transparent);
+  stroke-width: 1.5;
+}
+.shield-symbol {
+  stroke: var(--shield);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: shield-symbol-in 240ms var(--ease-out);
+}
+@keyframes shield-symbol-in {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
+.shield-symbol-fill {
+  fill: var(--shield);
+  stroke: none;
+}
+.shield-satellite {
+  fill: var(--shield);
+}
+
+/* The core breathes at the state's pulse speed. */
+.status-shield.is-moving .shield-core {
+  animation: shield-pulse var(--shield-pulse) ease-in-out infinite;
+}
+@keyframes shield-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shield-body {
+    transition: none;
+  }
+  .shield-symbol {
+    animation: shield-symbol-fade 200ms ease;
+  }
+  @keyframes shield-symbol-fade {
+    from { opacity: 0; }
+  }
+}
+
+/* Sentinel wrapper used by older pages. */
+.sentinel {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.sentinel-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+/* The app's one loading state: the shield scanning beside what is loading. */
+.shield-loader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 40px 0;
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+.shield-loader.is-inline {
+  gap: 10px;
+  padding: 10px 16px;
+  font-size: 0.8125rem;
+}

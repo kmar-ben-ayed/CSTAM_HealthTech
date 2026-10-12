@@ -1,1390 +1,478 @@
-import { useEffect, useState } from 'react';
-import Sentinel from '../components/Sentinel';
-import type { SentinelState } from '../components/Sentinel';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import HoldButton from '../components/HoldButton';
+import ShieldLoader from '../components/ShieldLoader';
+import StatusShield, { SHIELD_FOR_STATUS } from '../components/StatusShield';
+import FindingInspector, { ACTIONS, RESULT_LABEL, type ActionKey, type Finding, type ReviewChoice } from '../components/FindingInspector';
+import { ApiError } from '../api/client';
+import { getAuditEvents } from '../api/audit';
+import { listRules } from '../api/rules';
 import {
-  evaluationToReviewRules,
   exportFhirPayload,
   getDataset,
-  getExplanation,
-  postReview,
-  type BackendClaim,
-  type ExplanationAssessment,
-  type FhirPayload,
-  type ReviewAction,
-  type ReviewEvidence,
   getIngestedClaim,
+  postReview,
+  reevaluateClaim,
+  type BackendClaim,
+  type FhirPayload,
+  type RuleResult,
 } from '../api/claims';
+import { cardResult, claimStatus, loadCardContext, type CardContext, type CardRuleResult, type ClaimStatus } from '../api/claimCards';
+import '../styles/claim-review.css';
 
 interface ClaimReviewProps {
   claimId: string;
   onNavigate: (page: string) => void;
 }
 
-type RuleStatus = 'PASS' | 'FAIL' | 'UNABLE_TO_ASSESS' | 'NOT_APPLICABLE' | 'NOT_IMPLEMENTED';
-
-interface Rule {
-  id: string;
-  name: string;
-  status: RuleStatus;
-  finding: string;
-  evidence?: ReviewEvidence[];
-  evidencePaths: string[];
-  observed?: string;
-  expected?: string;
-  aiExplanation: string;
-  category: string;
-}
-
-const RULES: Rule[] = [
-  { id: 'R001', name: 'Member eligibility', category: 'Eligibility', status: 'PASS', finding: 'Member is eligible for the service date.', evidencePaths: ['/member/id', '/member/eligibility/effective_date', '/member/eligibility/termination_date'], observed: '"2023-01-01" → "2027-12-31"', aiExplanation: 'The member\'s eligibility period (2023-01-01 to 2027-12-31) fully encompasses the service date (2026-09-15). The eligibility status field confirms active enrollment.', },
-  { id: 'R002', name: 'Provider enrollment', category: 'Provider', status: 'PASS', finding: 'Billing provider is enrolled with the payer.', evidencePaths: ['/billing_provider/npi', '/billing_provider/enrollment_status'], observed: '"ACTIVE"', aiExplanation: 'The billing provider NPI 1234567890 has an active enrollment status with this payer. The enrollment has no restrictions that would affect this claim type.', },
-  { id: 'R003', name: 'Service date validity', category: 'Temporal', status: 'PASS', finding: 'Service date is within valid range.', evidencePaths: ['/lines/0/service_date', '/submission_date'], observed: '"2026-09-15" < "2026-09-25"', aiExplanation: 'The service date (2026-09-15) is in the past relative to the submission date (2026-09-25), which satisfies the temporal validity requirement. The 10-day gap is within the standard filing window.', },
-  { id: 'R004', name: 'Benefit coverage', category: 'Coverage', status: 'PASS', finding: 'Service code is covered under the member benefit plan.', evidencePaths: ['/lines/0/service_code', '/member/plan_id', '/benefit_catalog/99213'], observed: '"COVERED"', aiExplanation: 'Service code 99213 (Office visit, established patient) is listed as a covered benefit under the member\'s plan (PLAN-7829). No exclusions or limitations apply to this service for this member.', },
-  { id: 'R005', name: 'Duplicate claim check', category: 'Integrity', status: 'PASS', finding: 'No duplicate claim detected.', evidencePaths: ['/claim_id', '/member/id', '/lines/0/service_date', '/lines/0/service_code'], observed: 'No match in 90-day window', aiExplanation: 'No claim with matching member ID, service date, service code, and provider NPI was found within the 90-day lookback window. This claim appears to be a first submission.', },
-  { id: 'R006', name: 'Diagnosis validity', category: 'Clinical', status: 'PASS', finding: 'Diagnosis codes are valid ICD-10-CM codes.', evidencePaths: ['/diagnoses/0/code', '/diagnoses/1/code'], observed: '"J06.9", "Z23"', aiExplanation: 'Both diagnosis codes (J06.9 — Acute upper respiratory infection, unspecified; Z23 — Encounter for immunization) are valid ICD-10-CM codes effective for the service date. Neither code has been retired or invalidated as of 2026-09-15.', },
-  { id: 'R007', name: 'Service code validity', category: 'Clinical', status: 'PASS', finding: 'Service code is a valid CPT code.', evidencePaths: ['/lines/0/service_code'], observed: '"99213"', aiExplanation: 'CPT code 99213 is a valid, active procedure code. It has not been deleted, bundled, or replaced as of the service date.', },
-  {
-    id: 'R008',
-    name: 'Authorization reference',
-    category: 'Authorization',
-    status: 'FAIL',
-    finding: 'Required authorization reference is missing.',
-    evidencePaths: ['/lines/0/service_code', '/lines/0/authorization_reference'],
-    observed: 'null',
-    expected: 'Non-null string (prior authorization number)',
-    aiExplanation: 'The service code (99213) is flagged as requiring prior authorization under the member\'s benefit plan. The authorization_reference field for line 0 is null, indicating no prior authorization number was provided. Because the reference is absent, the authorization requirement cannot be verified. This constitutes a failure of the authorization reference rule.',
-  },
-  {
-    id: 'R009',
-    name: 'Authorization validity',
-    category: 'Authorization',
-    status: 'UNABLE_TO_ASSESS',
-    finding: 'Authorization validity cannot be established because the required authorization reference is unavailable.',
-    evidencePaths: ['/lines/0/authorization_reference', '/authorization_registry'],
-    observed: 'null',
-    aiExplanation: 'This rule requires an authorization reference number to look up the authorization record in the registry. Because the authorization reference (R008) is null, no lookup can be performed. The validity of any authorization cannot be assessed. This is not a failure — it is a consequence of the missing input from R008. Assessing this rule would require fabricating an assumption, which is not permitted.',
-  },
-  { id: 'R010', name: 'Place of service', category: 'Facility', status: 'PASS', finding: 'Place of service code is valid for the service type.', evidencePaths: ['/lines/0/place_of_service', '/lines/0/service_code'], observed: '"11" (Office)', aiExplanation: 'Place of service code 11 (Physician\'s office) is appropriate for CPT 99213. The combination of service code and place of service is a permitted pairing under the payer rules.', },
-  { id: 'R011', name: 'Billing provider NPI', category: 'Provider', status: 'PASS', finding: 'Billing provider NPI is valid and active.', evidencePaths: ['/billing_provider/npi'], observed: '"1234567890"', aiExplanation: 'The billing provider NPI (1234567890) is a valid, 10-digit NPI that is active in the National Plan and Provider Enumeration System (NPPES) as of the service date.', },
-  { id: 'R012', name: 'Rendering provider NPI', category: 'Provider', status: 'PASS', finding: 'Rendering provider NPI is valid and active.', evidencePaths: ['/rendering_provider/npi'], observed: '"9876543210"', aiExplanation: 'The rendering provider NPI (9876543210) is valid and active in NPPES. The rendering provider is associated with the billing provider\'s group practice, which satisfies the credentialing requirement.', },
-  { id: 'R013', name: 'Diagnosis–procedure alignment', category: 'Clinical', status: 'PASS', finding: 'Diagnosis codes support the billed procedure.', evidencePaths: ['/lines/0/service_code', '/diagnoses/0/code'], observed: '99213 ↔ J06.9', aiExplanation: 'CPT 99213 (office visit) is clinically appropriate for the principal diagnosis J06.9 (acute upper respiratory infection). The ICD-10/CPT alignment check confirms this combination is valid and does not trigger any MUE or NCCI edit.', },
-  { id: 'R014', name: 'Age & gender appropriateness', category: 'Clinical', status: 'PASS', finding: 'Service is appropriate for member age and gender.', evidencePaths: ['/member/date_of_birth', '/member/gender', '/lines/0/service_code'], observed: 'Age: 34 · Gender: F', aiExplanation: 'CPT 99213 has no age or gender restrictions. The member\'s age (34) and gender (Female) are within the permissible range for this service code. No age/gender-based edit applies.', },
-  { id: 'R015', name: 'Coordination of benefits', category: 'Coverage', status: 'NOT_APPLICABLE', finding: 'Member has no secondary insurance. COB check is not applicable.', evidencePaths: ['/member/secondary_insurance'], observed: 'null', aiExplanation: 'The member has no secondary insurance plan on file. Coordination of benefits is not applicable for single-coverage members. This rule is correctly marked as not applicable.', },
+// Findings groups, in the order a reviewer works through them.
+const GROUPS: Array<{ result: CardRuleResult; openByDefault: boolean }> = [
+  { result: 'FAIL', openByDefault: true },
+  { result: 'REVIEW', openByDefault: true },
+  { result: 'UNABLE', openByDefault: true },
+  { result: 'PASS', openByDefault: false },
+  { result: 'NA', openByDefault: false },
 ];
 
-const STATUS_LABEL: Record<RuleStatus, string> = {
-  PASS: 'PASS',
-  FAIL: 'FAIL',
-  UNABLE_TO_ASSESS: 'UNABLE TO ASSESS',
-  NOT_APPLICABLE: 'N/A',
-  NOT_IMPLEMENTED: 'NOT IMPLEMENTED',
+const STATUS_WORD: Record<ClaimStatus, string> = {
+  Failed: 'is-fail',
+  'Unable to assess': 'is-unable',
+  'Needs review': 'is-review',
+  Passed: 'is-pass',
 };
 
-const STATUS_SENTINEL: Record<RuleStatus, SentinelState> = {
-  PASS: 'pass',
-  FAIL: 'fail',
-  UNABLE_TO_ASSESS: 'uncertain',
-  NOT_APPLICABLE: 'idle',
-  NOT_IMPLEMENTED: 'idle',
-};
+type ClaimDecision = 'approved' | 'rejected';
 
-const STATUS_STYLE: Record<RuleStatus, { bg: string; text: string; border: string; leftBorder: string }> = {
-  PASS: { bg: 'var(--status-pass-bg)', text: 'var(--status-pass)', border: 'var(--status-pass-border)', leftBorder: 'var(--status-pass)' },
-  FAIL: { bg: 'var(--status-fail-bg)', text: 'var(--status-fail)', border: 'var(--status-fail-border)', leftBorder: 'var(--status-fail)' },
-  UNABLE_TO_ASSESS: { bg: 'var(--status-uta-bg)', text: 'var(--status-uta)', border: 'var(--status-uta-border)', leftBorder: 'var(--status-uta)' },
-  NOT_APPLICABLE: { bg: 'var(--status-na-bg)', text: 'var(--status-na)', border: 'var(--status-na-border)', leftBorder: 'var(--status-na)' },
-  NOT_IMPLEMENTED: { bg: 'var(--status-na-bg)', text: 'var(--status-na)', border: 'var(--status-na-border)', leftBorder: 'var(--status-na)' },
-};
+// When a claim opens, the shield scans for one orbit (1.6s) before showing the
+// claim's state. It never holds up the page, only the shield.
+const SCAN_MS = 1600;
 
+interface Loaded {
+  claim: BackendClaim;
+  results: RuleResult[];
+  context: CardContext;
+  ruleTitles: Map<string, string>;
+  /** Latest recorded review action per rule, from the audit trail. */
+  recorded: Map<string, string>;
+}
 
-function formatEvidenceValue(value: unknown): string {
-  if (value === null) return 'null';
-  if (value === undefined) return '—';
-  if (typeof value === 'string') return JSON.stringify(value);
+async function loadReview(claimId: string, signal: AbortSignal): Promise<Loaded> {
+  const stored = getIngestedClaim(claimId, signal)
+    .then((response) => ({ claim: response.claim, results: response.evaluation }))
+    .catch(async (cause: unknown) => {
+      if (!(cause instanceof ApiError && cause.status === 404)) throw cause;
+      const dataset = await getDataset('development', 500, signal);
+      return { claim: dataset.claims.find((item) => item.claim_id === claimId), results: dataset.evaluations[claimId] ?? [] };
+    });
+  const [{ claim, results }, context, rules, audit] = await Promise.all([
+    stored,
+    loadCardContext(signal),
+    listRules(signal).catch(() => []),
+    getAuditEvents(500, signal).catch(() => ({ total_count: 0, events: [] })),
+  ]);
+  if (!claim) throw new Error('not-found');
+
+  const recorded = new Map<string, string>();
+  const latest = new Map<string, number>();
+  for (const event of audit.events) {
+    if (event.claim_id !== claimId || event.event_type !== 'human_decision') continue;
+    const ruleId = typeof event.payload.rule_id === 'string' ? event.payload.rule_id : '';
+    const action = ACTIONS.find((item) => item.api === event.payload.action);
+    const at = new Date(event.timestamp).getTime();
+    if (!ruleId || !action || at < (latest.get(ruleId) ?? 0)) continue;
+    latest.set(ruleId, at);
+    recorded.set(ruleId, action.recorded);
+  }
+
+  return { claim, results, context, ruleTitles: new Map(rules.map((rule) => [rule.rule_id, rule.title])), recorded };
+}
+
+function toFinding(result: RuleResult, titles: Map<string, string>): Finding {
+  const evidence = Array.isArray(result.evidence)
+    ? (result.evidence as Array<{ path?: unknown; value?: unknown }>)
+      .filter((item) => typeof item?.path === 'string')
+      .map((item) => ({ path: item.path as string, value: item.value }))
+    : [];
+  return {
+    ruleId: result.rule_id,
+    title: titles.get(result.rule_id) || `Rule ${result.rule_id}`,
+    result: cardResult(result),
+    status: result.status,
+    summary: typeof result.explanation === 'string' ? result.explanation : '',
+    evidence,
+    source: typeof result.rule_source === 'string' ? result.rule_source : '',
+    correctiveAction: typeof result.corrective_action === 'string' ? result.corrective_action : '',
+  };
+}
+
+function Leader({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="sheet-leader">
+      <dt>{label}</dt>
+      <span className="sheet-dots" aria-hidden="true" />
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+function money(amount: unknown, currency: unknown): string {
+  if (typeof amount !== 'number') return '—';
   try {
-    return JSON.stringify(value);
+    return new Intl.NumberFormat('en', { style: 'currency', currency: typeof currency === 'string' && currency ? currency : 'SAR' }).format(amount);
   } catch {
-    return String(value);
+    return String(amount);
   }
 }
 
-function formatClaimDate(value: unknown): string {
-  if (typeof value !== 'string' || !value) return '—';
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
-}
-
-function formatClaimAmount(value: unknown, currency: unknown): string {
-  if (typeof value !== 'number') return '—';
-  return new Intl.NumberFormat('en', {
-    style: 'currency',
-    currency: typeof currency === 'string' && currency ? currency : 'SAR',
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
-const CATEGORY_COLORS: Record<string, string> = {
-  high: 'var(--status-fail)', medium: 'var(--status-uta)', low: 'var(--text-secondary)',
-};
-
-export default function ClaimReview({ claimId, onNavigate }: ClaimReviewProps) {
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [claim, setClaim] = useState<BackendClaim | null>(null);
-  const [selectedRule, setSelectedRule] = useState<Rule>(RULES[0]);
-  const [loading, setLoading] = useState(true);
+export default function ClaimReview({ claimId }: ClaimReviewProps) {
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [aiExplanation, setAiExplanation] = useState<string | null>(null);
-  const [aiProvider, setAiProvider] = useState<string | null>(null);
-  const [aiFallback, setAiFallback] = useState(false);
-  const [aiAssessment, setAiAssessment] = useState<ExplanationAssessment | null>(null);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
-  const [reviewAction, setReviewAction] = useState<string | null>(null);
-  const [reviewNote, setReviewNote] = useState('');
-  const [reviewReason, setReviewReason] = useState('');
-  const [confirmed, setConfirmed] = useState(false);
-  const [claimContextOpen, setClaimContextOpen] = useState(true);
-  const [claimContextExpanded, setClaimContextExpanded] = useState(false);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
-  const [fhirDrawerOpen, setFhirDrawerOpen] = useState(false);
-  const [fhirPayload, setFhirPayload] = useState<FhirPayload | null>(null);
-  const [fhirRequestState, setFhirRequestState] = useState<'idle' | 'loading' | 'ready' | 'error' | 'empty'>('idle');
-  const [fhirRetryCount, setFhirRetryCount] = useState(0);
-  const [fhirCopyFeedback, setFhirCopyFeedback] = useState<'copied' | 'error' | null>(null);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-    passed: false,
-    notApplicable: false,
-    other: false,
-  });
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(GROUPS.map((group) => [group.result, group.openByDefault])),
+  );
+  const [choices, setChoices] = useState<Record<string, ReviewChoice>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [rerunning, setRerunning] = useState(false);
+  const [rerunError, setRerunError] = useState<string | null>(null);
+  const [fhirOpen, setFhirOpen] = useState(false);
+  const [fhir, setFhir] = useState<{ state: 'loading' | 'ready' | 'error'; payload?: FhirPayload }>({ state: 'loading' });
+  const [decision, setDecision] = useState<ClaimDecision | null>(null);
+  const [decisionRound, setDecisionRound] = useState(0);
+  const [scanning, setScanning] = useState(true);
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
+    const openedAt = performance.now();
+    const scanFor = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : SCAN_MS;
+    let timer = 0;
+    setLoaded(null);
     setLoadError(null);
-    getIngestedClaim(claimId, controller.signal)
-      .catch((cause: unknown) => {
-        if (cause instanceof Error && 'status' in cause && (cause as { status?: number }).status === 404) {
-          return getDataset('development', 500, controller.signal).then((dataset) => ({
-            claim: dataset.claims.find((item) => item.claim_id === claimId),
-            evaluation: dataset.evaluations[claimId] || [],
-          }));
-        }
-        throw cause;
-      })
-      .then((stored) => {
-        const selectedClaim = stored.claim;
-        const result = evaluationToReviewRules(stored.evaluation);
-        if (!selectedClaim || !result.length) {
-          setLoadError('This claim was not found in the latest ingested batch or development dataset.');
-          setLoading(false);
-          return;
-        }
-        setClaim(selectedClaim);
-        setRules(result);
-        setSelectedRule(
-          result.find((rule) => rule.status === 'FAIL')
-          || result.find((rule) => rule.status === 'UNABLE_TO_ASSESS')
-          || result[0],
-        );
-        setLoading(false);
-
+    setScanning(true);
+    loadReview(claimId, controller.signal)
+      .then((review) => {
+        setLoaded(review);
+        timer = window.setTimeout(() => setScanning(false), Math.max(0, scanFor - (performance.now() - openedAt)));
       })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setLoadError('The claim evaluation could not be loaded.');
-        setLoading(false);
+        setScanning(false);
+        setLoadError(cause instanceof Error && cause.message === 'not-found'
+          ? 'This claim was not found in the latest ingested batch or the development dataset.'
+          : 'The claim could not be loaded.');
       });
-
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
   }, [claimId]);
 
   useEffect(() => {
-    if (!claim || !rules.some((rule) => rule.id === selectedRule.id)) return;
-
+    if (!fhirOpen || !loaded) return;
     const controller = new AbortController();
-    setAiLoading(true);
-    setAiExplanation(null);
-    setAiProvider(null);
-    setAiFallback(false);
-    setAiAssessment(null);
-    setAiError(null);
-    getExplanation(claim, selectedRule.id, 'openai', controller.signal)
-      .then((response) => {
-        setAiExplanation(response.explanation);
-        setAiProvider(response.provider);
-        setAiFallback(response.fallback_used);
-        setAiAssessment(response.assessment);
-        setAiLoading(false);
-      })
+    setFhir({ state: 'loading' });
+    exportFhirPayload(loaded.claim, controller.signal)
+      .then((payload) => setFhir({ state: 'ready', payload }))
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setAiError(cause instanceof Error ? cause.message : 'The explanation request failed.');
-        setAiLoading(false);
+        setFhir({ state: 'error' });
       });
-
     return () => controller.abort();
-  }, [claim, rules, selectedRule.id]);
+  }, [fhirOpen, loaded]);
 
-  useEffect(() => {
-    if (!fhirDrawerOpen || !claim) return;
+  const findings = useMemo(
+    () => (loaded ? loaded.results.map((result) => toFinding(result, loaded.ruleTitles)) : []),
+    [loaded],
+  );
+  const selected = findings.find((finding) => finding.ruleId === selectedId)
+    ?? findings.find((finding) => finding.result === 'FAIL')
+    ?? findings.find((finding) => finding.result !== 'PASS' && finding.result !== 'NA')
+    ?? findings[0];
 
-    const controller = new AbortController();
-    setFhirPayload(null);
-    setFhirRequestState('loading');
-    setFhirCopyFeedback(null);
-    exportFhirPayload(claim, controller.signal)
-      .then((payload) => {
-        if (!payload || Object.keys(payload).length === 0) {
-          setFhirRequestState('empty');
-          return;
-        }
-        setFhirPayload(payload);
-        setFhirRequestState('ready');
-      })
-      .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        setFhirRequestState('error');
-      });
+  if (loadError) {
+    return (
+      <div className="review-page">
+        <Link to="/app/claims" className="text-link">Back to claims</Link>
+        <p className="review-message" role="alert">{loadError}</p>
+      </div>
+    );
+  }
+  if (!loaded || !selected) {
+    return (
+      <div className="review-page">
+        <ShieldLoader label="Checking the claim…" />
+      </div>
+    );
+  }
 
-    return () => controller.abort();
-  }, [claim, fhirDrawerOpen, fhirRetryCount]);
+  const { claim, context } = loaded;
+  const status = claimStatus(loaded.results);
+  const lines = Array.isArray(claim.lines) ? claim.lines : [];
+  const firstCode = lines[0]?.service_code || '';
+  const failedCount = loaded.results.filter((result) => result.status === 'FAIL').length;
+  const unableCount = loaded.results.filter((result) => result.status === 'UNABLE_TO_ASSESS').length;
+  const actionable = findings.filter((finding) => finding.result !== 'PASS' && finding.result !== 'NA');
+  const reviewedCount = actionable.filter((finding) => choices[finding.ruleId]?.state === 'saved' || (!choices[finding.ruleId] && loaded.recorded.has(finding.ruleId))).length;
+  const approveBlocked = failedCount > 0;
 
-  useEffect(() => {
-    if (!fhirCopyFeedback) return;
-    const timeout = window.setTimeout(() => setFhirCopyFeedback(null), 1600);
-    return () => window.clearTimeout(timeout);
-  }, [fhirCopyFeedback]);
-
-  useEffect(() => {
-    if (!fhirDrawerOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setFhirDrawerOpen(false);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [fhirDrawerOpen]);
-
-  useEffect(() => {
-    const attentionRulesForKeyboard = rules.filter((rule) => rule.status === 'FAIL' || rule.status === 'UNABLE_TO_ASSESS');
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (reviewAction || !attentionRulesForKeyboard.length) return;
-      const currentIndex = attentionRulesForKeyboard.findIndex((rule) => rule.id === selectedRule.id);
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        setSelectedRule(attentionRulesForKeyboard[Math.min(currentIndex + 1, attentionRulesForKeyboard.length - 1)] || attentionRulesForKeyboard[0]);
-        setInspectorOpen(true);
-      }
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        setSelectedRule(attentionRulesForKeyboard[Math.max(currentIndex - 1, 0)] || attentionRulesForKeyboard[0]);
-        setInspectorOpen(true);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [rules, reviewAction, selectedRule.id]);
-
-  const passingRules = rules.filter(r => r.status === 'PASS').length;
-  const failingRules = rules.filter(r => r.status === 'FAIL').length;
-  const utaRules = rules.filter(r => r.status === 'UNABLE_TO_ASSESS').length;
-
-  const notApplicableRules = rules.filter(r => r.status === 'NOT_APPLICABLE');
-  const attentionRules = rules.filter(r => r.status === 'FAIL' || r.status === 'UNABLE_TO_ASSESS');
-  const passedRules = rules.filter(r => r.status === 'PASS');
-  const otherRules = rules.filter(r => r.status === 'NOT_IMPLEMENTED');
-  const claimLines = Array.isArray(claim?.lines) ? claim.lines : [];
-  const claimDiagnosis = typeof claim?.diagnosis_code === 'string' ? claim.diagnosis_code : '—';
-  const claimMemberId = typeof claim?.member_id === 'string' ? claim.member_id : '—';
-  const claimProviderId = typeof claim?.provider_id === 'string' ? claim.provider_id : '—';
-
-
-  const ss = STATUS_STYLE[selectedRule.status];
-  const formattedFhirPayload = fhirPayload ? JSON.stringify(fhirPayload, null, 2) : '';
-
-  const handleCopyFhirPayload = async () => {
-    if (!formattedFhirPayload) return;
+  const recordAction = async (finding: Finding, action: ActionKey, reason: string) => {
+    const api = ACTIONS.find((item) => item.key === action)!.api;
+    const original = finding.status === 'NOT_IMPLEMENTED' ? 'UNABLE_TO_ASSESS' : finding.status;
+    setActionError(null);
+    setChoices((current) => ({ ...current, [finding.ruleId]: { action, state: 'saving' } }));
     try {
-      await navigator.clipboard.writeText(formattedFhirPayload);
-      setFhirCopyFeedback('copied');
+      await postReview(claim.claim_id, finding.ruleId, api, reason, original as 'PASS' | 'FAIL' | 'UNABLE_TO_ASSESS' | 'NOT_APPLICABLE');
+      setChoices((current) => ({ ...current, [finding.ruleId]: { action, state: 'saved' } }));
     } catch {
-      setFhirCopyFeedback('error');
+      // Roll back: nothing was recorded.
+      setChoices((current) => {
+        const next = { ...current };
+        delete next[finding.ruleId];
+        return next;
+      });
+      setActionError('The action could not be recorded. Nothing was written to the audit trail.');
     }
   };
 
-  const handleDownloadFhirPayload = () => {
-    if (!formattedFhirPayload) return;
-    const payloadUrl = URL.createObjectURL(new Blob([formattedFhirPayload], { type: 'application/fhir+json' }));
-    const downloadLink = document.createElement('a');
-    downloadLink.href = payloadUrl;
-    downloadLink.download = `${claimId}.json`;
-    downloadLink.click();
-    window.setTimeout(() => URL.revokeObjectURL(payloadUrl), 0);
-  };
-
-  const handleConfirm = async () => {
-    if (!reviewAction || reviewSubmitting) return;
-
-    const actionMap: Record<string, ReviewAction> = {
-      confirm: 'confirm_issue',
-      dismiss: 'dismiss_with_reason',
-      'request-info': 'request_information',
-      'correct-recheck': 'mark_corrected_for_recheck',
-    };
-    const originalStatus = selectedRule.status === 'NOT_IMPLEMENTED' ? 'UNABLE_TO_ASSESS' : selectedRule.status;
-    const reason = reviewNote.trim() || reviewReason || 'Decision recorded from Claim Review.';
-
-    setReviewSubmitting(true);
-    setReviewError(null);
+  const rerun = async () => {
+    setRerunning(true);
+    setRerunError(null);
     try {
-      await postReview(claimId, selectedRule.id, actionMap[reviewAction], reason, originalStatus);
-      setConfirmed(true);
-      setReviewAction(null);
+      const results = await reevaluateClaim(claim);
+      setLoaded({ ...loaded, results });
     } catch {
-      setReviewError('The decision could not be recorded. The rule result remains unchanged.');
+      setRerunError('The rules could not be re-run.');
     } finally {
-      setReviewSubmitting(false);
+      setRerunning(false);
     }
   };
 
-
-  const toggleGroup = (group: string) => {
-    setExpandedGroups((current) => ({ ...current, [group]: !current[group] }));
+  const exportClaim = () => {
+    const body = JSON.stringify({ claim, results: loaded.results }, null, 2);
+    const url = URL.createObjectURL(new Blob([body], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${claim.claim_id}.json`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
-  const renderRuleCard = (rule: Rule) => {
-    const st = STATUS_STYLE[rule.status];
-    const isSelected = inspectorOpen && selectedRule.id === rule.id;
-    const catColor = CATEGORY_COLORS[rule.category] || 'var(--text-tertiary)';
-
-    return (
-      <button
-        key={rule.id}
-        type="button"
-        onClick={() => {
-          setSelectedRule(rule);
-          setInspectorOpen(true);
-        }}
-        className={`claim-review-rule-card claim-review-rule-card-${rule.status.toLowerCase().replace(/_/g, '-')}${isSelected ? ' is-selected' : ''}`}
-        style={{
-          background: 'var(--card-bg)',
-          borderRadius: 8,
-          padding: '14px 16px',
-          cursor: 'pointer',
-          textAlign: 'left',
-          width: '100%',
-        }}
-      >
-        <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.75rem', fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.04em', minWidth: 36 }}>
-              {rule.id}
-            </span>
-            <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              {rule.name}
-            </span>
-            <span style={{ fontSize: '0.6rem', fontWeight: 600, color: catColor, background: `color-mix(in srgb, ${catColor} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${catColor} 15%, transparent)`, borderRadius: 4, padding: '1px 6px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              {rule.category}
-            </span>
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <Sentinel state={STATUS_SENTINEL[rule.status]} size={20} />
-            <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', fontWeight: 700, color: st.text, background: st.bg, border: `1px solid ${st.border}`, borderRadius: 4, padding: '2px 8px', letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
-              {STATUS_LABEL[rule.status]}
-            </span>
-          </span>
-        </span>
-        <span style={{ display: 'block', fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 8, lineHeight: 1.5 }}>
-          {rule.finding}
-        </span>
-        <span className="claim-review-rule-card-inspect">Inspect finding <span aria-hidden="true">→</span></span>
-      </button>
-    );
+  const undoDecision = () => {
+    setDecision(null);
+    setDecisionRound((round) => round + 1); // remounts both hold buttons
   };
-
-  const renderGroup = (label: string, group: string, groupRules: Rule[], tone: 'attention' | 'neutral' = 'neutral') => {
-    if (!groupRules.length) return null;
-    const isExpanded = expandedGroups[group];
-    return (
-      <section className={`claim-review-rule-group claim-review-rule-group-${tone}`}>
-        <button type="button" className="claim-review-group-toggle" onClick={() => toggleGroup(group)} aria-expanded={isExpanded}>
-          <span>
-            <strong>{label}</strong>
-            <span className="claim-review-group-count">{groupRules.length}</span>
-          </span>
-          <span aria-hidden="true">{isExpanded ? '−' : '+'}</span>
-        </button>
-        {isExpanded && <div className="claim-review-rule-list">{groupRules.map(renderRuleCard)}</div>}
-      </section>
-    );
-  };
-
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '60vh',
-        fontFamily: 'var(--font-sans)',
-        color: 'var(--text-secondary)',
-        fontSize: '0.9375rem',
-      }}>
-        Loading claim {claimId}…
-      </div>
-    );
-  }
-
-  if (loadError || !rules.length) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '60vh',
-        gap: 12,
-        fontFamily: 'var(--font-sans)',
-        textAlign: 'center',
-        padding: 24,
-      }}>
-        <div style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--status-fail-ink)' }}>
-          {loadError || 'This claim could not be loaded.'}
-        </div>
-        <button
-          onClick={() => onNavigate('claims')}
-          style={{
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 6,
-            padding: '8px 16px',
-            color: 'var(--card-bg)',
-            fontSize: '0.8125rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          Back to Claims
-        </button>
-      </div>
-    );
-  }
 
   return (
-    <div className="claim-review-shell" style={{ fontFamily: 'var(--font-sans)' }}>
-      {/* Header bar */}
-      <div style={{
-        background: 'var(--card-bg)',
-        borderBottom: '1px solid var(--border)',
-        padding: '0 24px',
-        height: 56,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-      }} className="claim-review-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button type="button" onClick={() => onNavigate('claims')} className="claim-review-back">
-            Back to claims
+    <div className="review-page">
+      <div className="review-bar">
+        <Link to="/app/claims" className="text-link">Back to claims</Link>
+        <div className="review-bar-actions">
+          {rerunError && <span className="inspector-error" role="alert">{rerunError}</span>}
+          <button type="button" className="button-secondary" onClick={rerun} disabled={rerunning}>
+            {rerunning ? 'Re-running…' : 'Re-run rules'}
           </button>
-          <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span className="mono-id" style={{ fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
-              {claimId}
-            </span>
-            {!confirmed
-              ? <span className="status-pill is-review">Needs review</span>
-              : <span className="status-pill is-pass">Reviewed</span>}
-          </div>
-        </div>
-
-        {/* Action buttons */}
-        <div className="claim-review-actions" style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReviewAction('request-info')}>
-            Request info
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReviewAction('correct-recheck')}>
-            Correct & Recheck
-          </button>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setReviewAction('dismiss')}>
-            Dismiss
-          </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => setReviewAction('confirm')}>
-            Confirm decision
-          </button>
+          <button type="button" className="button-secondary" onClick={exportClaim}>Export</button>
         </div>
       </div>
 
-      {/* 3-panel layout */}
-      <div className={`claim-review-panels${claimContextOpen ? '' : ' context-collapsed'}${inspectorOpen ? '' : ' inspector-closed'}`}>
-
-        {/* LEFT: Claim information */}
-        <div style={{
-          borderRight: '1px solid var(--border)',
-          background: 'var(--card-bg)',
-          overflow: 'auto',
-          padding: claimContextOpen ? '16px' : 0,
-        }} className={`claim-review-claim-panel${claimContextOpen ? '' : ' context-collapsed'}`}>
-          {!claimContextOpen && (
-            <button type="button" className="claim-review-context-rail" onClick={() => setClaimContextOpen(true)} aria-label="Open claim context">
-              <span>Claim context</span>
-              <span aria-hidden="true">›</span>
-            </button>
-          )}
-          {claimContextOpen && (
-            <>
-          <div className="claim-review-context-header">
-            <span>Claim context</span>
-            <button type="button" onClick={() => setClaimContextOpen(false)} aria-label="Collapse claim context">‹</button>
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <div className="case-card-label">Provider</div>
-            <h2 className="serif-title" style={{ fontSize: '1.75rem', margin: '4px 0 4px', overflowWrap: 'anywhere' }}>{claimProviderId}</h2>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', margin: '0 0 14px' }}>
-              {claimLines.map((line) => line.service_code).filter(Boolean).join(', ') || 'No service codes'}
-              {' · '}{claimLines.length} line{claimLines.length === 1 ? '' : 's'}
-            </p>
-
-            {[
-  { label: 'Claim ID', value: claimId, mono: true },
-  { label: 'Invoice number', value: claim?.invoice_number || '—', mono: true },
-  { label: 'Patient ID', value: claim?.patient_id || '—', mono: true },
-  { label: 'Member ID', value: claimMemberId, mono: true },
-  { label: 'Provider ID', value: claimProviderId, mono: true },
-  { label: 'Payer ID', value: claim?.payer_id || '—', mono: true },
-  { label: 'Policy ID', value: claim?.policy_id || '—', mono: true },
-  {
-    label: 'Service date',
-    value: formatClaimDate(claimLines[0]?.service_date),
-    mono: true,
-  },
-  {
-    label: 'Submission date',
-    value: formatClaimDate(claim?.submission_date),
-    mono: true,
-  },
-  {
-    label: 'Total amount',
-    value: formatClaimAmount(claim?.total_amount, claim?.currency),
-    mono: true,
-  },
-].map(f => (
-              <div key={f.label} className="leader-row">
-                <span className="leader-row-label">{f.label}</span>
-                <span className="leader-row-fill" aria-hidden="true" />
-                <span className="leader-row-value" title={String(f.value)}>{f.value}</span>
-              </div>
-            ))}
-            <div style={{ height: 14 }} />
-
-            {claim && (
-              <button type="button" className="claim-review-fhir-trigger" onClick={() => setFhirDrawerOpen(true)}>
-                <span className="claim-review-fhir-trigger-icon" aria-hidden="true">{'{}'}</span>
-                <span className="claim-review-fhir-trigger-copy">
-                  <strong>FHIR payload</strong>
-                  <span>FHIR R4 · JSON · Available</span>
-                </span>
-                <span className="claim-review-fhir-trigger-action">View <span aria-hidden="true">→</span></span>
-              </button>
-            )}
-
-            <button type="button" className="claim-review-context-toggle" onClick={() => setClaimContextExpanded((expanded) => !expanded)} aria-expanded={claimContextExpanded}>
-              <span>{claimContextExpanded ? 'Hide claim context' : 'Show full claim context'}</span>
-              <span aria-hidden="true">{claimContextExpanded ? '−' : '+'}</span>
-            </button>
-          </div>
-
-            {claimContextExpanded && (
-              <>
-            <div style={{ marginBottom: 16 }}>
-              {[
-                { label: 'Invoice', value: typeof claim?.invoice_number === 'string' ? claim.invoice_number : '—', mono: true },
-                { label: 'Payer ID', value: typeof claim?.payer_id === 'string' ? claim.payer_id : '—', mono: true },
-                { label: 'Policy ID', value: typeof claim?.policy_id === 'string' ? claim.policy_id : '—', mono: true },
-                { label: 'Submission date', value: formatClaimDate(claim?.submission_date), mono: true },
-              ].map(f => (
-                <div key={f.label} style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{f.label}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontFamily: f.mono ? "'JetBrains Mono', monospace" : 'inherit', textAlign: 'right' }}>{f.value}</div>
-                </div>
-              ))}
-            </div>
-          <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', margin: '16px 0' }} />
-
-          {/* Service lines */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 12 }}>
-              Service lines
-            </div>
-
-            {claimLines.map((line, index) => (
-              <div
-                key={line.line_id || index}
-                style={{
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  padding: '10px 12px',
-                  marginBottom: 8,
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {line.service_code || '—'}
-                  </span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {formatClaimAmount(line.net_amount, claim?.currency)}
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: 4 }}>
-                  Service date: {formatClaimDate(line.service_date)}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>Auth:</span>
-                  {line.authorization_id ? (
-                    <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6875rem', color: 'var(--status-pass)' }}>
-                      {line.authorization_id}
-                    </span>
-                  ) : (
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: 'var(--status-fail-ink)', fontStyle: 'italic' }}>
-                      null
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', margin: '16px 0' }} />
-
-          {/* Diagnoses */}
-          <div>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 12 }}>
-              Diagnosis
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>
-                {claim?.diagnosis_code || 'Not provided'}
-              </span>
-            </div>
-          </div>
-
-          {/* Run info */}
-          <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', margin: '16px 0' }} />
-          <div>
-            <div style={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 12 }}>
-              Run metadata
-            </div>
-            {[
-              { label: 'Ruleset', value: 'fictional-rulebook@1.0.0', mono: true },
-              { label: 'AI provider', value: aiProvider || 'pending', mono: true },
-              { label: 'Coverage status', value: claim?.coverage?.status || '—', mono: false },
-            ].map(f => (
-              <div key={f.label} style={{ marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{f.label}</div>
-                <div style={{
-                  fontSize: '0.75rem',
-                  color: 'var(--text-primary)',
-                  fontFamily: f.mono ? "var(--font-sans)" : 'inherit',
-                  fontWeight: f.mono ? 500 : 400,
-                }}>
-                  {f.value}
-                </div>
-              </div>
-            ))}
-          </div>
-            </>
-          )}
-            </>
-          )}
-        </div>
-
-        {/* CENTER: Validation findings */}
-        <div style={{ overflow: 'auto', background: 'var(--canvas-bg)', padding: '20px' }} className="claim-review-findings-panel">
-          <h1 className="claim-review-title">Review findings</h1>
-          <div className="claim-review-summary-line">
-            <strong>{attentionRules.length} need attention</strong>
-            <span>·</span>
-            <span>{passedRules.length} passed</span>
-            <span>·</span>
-            <span>{notApplicableRules.length} not applicable</span>
-            {!inspectorOpen && <button type="button" onClick={() => setInspectorOpen(true)}>Open inspector</button>}
-          </div>
-
-          <div className="claim-review-rule-groups">
-            {attentionRules.length ? (
-              <section className="claim-review-rule-group claim-review-rule-group-attention">
-                <div className="claim-review-group-heading">
-                  <div>
-                    <strong>Needs attention</strong>
-                    <span className="claim-review-group-count">{attentionRules.length}</span>
-                  </div>
-                  <span>Review these findings first</span>
-
-                </div>
-                <div className="claim-review-rule-list">{attentionRules.map(renderRuleCard)}</div>
-              </section>
-            ) : (
-              <div className="claim-review-empty-state">No findings currently require attention.</div>
-            )}
-            {renderGroup('Passed rules', 'passed', passedRules)}
-            {renderGroup('Not applicable', 'notApplicable', notApplicableRules)}
-            {renderGroup('Other statuses', 'other', otherRules)}
-          </div>
-        </div>
-
-        {/* RIGHT: Evidence + AI explanation */}
-        {inspectorOpen && <div style={{
-          borderLeft: '1px solid var(--border)',
-          background: 'var(--card-bg)',
-          overflow: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-        }} className="claim-review-explanation-panel">
-          {/* Finding header */}
-          <div style={{
-            padding: '16px',
-            borderBottom: '1px solid var(--border)',
-            background: 'var(--card-bg)',
-            borderLeft: '0',
-          }}>
-            <div className="claim-review-inspector-heading">
-              <span>Finding inspector</span>
-              <button type="button" onClick={() => setInspectorOpen(false)} aria-label="Close finding inspector">×</button>
-            </div>
-            <div className="claim-review-inspector-rule" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-              <div className="claim-review-selected-heading" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Sentinel state={STATUS_SENTINEL[selectedRule.status]} size={32} />
-                <div>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: 'var(--accent)' }}>
-                    {selectedRule.id}
-                  </div>
-                  <div className="claim-review-selected-name" style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-                    {selectedRule.name}
-                  </div>
-                </div>
-              </div>
-              <span style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: '0.6875rem',
-                fontWeight: 700,
-                color: ss.text,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-              }}>
-                {STATUS_LABEL[selectedRule.status]}
-              </span>
-            </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              {selectedRule.finding}
-            </p>
-          </div>
-
-          <div className="claim-review-inspector-content" style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-            {/* Deterministic section */}
-            <div className="claim-review-report-section" style={{ background: 'transparent', border: 0, borderRadius: 0, marginBottom: 16, overflow: 'visible' }}>
-              <div style={{
-                padding: '10px 14px',
-                borderBottom: '1px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: 'transparent',
-              }}>
-                <div className="claim-review-section-heading" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M6 1l5 9H1L6 1z" stroke="var(--text-primary)" strokeWidth="1.2" strokeLinejoin="round"/>
-                  </svg>
-                  <span className="serif-label inspector-section-title">Evidence</span>
-                </div>
-                <span style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: '0.6875rem',
-                  fontWeight: 700,
-                  color: ss.text,
-                  background: ss.bg,
-                  border: `1px solid ${ss.border}`,
-                  borderRadius: 3,
-                  padding: '1px 6px',
-                }}>
-                  {STATUS_LABEL[selectedRule.status]}
-                </span>
-              </div>
-              <div style={{ padding: '14px 0' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Rule
-                </div>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', lineHeight: 1.6, marginBottom: 14 }}>
-                  {selectedRule.finding}
+      <div className="review-layout">
+        <article className="review-sheet">
+          <div className="review-sheet-body">
+            <header className="sheet-header">
+              <div className="sheet-heading">
+                <h1 className="sheet-provider">{context.providerNames.get(claim.provider_id || '') || claim.provider_id || 'Unknown provider'}</h1>
+                <p className="sheet-service">
+                  {context.serviceNames.get(firstCode) || 'Service not on file'}, <span className="mono">{firstCode || '—'}</span>
                 </p>
-
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Evidence paths
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
-                  {(selectedRule.evidence || selectedRule.evidencePaths.map((path) => ({ path, value: undefined }))).map((evidence) => (
-                    <div key={evidence.path} className="evidence-block claim-review-report-evidence" style={{ padding: '5px 10px' }}>
-                      <span className="ev-path">{evidence.path}</span>
-                      {' = '}
-                      <span className={evidence.value === null || evidence.value === undefined ? 'ev-null' : 'ev-value'}>
-                        {formatEvidenceValue(evidence.value)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-
-                {selectedRule.observed !== undefined && (
+              </div>
+              {/* The claim's state, as the Sentinel shield. */}
+              <div className="sheet-state">
+                {scanning || rerunning ? (
                   <>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Observed
-                    </div>
-                    <div className="evidence-block">
-                      <span className="ev-path">{selectedRule.evidencePaths[0]}</span>
-                      {' = '}
-                      <span className={selectedRule.observed === 'null' ? 'ev-null' : 'ev-value'}>
-                        {selectedRule.observed}
-                      </span>
-                    </div>
+                    <StatusShield state="scanning" size={88} label="Checking the rules" />
+                    <span className="result-word sheet-state-checking">Checking rules…</span>
                   </>
-                )}
-                {selectedRule.expected && (
-                  <>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', margin: '10px 0 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                      Expected
-                    </div>
-                    <div className="evidence-block claim-review-report-expected">
-                      <span style={{ color: 'var(--status-pass)', fontStyle: 'italic' }}>{selectedRule.expected}</span>
-
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* AI explanation */}
-            <div className="claim-review-report-section claim-review-ai-section" style={{ background: 'transparent', border: 0, borderRadius: 0, marginBottom: 16, overflow: 'visible' }}>
-              <div style={{
-                padding: '10px 14px',
-                borderBottom: '1px solid var(--border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: 'transparent',
-              }}>
-                <div className="claim-review-section-heading" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <circle cx="6" cy="6" r="5" stroke="var(--accent)" strokeWidth="1.2"/>
-                    <circle cx="6" cy="6" r="2" fill="var(--accent)"/>
-                  </svg>
-                  <span className="serif-label inspector-section-title">Explanation</span>
-                </div>
-<div
-  className="claim-review-section-heading-meta"
-  style={{ display: 'flex', alignItems: 'center', gap: 6 }}
->
-  {aiAssessment && (
-    <span
-      style={{
-        fontSize: '0.6rem',
-        fontWeight: 600,
-        color:
-          aiAssessment.explanation_source === 'llm'
-            ? 'var(--accent)'
-            : aiAssessment.explanation_source === 'fallback'
-              ? 'var(--status-uta-ink)'
-              : 'var(--text-tertiary)',
-        background:
-          aiAssessment.explanation_source === 'llm'
-            ? 'var(--accent-subtle)'
-            : aiAssessment.explanation_source === 'fallback'
-              ? 'var(--status-uta-bg)'
-              : 'var(--text-primary)',
-        border: `1px solid ${
-          aiAssessment.explanation_source === 'llm'
-            ? 'var(--status-pass-border)'
-            : aiAssessment.explanation_source === 'fallback'
-              ? 'var(--status-uta-border)'
-              : 'var(--border)'
-        }`,
-        borderRadius: 3,
-        padding: '1px 6px',
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-      }}
-    >
-      {aiAssessment.explanation_source === 'llm'
-        ? 'Grounded'
-        : aiAssessment.explanation_source === 'fallback'
-          ? 'Fallback'
-          : 'Skipped'}
-    </span>
-  )}
-
-  <span
-    style={{
-      fontFamily: "var(--font-sans)",
-      fontSize: '0.625rem',
-      color: 'var(--text-tertiary)',
-    }}
-  >
-    {aiProvider || 'pending'}{aiFallback ? ' · fallback used' : ''}
-  </span>
-</div>
-              </div>
-              <div style={{ padding: '10px 0', background: 'transparent', borderBottom: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '0.6875rem', lineHeight: 1.45 }}>
-                Context only. The deterministic rule result above remains authoritative.
-              </div>
-              <div style={{ padding: '14px 0' }}>
-                {aiLoading ? (
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.7 }}>
-                    Generating a grounded explanation…
-                  </div>
-                ) : !aiExplanation ? (
-                  <div style={{
-                    background: 'var(--status-uta-bg)',
-                    border: '1px solid var(--status-uta-border)',
-                    borderRadius: 6,
-                    padding: '12px',
-                    display: 'flex',
-                    gap: 10,
-                    alignItems: 'flex-start',
-                  }}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                      <path d="M8 2l6 11H2L8 2z" stroke="var(--status-uta-ink)" strokeWidth="1.3" strokeLinejoin="round"/>
-                      <path d="M8 6v4M8 11.5v.5" stroke="var(--status-uta-ink)" strokeWidth="1.3" strokeLinecap="round"/>
-                    </svg>
-                    <div>
-                      <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--status-uta-ink)', marginBottom: 4 }}>
-                        AI explanation unavailable
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--status-uta-ink)', lineHeight: 1.5 }}>
-                        {aiError || 'The deterministic finding remains available. You may proceed with review based on the rule result and evidence above.'}
-                      </div>
-                    </div>
-                  </div>
                 ) : (
                   <>
-                    <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.7, marginBottom: 14 }}>
-                      {aiExplanation}
-                    </p>
-
-                    {aiAssessment && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
-                        <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px' }}>
-                          Source: {aiAssessment.explanation_source}
-                        </span>
-                        {aiAssessment.explanation_grounding !== null && (
-                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px' }}>
-                            Grounding: {Math.round(aiAssessment.explanation_grounding * 100)}%
-                          </span>
-                        )}
-                        {aiAssessment.evidence_completeness !== null && (
-                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 8px' }}>
-                            Evidence completeness: {Math.round(aiAssessment.evidence_completeness * 100)}%
-                          </span>
-                        )}
-                        <span style={{
-                          fontSize: '0.6875rem',
-                          color: aiAssessment.escalate ? 'var(--status-fail-ink)' : 'var(--text-tertiary)',
-                          background: aiAssessment.escalate ? 'var(--status-fail-bg)' : 'var(--card-bg)',
-                          border: `1px solid ${aiAssessment.escalate ? 'var(--status-fail-border)' : 'var(--border)'}`,
-                          borderRadius: 4,
-                          padding: '2px 8px',
-                          fontWeight: aiAssessment.escalate ? 700 : 400,
-                        }}>
-                          {aiAssessment.escalate
-                            ? `Escalate (${aiAssessment.escalation_reasons.join(', ')})`
-                            : 'No escalation needed'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Citations */}
-                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                      <div style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
-                        Citations
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {selectedRule.evidencePaths.map(p => (
-                          <span
-                            key={p}
-                            className="claim-review-citation"
-                            style={{
-                              fontFamily: "var(--font-sans)",
-                              fontSize: '0.6875rem',
-                              color: 'var(--status-review-ink)',
-                              background: 'var(--status-review-bg)',
-                              border: '1px solid var(--status-review-border)',
-                              borderRadius: 4,
-                              padding: '2px 8px',
-                            }}
-                          >
-                            {p}
-                          </span>
-                        ))}
-                        <span style={{
-                          fontFamily: "var(--font-sans)",
-                          fontSize: '0.6875rem',
-                          color: 'var(--accent)',
-                          background: 'var(--accent-subtle)',
-                          border: '1px solid var(--status-pass-border)',
-                          borderRadius: 4,
-                          padding: '2px 8px',
-                        }}>
-                          {selectedRule.id}
-                        </span>
-                      </div>
-                    </div>
+                    <StatusShield state={SHIELD_FOR_STATUS[status]} size={88} label={`Claim status: ${status}`} />
+                    <span className={`result-word ${STATUS_WORD[status]}`}>{status}</span>
+                    <span className="sheet-state-detail">{failedCount} failed · {unableCount} unable</span>
                   </>
                 )}
               </div>
-            </div>
-
-            {/* Human review panel */}
-            {!confirmed ? (
-              <div>
-                <div className="serif-label inspector-section-title">Review action</div>
-                <div>
-                  <div className="review-options" role="radiogroup" aria-label="Review action">
-                    {[
-                      { key: 'confirm', label: 'Confirm issue', desc: 'The finding stands and the claim stays flagged.', color: 'var(--status-fail-ink)' },
-                      { key: 'request-info', label: 'Request information', desc: 'Ask the provider for what is missing.', color: 'var(--text-primary)' },
-                      { key: 'dismiss', label: 'Dismiss', desc: 'The rule does not apply here. A reason is required.', color: 'var(--text-primary)' },
-                    ].map((action, index) => (
-                      <button
-                        key={action.key}
-                        type="button"
-                        role="radio"
-                        aria-checked={reviewAction === action.key}
-                        onClick={() => setReviewAction(action.key)}
-                        className={`review-option${reviewAction === action.key ? ' is-selected' : ''}`}
-                      >
-                        <span className="review-option-number" aria-hidden="true">{index + 1}</span>
-                        <span style={{ textAlign: 'left' }}>
-                          <span className="review-option-label" style={{ color: action.color }}>{action.label}</span>
-                          <span className="review-option-desc">{action.desc}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-
-                  {reviewAction && (
-                    <>
-                      <div style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
-                          Reason
-                        </label>
-                        <select
-                          value={reviewReason}
-                          onChange={e => setReviewReason(e.target.value)}
-                          style={{
-                            width: '100%',
-                            background: 'var(--card-bg)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 6,
-                            padding: '7px 10px',
-                            fontSize: '0.8125rem',
-                            color: 'var(--text-primary)',
-                            fontFamily: 'inherit',
-                            outline: 'none',
-                          }}
-                        >
-                          <option value="">Select reason...</option>
-                          <option>Authorization reference was subsequently provided</option>
-                          <option>Provider submitted corrected claim</option>
-                          <option>Rule does not apply to this payer contract</option>
-                          <option>Evidence was available in separate document</option>
-                          <option>Other (see note)</option>
-                        </select>
-                      </div>
-
-                      <div style={{ marginBottom: 12 }}>
-                        <label style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>
-                          Reviewer note
-                        </label>
-                        <textarea
-                          value={reviewNote}
-                          onChange={e => setReviewNote(e.target.value)}
-                          placeholder="Optional: add a note for the audit record..."
-                          rows={3}
-                          style={{
-                            width: '100%',
-                            background: 'var(--card-bg)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 6,
-                            padding: '8px 10px',
-                            fontSize: '0.8125rem',
-                            color: 'var(--text-primary)',
-                            fontFamily: 'inherit',
-                            outline: 'none',
-                            resize: 'vertical',
-                          }}
-                        />
-                      </div>
-
-                      <button
-                        onClick={handleConfirm}
-                        disabled={reviewSubmitting}
-                        style={{
-                          width: '100%',
-                          background: 'var(--text-primary)',
-                          border: 'none',
-                          borderRadius: 7,
-                          padding: '10px',
-                          color: 'var(--card-bg)',
-                          fontSize: '0.875rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          letterSpacing: '-0.01em',
-                          opacity: reviewSubmitting ? 0.65 : 1,
-                        }}
-                      >
-                        {reviewSubmitting ? 'Recording decision…' : 'Submit decision → record to audit'}
-                      </button>
-                      {reviewError && (
-                        <p style={{ fontSize: '0.75rem', color: 'var(--status-fail-ink)', marginTop: 8, lineHeight: 1.4 }}>
-                          {reviewError}
-                        </p>
-                      )}
-                      <p style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: 8, textAlign: 'center', lineHeight: 1.4 }}>
-                        This action will be recorded in the immutable audit trail.
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div style={{
-                background: 'var(--status-pass-bg)',
-                border: '1px solid var(--status-pass-border)',
-                borderRadius: 8,
-                padding: '16px',
-                display: 'flex',
-                gap: 12,
-                alignItems: 'flex-start',
-              }}>
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0 }}>
-                  <circle cx="9" cy="9" r="8" fill="var(--status-pass)"/>
-                  <path d="M5 9l3 3 5-6" stroke="var(--card-bg)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <div>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--status-pass-ink)', marginBottom: 4 }}>
-                    Decision recorded
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--status-pass-ink)', lineHeight: 1.5 }}>
-                    Reviewed by Marwen Agrebi · {new Date().toLocaleTimeString()} · Recorded to audit trail
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>}
-      </div>
-
-      {/* Review action modal */}
-      {reviewAction && !confirmed && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.3)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backdropFilter: 'blur(4px)',
-          }}
-          onClick={() => setReviewAction(null)}
-        >
-          <div
-            style={{
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 12,
-              padding: '24px',
-              width: 440,
-              boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-              animation: 'fade-in-up 0.2s ease-out',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-                {reviewAction === 'confirm' ? 'Confirm issue' :
-                 reviewAction === 'request-info' ? 'Request information' :
-                 reviewAction === 'dismiss' ? 'Dismiss finding' :
-                 'Correct & Recheck'}
-              </h3>
-              <button
-                onClick={() => setReviewAction(null)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', fontSize: '1.2rem' }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <div style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 7,
-                padding: '10px 12px',
-                marginBottom: 14,
-                display: 'flex',
-                gap: 8,
-              }}>
-                <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600 }}>{selectedRule.id}</span>
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{selectedRule.name}</span>
-              </div>
-
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>
-                Reason
-              </label>
-              <select
-                value={reviewReason}
-                onChange={e => setReviewReason(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 7,
-                  padding: '9px 12px',
-                  fontSize: '0.875rem',
-                  fontFamily: 'inherit',
-                  marginBottom: 14,
-                  outline: 'none',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                <option value="">Select a reason...</option>
-                <option>Authorization reference was subsequently provided</option>
-                <option>Provider submitted corrected claim</option>
-                <option>Rule does not apply to this payer contract</option>
-                <option>Evidence was available in separate document</option>
-                <option>Other (see note)</option>
-              </select>
-
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>
-                Note (optional)
-              </label>
-              <textarea
-                value={reviewNote}
-                onChange={e => setReviewNote(e.target.value)}
-                placeholder="Add context for the audit record..."
-                rows={3}
-                style={{
-                  width: '100%',
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 7,
-                  padding: '9px 12px',
-                  fontSize: '0.875rem',
-                  fontFamily: 'inherit',
-                  outline: 'none',
-                  resize: 'vertical',
-                  color: 'var(--text-primary)',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => setReviewAction(null)}
-                style={{
-                  flex: 1,
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 7,
-                  padding: '10px',
-                  fontSize: '0.875rem',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  fontWeight: 500,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirm}
-                style={{
-                  flex: 2,
-                  background: 'var(--text-primary)',
-                  border: 'none',
-                  borderRadius: 7,
-                  padding: '10px',
-                  color: 'var(--card-bg)',
-                  fontSize: '0.875rem',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                  fontWeight: 600,
-                }}
-              >
-                Submit · Record to audit trail
-              </button>
-            </div>
-
-            <p style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', marginTop: 10, textAlign: 'center' }}>
-              This action is permanent and will be recorded in the immutable audit chain.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {fhirDrawerOpen && (
-        <div className="claim-review-fhir-overlay" onClick={() => setFhirDrawerOpen(false)}>
-          <aside
-            className="claim-review-fhir-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="claim-review-fhir-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="claim-review-fhir-header">
-              <div className="claim-review-fhir-heading-copy">
-                <div className="claim-review-fhir-eyebrow">FHIR Payload</div>
-                <h2 id="claim-review-fhir-title">Claim {claimId}</h2>
-                <div className="claim-review-fhir-subtitle">FHIR R4 · JSON</div>
-              </div>
-              <button type="button" className="claim-review-fhir-close" onClick={() => setFhirDrawerOpen(false)} aria-label="Close FHIR payload">×</button>
             </header>
 
-            <div className="claim-review-fhir-toolbar">
-              <div className="claim-review-fhir-format">
-                <span aria-hidden="true" />
-                <span>application/fhir+json</span>
-                <small>Read only</small>
-              </div>
-              <div className="claim-review-fhir-actions">
-                <button type="button" onClick={handleCopyFhirPayload} disabled={fhirRequestState !== 'ready'}>
-                  {fhirCopyFeedback === 'copied' ? 'Copied' : fhirCopyFeedback === 'error' ? 'Copy failed' : 'Copy JSON'}
-                </button>
-                <button type="button" onClick={handleDownloadFhirPayload} disabled={fhirRequestState !== 'ready'}>Download .json</button>
-              </div>
+            <dl className="sheet-details">
+              <Leader label="Claim ID"><span className="mono">{claim.claim_id}</span></Leader>
+              <Leader label="Patient ID"><span className="mono">{claim.patient_id || '—'}</span></Leader>
+              <Leader label="Member ID"><span className="mono">{claim.member_id || '—'}</span></Leader>
+              <Leader label="Provider ID"><span className="mono">{claim.provider_id || '—'}</span></Leader>
+              <Leader label="Payer plan"><span className="mono">{[claim.payer_id, claim.policy_id].filter(Boolean).join(' · ') || '—'}</span></Leader>
+              <Leader label="Service date"><span className="mono">{lines[0]?.service_date || '—'}</span></Leader>
+              <Leader label="Submitted"><span className="mono">{claim.submission_date || '—'}</span></Leader>
+              <Leader label="Diagnosis"><span className="mono">{claim.diagnosis_code || '—'}</span></Leader>
+            </dl>
+
+            <table className="sheet-lines">
+              <caption className="visually-hidden">Service lines</caption>
+              <thead>
+                <tr><th scope="col">Code</th><th scope="col">Description</th><th scope="col">Amount</th></tr>
+              </thead>
+              <tbody>
+                {lines.map((line, index) => (
+                  <tr key={line.line_id || index}>
+                    <td className="mono">{line.service_code || '—'}</td>
+                    <td>{context.serviceNames.get(line.service_code || '') || 'Service not on file'}</td>
+                    <td className="mono">{money(line.net_amount, claim.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <button type="button" className="text-link" aria-expanded={fhirOpen} onClick={() => setFhirOpen((open) => !open)}>
+              {fhirOpen ? 'Hide FHIR payload' : 'View FHIR payload'}
+            </button>
+            {fhirOpen && (
+              <pre className="sheet-code" aria-live="polite">
+                {fhir.state === 'loading' ? 'Building the FHIR payload…'
+                  : fhir.state === 'error' ? 'The FHIR payload could not be built.'
+                    : JSON.stringify(fhir.payload, null, 2)}
+              </pre>
+            )}
+
+            <div className="findings-heading">
+              <h2>Findings</h2>
+              <span>{reviewedCount} of {actionable.length} reviewed</span>
             </div>
 
-            <div className="claim-review-fhir-viewer" aria-live="polite">
-              {fhirRequestState === 'loading' && <div className="claim-review-fhir-message">Loading FHIR payload...</div>}
-              {fhirRequestState === 'error' && (
-                <div className="claim-review-fhir-message">
-                  <p>Unable to load FHIR payload</p>
-                  <button type="button" onClick={() => setFhirRetryCount((count) => count + 1)}>Retry</button>
-                </div>
-              )}
-              {fhirRequestState === 'empty' && <div className="claim-review-fhir-message">FHIR payload unavailable for this claim.</div>}
-              {fhirRequestState === 'ready' && <pre className="claim-review-fhir-code"><code>{formattedFhirPayload}</code></pre>}
+            {GROUPS.map(({ result }) => {
+              const members = findings.filter((finding) => finding.result === result);
+              if (members.length === 0) return null;
+              const open = openGroups[result];
+              return (
+                <section key={result} className="findings-group">
+                  <button
+                    type="button"
+                    className="findings-group-header"
+                    aria-expanded={open}
+                    onClick={() => setOpenGroups((current) => ({ ...current, [result]: !current[result] }))}
+                  >
+                    <span className={`result-word is-${result.toLowerCase()}`}>{RESULT_LABEL[result]}</span>
+                    <span className="mono">{members.length}</span>
+                    <span className={`findings-caret${open ? ' is-open' : ''}`} aria-hidden="true" />
+                  </button>
+                  {open && (
+                    <ul className="findings-rows">
+                      {members.map((finding) => {
+                        const choice = choices[finding.ruleId];
+                        const decisionText = finding.result === 'PASS' || finding.result === 'NA'
+                          ? ''
+                          : choice
+                            ? choice.state === 'saving' ? 'Saving…' : ACTIONS.find((item) => item.key === choice.action)!.recorded
+                            : loaded.recorded.get(finding.ruleId) || 'Open';
+                        return (
+                          <li key={finding.ruleId}>
+                            <button
+                              type="button"
+                              className={`finding-row${finding.ruleId === selected.ruleId ? ' is-selected' : ''}`}
+                              aria-current={finding.ruleId === selected.ruleId || undefined}
+                              onClick={() => {
+                                setSelectedId(finding.ruleId);
+                                setActionError(null);
+                              }}
+                            >
+                              <span className="mono finding-id">{finding.ruleId}</span>
+                              <span className="finding-main">
+                                <span className="finding-name">{finding.title}</span>
+                                <span className="finding-summary">{finding.summary}</span>
+                              </span>
+                              <span className="finding-decision">{decisionText}</span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </section>
+              );
+            })}
+
+            <div className="sheet-total">
+              <span>Rules failed</span>
+              <span className={`sheet-total-count${failedCount > 0 ? ' has-failures' : ''}`}>{failedCount}</span>
             </div>
 
-            <footer className="claim-review-fhir-footer">FHIR R4 Bundle</footer>
-          </aside>
-        </div>
-      )}
+            <section className="claim-decision" aria-labelledby="claim-decision-heading">
+              <h2 id="claim-decision-heading">Decision on this claim</h2>
+              <div className="claim-decision-buttons" key={decisionRound}>
+                <HoldButton
+                  doneLabel="Claim rejected"
+                  backgroundColor="var(--surface)"
+                  textColor="var(--ink)"
+                  fillColor="var(--reject-fill)"
+                  fillTextColor="#ffffff"
+                  size="lg"
+                  radius={7}
+                  fillDirection="right"
+                  holdTime={1200}
+                  releaseTime={200}
+                  pressScale={0.985}
+                  resetAfter={0}
+                  disabled={decision === 'approved'}
+                  aria-describedby="claim-decision-hint"
+                  onHold={() => setDecision('rejected')}
+                >
+                  Hold to reject claim
+                </HoldButton>
+                <HoldButton
+                  doneLabel="Claim approved"
+                  backgroundColor="var(--surface)"
+                  textColor="var(--ink)"
+                  fillColor="var(--approve-fill)"
+                  fillTextColor="#ffffff"
+                  size="lg"
+                  radius={7}
+                  fillDirection="right"
+                  holdTime={1200}
+                  releaseTime={200}
+                  pressScale={0.985}
+                  resetAfter={0}
+                  disabled={approveBlocked || decision === 'rejected'}
+                  aria-describedby="claim-decision-hint"
+                  onHold={() => setDecision('approved')}
+                >
+                  Hold to approve claim
+                </HoldButton>
+              </div>
+              <p id="claim-decision-hint" className="claim-decision-hint" aria-live="polite">
+                {decision ? (
+                  <>
+                    Claim {decision}. Not saved yet: claim decisions are not connected to the server.{' '}
+                    <button type="button" className="text-link" onClick={undoDecision}>Undo</button>
+                  </>
+                ) : approveBlocked
+                  ? 'Approval is unavailable while a rule has failed. Reject, or request information above.'
+                  : 'Press and hold to confirm.'}
+              </p>
+            </section>
+          </div>
+        </article>
+
+        <FindingInspector
+          key={selected.ruleId}
+          claim={claim}
+          finding={selected}
+          choice={choices[selected.ruleId]}
+          recorded={loaded.recorded.get(selected.ruleId)}
+          error={actionError}
+          onChoose={(action, reason) => recordAction(selected, action, reason)}
+          onUndo={() => setChoices((current) => {
+            const next = { ...current };
+            delete next[selected.ruleId];
+            return next;
+          })}
+        />
+      </div>
     </div>
   );
 }

@@ -17,7 +17,6 @@ well-formed but wrong or unsafe to activate:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
 
 from .catalogue import (
     BOOLEAN,
@@ -31,6 +30,7 @@ from .catalogue import (
     TEXT,
     FieldCatalogue,
 )
+from .interpreter import iso_date
 from .language import (
     AddValue,
     AllOf,
@@ -69,6 +69,11 @@ from .language import (
 
 MAX_NODES = 400
 MAX_DEPTH = 14
+# Small models compare a date with a day count ("service date at most 30"); say how to count days.
+DAYS_HINT = (
+    '. To compare how many days apart two dates are, put {"days_between": [earlier date, later date]} '
+    "on that side; it gives a number of days."
+)
 
 
 @dataclass(frozen=True)
@@ -104,6 +109,8 @@ class _Scope:
 class SpecAnalysis:
     problems: list[str]
     fields_read: set[str]  # catalogue paths such as "/currency" or "/lines/*/quantity"
+    # The fields that decide whether the rule applies (read by an only_if condition).
+    applicability_fields: set[str] = field(default_factory=set)
 
 
 def check_spec(spec: RuleSpec, catalogue: FieldCatalogue) -> list[str]:
@@ -114,7 +121,8 @@ def check_spec(spec: RuleSpec, catalogue: FieldCatalogue) -> list[str]:
 def analyse_spec(spec: RuleSpec, catalogue: FieldCatalogue) -> SpecAnalysis:
     checker = _Checker(catalogue)
     problems = checker.run(spec)
-    return SpecAnalysis(problems=problems, fields_read=checker.fields_read)
+    return SpecAnalysis(problems=problems, fields_read=checker.fields_read,
+                        applicability_fields=checker.applicability_fields)
 
 
 class _Checker:
@@ -123,6 +131,8 @@ class _Checker:
         self.problems: list[str] = []
         self.require_count = 0
         self.fields_read: set[str] = set()
+        self.applicability_fields: set[str] = set()
+        self.in_only_if = False
 
     def problem(self, message: str) -> None:
         if message not in self.problems:
@@ -149,7 +159,11 @@ class _Checker:
             elif isinstance(step, OnlyIfStep):
                 if checks_started:
                     self.problem("only_if must come before any require or for_each in its block")
-                self.condition(step.only_if, scope)
+                self.in_only_if = True
+                try:
+                    self.condition(step.only_if, scope)
+                finally:
+                    self.in_only_if = False
             elif isinstance(step, RequireStep):
                 checks_started = True
                 self.require_count += 1
@@ -235,7 +249,8 @@ class _Checker:
 
     def expect(self, shape: Shape, allowed: set[str], op: str) -> None:
         if shape.types is not None and not shape.types & allowed:
-            self.problem(f"{op} expects {_describe(allowed)}, got {_describe(shape.types)}")
+            hint = DAYS_HINT if NUMBER in allowed and DATE in shape.types else ""
+            self.problem(f"{op} expects {_describe(allowed)}, got {_describe(shape.types)}{hint}")
 
     def expect_date(self, shape: Shape, node: Node, op: str) -> None:
         if isinstance(node, LiteralValue):
@@ -324,9 +339,11 @@ class _Checker:
     def claim_field(self, catalogue_path: str, shown_as: str) -> Shape:
         info = self.catalogue.get(catalogue_path)
         if info is None:
-            self.problem(f'"{shown_as}" is not a claim field')
+            self.problem(self.catalogue.unknown_field(catalogue_path, shown_as=shown_as))
             return UNKNOWN
         self.fields_read.add(catalogue_path)
+        if self.in_only_if:
+            self.applicability_fields.add(catalogue_path)
         if info.is_list:
             item_info = self.catalogue.get(f"{catalogue_path}/*")
             item = UNKNOWN
@@ -367,6 +384,8 @@ class _Checker:
 
         # policy: always the one named by the claim's /policy_id
         self.fields_read.add("/policy_id")
+        if self.in_only_if:
+            self.applicability_fields.add("/policy_id")
         if not segments:
             return shape_of(OBJECT)
         field_name = segments[0]
@@ -378,7 +397,12 @@ class _Checker:
             item = shape_of(entry_type) if entry_type else None
             return shape_of(field_type, item=item)
         if field_type != MAP:
-            self.problem(f'policy field "{field_name}" is not a map, so it takes no key')
+            # Drafters wrote {"policy": "version", "for": "/policy_id"} meaning "the claim's policy
+            # must be known" (collection run 2, 2 compile errors): say how that is written.
+            self.problem(f'policy field "{field_name}" is a single value of the claim\'s policy, so it takes no key '
+                         '("for" looks a value up per service, in a map such as max_unit_price). To give '
+                         'UNABLE_TO_ASSESS when the claim\'s policy is unknown, add "if_unknown": "UNABLE_TO_ASSESS" '
+                         'to a condition that reads a policy value')
             return UNKNOWN
         if len(segments) > 2:
             self.problem(f'policy field "{field_name}" takes a single key')
@@ -409,11 +433,7 @@ def _describe(types) -> str:
 
 
 def _is_iso_date(text: str) -> bool:
-    try:
-        date.fromisoformat(text)
-    except ValueError:
-        return False
-    return len(text) == 10
+    return iso_date(text) is not None
 
 
 def _measure(node: Node) -> tuple[int, int]:

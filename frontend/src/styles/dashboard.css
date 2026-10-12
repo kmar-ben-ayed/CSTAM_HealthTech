@@ -1,0 +1,384 @@
+/* Overview (dashboard). Case-file style: hairlines, ledger figures, serif numerals. */
+
+.ov-page {
+  padding: 32px 40px 56px 0;
+  color: var(--ink);
+}
+.ov-page .mono {
+  font-family: var(--font-mono);
+}
+
+/* Header: the queue's shield, the greeting, the two actions. */
+.ov-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+}
+.ov-header-text {
+  flex: 1;
+  min-width: 260px;
+}
+.ov-date {
+  color: var(--ink);
+  font-weight: 500;
+}
+.ov-date::after {
+  content: ' · ';
+  color: var(--faint);
+}
+.ov-header h1 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  color: var(--ink);
+}
+.ov-lede {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.ov-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ov-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 120ms var(--ease-out), background-color 150ms ease, border-color 150ms ease;
+}
+.ov-button.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.ov-button.is-small {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+}
+.ov-button:active {
+  transform: scale(0.97);
+}
+.ov-page :is(a, button):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ov-link {
+  color: var(--accent);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 150ms ease;
+}
+.ov-link:hover {
+  color: var(--ink);
+}
+
+/* The ledger: four figures between hairlines. */
+.ov-ledger {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 24px;
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1px solid var(--border2);
+}
+.ov-ledger > div {
+  padding: 16px 20px 18px;
+}
+.ov-ledger > div + div {
+  border-left: 1px solid var(--border);
+}
+.ov-ledger > div:first-child {
+  padding-left: 0;
+}
+.ov-ledger dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.ov-ledger dd {
+  margin: 6px 0 2px;
+  font-family: var(--font-serif);
+  font-size: 44px;
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ov-ledger dd.is-fail { color: var(--fail-text); }
+.ov-ledger dd.is-unable { color: var(--unable-text); }
+.ov-ledger span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+@media (max-width: 900px) {
+  .ov-ledger {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ov-ledger > div:nth-child(3) {
+    border-left: none;
+    padding-left: 0;
+  }
+  .ov-ledger > div:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+/* Panels */
+.ov-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 20px 22px;
+}
+.ov-panel + .ov-columns,
+.ov-panel + .ov-panel {
+  margin-top: 20px;
+}
+.ov-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ov-panel-head h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 400;
+  text-transform: none;
+  color: var(--ink);
+}
+.ov-panel-head p {
+  margin: 2px 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.ov-empty {
+  margin: 0;
+  padding: 12px 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+/* Priority table */
+.ov-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.ov-table th {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--border2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.ov-table td {
+  padding: 10px 12px 10px 0;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.ov-table tr:last-child td {
+  border-bottom: none;
+}
+.ov-table tbody tr {
+  transition: background-color 150ms ease;
+}
+.ov-table tbody tr:hover {
+  background: var(--row);
+}
+.ov-claim {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+.ov-cell-action {
+  text-align: right;
+  padding-right: 0 !important;
+}
+.is-fail-text { color: var(--fail-text); font-weight: 600; }
+.is-unable-text { color: var(--unable-text); font-weight: 600; }
+.ov-status { font-weight: 600; }
+.ov-status.fail { color: var(--fail-text); }
+.ov-status.uncertain { color: var(--unable-text); }
+.ov-status.review { color: var(--review-text); }
+.ov-status.pass { color: var(--pass-text); }
+@media (max-width: 900px) {
+  .ov-table th:nth-child(3),
+  .ov-table td:nth-child(3),
+  .ov-table th:nth-child(5),
+  .ov-table td:nth-child(5) {
+    display: none;
+  }
+}
+
+/* Three columns: evaluation, hotspots, activity */
+.ov-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+@media (max-width: 1180px) {
+  .ov-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ov-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 0 0 18px;
+}
+.ov-facts dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.ov-facts dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.ov-distribution-label {
+  margin-bottom: 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.ov-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ov-bar span { min-width: 2px; }
+.ov-bar .is-pass { background: var(--pass); }
+.ov-bar .is-fail { background: var(--fail); }
+.ov-bar .is-unable { background: var(--unable); }
+.ov-bar .is-na { background: var(--na); }
+.ov-bar .is-other { background: var(--border2); }
+.ov-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+.ov-legend li {
+  display: flex;
+  gap: 6px;
+}
+.ov-legend-word { font-weight: 600; }
+.ov-legend-word.is-pass { color: var(--pass-text); }
+.ov-legend-word.is-fail { color: var(--fail-text); }
+.ov-legend-word.is-unable { color: var(--unable-text); }
+.ov-legend-word.is-na,
+.ov-legend-word.is-other { color: var(--na-text); }
+
+/* Hotspots: rule, title, dotted leader, count */
+.ov-hotspots {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ov-hotspots li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+.ov-rule-id {
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+.ov-rule-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ov-dots {
+  flex: 1;
+  min-width: 12px;
+  border-bottom: 1px dotted var(--border2);
+  transform: translateY(-3px);
+}
+.ov-rule-count {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--fail-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Activity */
+.ov-activity {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ov-activity li {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.ov-activity-time {
+  font-size: 0.75rem;
+  color: var(--faint);
+  padding-top: 2px;
+}
+
+@media (max-width: 760px) {
+  .ov-page {
+    padding: 22px 16px 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-button,
+  .ov-link,
+  .ov-table tbody tr {
+    transition: none;
+  }
+}

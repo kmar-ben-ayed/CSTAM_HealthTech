@@ -38,6 +38,14 @@ OPEN_STATES = RUNNING_STATES | {AWAITING_AUTHOR, AWAITING_CONFIRMATION}
 
 CLARIFICATION = "clarification"
 CASE = "case"
+# The drafter is stuck: the author is asked for example claims with the outcome they expect.
+EXAMPLE = "example"
+# What missing or unknown data gives in one situation (missing_data.py): one outcome for every
+# test claim of the situation, or "it depends".
+SITUATION = "situation"
+# Drafting stopped (time limit, the drafter gave up or failed): the admin chooses what next,
+# a draft that passed every check, more drafting time, example claims, or cancelling.
+CHOICE = "choice"
 
 
 def now() -> str:
@@ -47,11 +55,20 @@ def now() -> str:
 @dataclass
 class Question:
     question_id: str
-    kind: str  # CLARIFICATION (free text) or CASE (pick the correct outcome for a claim)
+    # CLARIFICATION (free text), CASE (pick the outcome of a claim), EXAMPLE (give example claims)
+    # or SITUATION (pick the outcome of every claim in a missing-data situation)
+    kind: str
     text: str
     case: dict[str, Any] | None = None
     answer: str | None = None
     answered_by: str | None = None
+    # For a clarification or a situation: the answers the author can pick.
+    options: list[str] = field(default_factory=list)
+    # For a situation: {"text": ..., "cases": [{"description", "claim", "drafted_rule_says"}]}.
+    situation: dict[str, Any] | None = None
+    # For a choice: what each option does, in the order of "options":
+    # {"action": "use" | "more" | "examples" | "cancel", "draft": index in Draft.good_drafts}.
+    choice: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -65,15 +82,37 @@ class Draft:
     created_at: str = field(default_factory=now)
     updated_at: str = field(default_factory=now)
     rounds: int = 0
+    # Rounds since the author last gave new information (an answer or a correction). The
+    # round limit applies to these: each correction is a new task, not another failed try.
+    rounds_since_input: int = 0
     questions: list[Question] = field(default_factory=list)
     author_answers: list[dict[str, str]] = field(default_factory=list)
     examples: list[LabelledCase] = field(default_factory=list)
     feedback: list[str] = field(default_factory=list)
     proposal: dict[str, Any] | None = None  # spec, intent, assumptions
+    # The last draft the checks saw ({"draft": sheet or spec, "passed_checks": bool}): the next
+    # round starts from it and changes only what the corrections or the problems require.
+    last_draft: dict[str, Any] | None = None
+    # Drafts that disagree, kept while the author answers the questions that tell them apart.
+    candidates: list[dict[str, Any]] = field(default_factory=list)
     report: dict[str, Any] | None = None
     outcome_reason: str = ""
     provenance: dict[str, Any] = field(default_factory=dict)
     events: list[dict[str, str]] = field(default_factory=list)
+    # Handed to a technical manager because the rule could not be generated: who, when.
+    escalations: list[dict[str, str]] = field(default_factory=list)
+    # Every draft that passed every check, kept so a good draft is never lost when a later one
+    # goes wrong ({"proposal", "at", "round"}); the admin can choose one when drafting stops.
+    good_drafts: list[dict[str, Any]] = field(default_factory=list)
+    # When the admin last gave the drafter something new (submitted, answered, corrected, chose
+    # to keep drafting): the drafting time limit counts from here.
+    input_at: str = field(default_factory=now)
+    # Outcomes the admin dropped by choosing a draft that disagrees with them ({"description",
+    # "claim_key", "expected_status"}): kept for the record, never asked again.
+    waived: list[dict[str, Any]] = field(default_factory=list)
+    # The proposal is a good draft the admin chose: it goes to their review as it is, without
+    # new questions (they chose it over drafting more). A new draft or new input clears it.
+    chosen: bool = False
 
     @property
     def is_open(self) -> bool:

@@ -1,379 +1,314 @@
-import { useEffect, useState } from 'react';
-import Sentinel from '../components/Sentinel';
-import type { SentinelState } from '../components/Sentinel';
-import { getAuditEvents, type BackendAuditEvent } from '../api/audit';
-import { datasetToClaimRows, getIngestedClaims, type ClaimRow } from '../api/claims';
+import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import StatusShield, { SHIELD_FOR_STATUS, type ShieldState } from '../components/StatusShield';
+import { ApiError } from '../api/client';
+import { describeAuditEvent, getAuditEvents, type BackendAuditEvent } from '../api/audit';
+import { getDataset, getIngestedClaims, type DatasetResponse, type RuleResult } from '../api/claims';
+import { displayName, loadCardContext, personName, timeAgo, toClaimCardData, type ClaimCardData } from '../api/claimCards';
+import { listRules } from '../api/rules';
+import { getIngestionRuns, type IngestionRun } from '../api/runs';
+import '../styles/dashboard.css';
+
+// ── Overview ───────────────────────────────────────────────────────────────
+// What needs a decision today, read from the ingested claims, the latest
+// ingestion run, the rule catalogue and the audit log. Every number on the
+// page is counted from that data.
 
 interface DashboardProps {
   onNavigate: (page: string, claimId?: string) => void;
 }
 
-const QUEUE_ITEMS = [
-  {
-    id: 'CLM-10482',
-    provider: 'Meridian Health Group',
-    service: 'Sep 15, 2026',
-    findings: 4,
-    status: 'review',
-    statusLabel: 'Needs review',
-    updated: '12 min ago',
-    sentinel: 'review' as SentinelState,
-  },
-  {
-    id: 'CLM-10479',
-    provider: 'Northside Clinic',
-    service: 'Sep 13, 2026',
-    findings: 1,
-    status: 'uncertain',
-    statusLabel: 'Unable to assess',
-    updated: '1h ago',
-    sentinel: 'uncertain' as SentinelState,
-  },
-  {
-    id: 'CLM-10477',
-    provider: 'Metro Health Partners',
-    service: 'Sep 12, 2026',
-    findings: 3,
-    status: 'review',
-    statusLabel: 'Needs review',
-    updated: '2h ago',
-    sentinel: 'review' as SentinelState,
-  },
-  {
-    id: 'CLM-10476',
-    provider: 'Riverside Medical Center',
-    findings: 1,
-    status: 'fail',
-    statusLabel: 'Failed',
-    updated: '4h ago',
-    sentinel: 'fail' as SentinelState,
-  },
-  {
-    id: 'CLM-10474',
-    provider: 'Summit Care Associates',
-    service: 'Sep 10, 2026',
-    findings: 2,
-    status: 'review',
-    statusLabel: 'Needs review',
-    sentinel: 'review' as SentinelState,
-  },
-];
-
-const ACTIVITY = [
-  { time: '10:33:02', event: 'REVIEW_ACTION', actor: 'Marwen Agrebi', detail: 'CLM-10481 · Request information submitted', type: 'human' },
-  { time: '10:31:03', event: 'RUN_COMPLETED', actor: 'System', detail: 'Run RUN-4821 · 24 claims · 98.2% status accuracy', type: 'system' },
-  { time: '10:28:44', event: 'CLAIM_RECEIVED', actor: 'System', detail: 'CLM-10482 · Meridian Health Group · $2,840.00', type: 'system' },
-  { time: '10:15:21', event: 'REVIEW_ACTION', actor: 'James Park', detail: 'CLM-10480 · Issue confirmed → escalated', type: 'human' },
-  { time: '09:58:07', event: 'RULE_EVALUATED', actor: 'System', detail: 'R008 → FAIL · CLM-10479 · Auth reference missing', type: 'rule' },
-  { time: '09:44:12', event: 'RUN_STARTED', actor: 'System', detail: 'Run RUN-4820 · Pacific Medical dataset', type: 'system' },
-];
-
-const STATUS_PILL: Record<string, string> = {
-  review: 'is-review',
-  fail: 'is-fail',
-  pass: 'is-pass',
-  uncertain: 'is-uta',
-};
-
-function initials(name: string): string {
-  const words = name.replace(/[^A-Za-z ]/g, ' ').trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '··';
-  return (words.length === 1 ? words[0].slice(0, 2) : words[0][0] + words[1][0]).toUpperCase();
+interface Overview {
+  cards: ClaimCardData[];
+  results: RuleResult[];
+  ruleTitles: Map<string, string>;
+  latestRun: IngestionRun | null;
+  activity: BackendAuditEvent[];
 }
 
-const ACTIVITY_COLORS: Record<string, string> = {
-  human: 'var(--status-review)',
-  system: 'var(--accent)',
-  rule: 'var(--status-fail)',
-};
+const OUTCOMES = [
+  { status: 'PASS', label: 'Pass', className: 'is-pass' },
+  { status: 'FAIL', label: 'Fail', className: 'is-fail' },
+  { status: 'UNABLE_TO_ASSESS', label: 'Unable', className: 'is-unable' },
+  { status: 'NOT_APPLICABLE', label: 'N/A', className: 'is-na' },
+  { status: 'NOT_IMPLEMENTED', label: 'Not run', className: 'is-other' },
+] as const;
+
+async function loadOverview(signal: AbortSignal): Promise<Overview> {
+  const [dataset, context, rules, runs, audit] = await Promise.all([
+    getIngestedClaims(undefined, signal).catch((cause: unknown): Promise<DatasetResponse> => {
+      if (cause instanceof ApiError && cause.status === 404) return getDataset('development', 500, signal);
+      throw cause;
+    }),
+    loadCardContext(signal),
+    listRules(signal).catch(() => []),
+    getIngestionRuns(signal).then((response) => response.runs).catch(() => []),
+    getAuditEvents(200, signal).then((response) => response.events).catch(() => []),
+  ]);
+  return {
+    cards: dataset.claims.map((claim) => toClaimCardData(claim, dataset.evaluations[claim.claim_id] ?? [], context)),
+    results: Object.values(dataset.evaluations).flat(),
+    ruleTitles: new Map(rules.map((rule) => [rule.rule_id, rule.title])),
+    latestRun: runs.length ? runs[runs.length - 1] : null,
+    activity: audit
+      .filter((event) => event.event_type !== 'rule_execution')
+      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+      .slice(0, 6),
+  };
+}
+
+// "Marwen A. confirmed the issue on R004", read as a sentence after the actor.
+function activityVerb(event: BackendAuditEvent): string {
+  const rule = typeof event.payload.rule_id === 'string' ? event.payload.rule_id : '';
+  const on = rule ? ` ${rule}` : '';
+  if (event.event_type === 'human_decision') {
+    const verbs: Record<string, string> = {
+      confirm_issue: 'confirmed',
+      dismiss_with_reason: 'dismissed',
+      request_information: 'requested information on',
+      mark_corrected_for_recheck: 'marked corrected',
+    };
+    return `${verbs[String(event.payload.action)] ?? 'reviewed'}${on}`;
+  }
+  if (event.event_type === 'ai_decision') return `explained${on}`;
+  return describeAuditEvent(event).toLowerCase();
+}
+
+function greeting(now: Date): string {
+  const hour = now.getHours();
+  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+// Most urgent first: more failed rules, then more unassessable ones.
+function priority(card: ClaimCardData): number {
+  const unable = card.findings.filter((finding) => finding.result === 'UNABLE').length;
+  return card.failedCount * 100 + unable;
+}
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
-  const [hoveredRow, setHoveredRow] = useState<string | null>(null);
-  const [claims, setClaims] = useState<ClaimRow[]>([]);
-  const [activity, setActivity] = useState<BackendAuditEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const now = useMemo(() => new Date(), []);
+  const actor = sessionStorage.getItem('claimguard-demo-actor') || '';
+  const firstName = personName(actor)?.split(' ')[0] ?? '';
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([
-      getIngestedClaims(undefined, controller.signal),
-      getAuditEvents(6, controller.signal),
-    ]).then(([ingested, audit]) => {
-      setClaims(datasetToClaimRows(ingested));
-      setActivity(audit.events);
-    }).catch(() => {
-      setClaims([]);
-      setActivity([]);
-    }).finally(() => setLoading(false));
+    loadOverview(controller.signal)
+      .then(setOverview)
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError('The overview could not be loaded.');
+      });
     return () => controller.abort();
   }, []);
 
-  const reviewClaims = claims.filter((claim) => claim.status !== 'pass');
-  const statusCounts = claims.reduce<Record<string, number>>((counts, claim) => {
-    counts[claim.status] = (counts[claim.status] || 0) + 1;
-    return counts;
-  }, {});
-  const queueItems = reviewClaims.slice(0, 5);
-  const statusLabels: Record<ClaimRow['status'], string> = {
-    review: 'Needs review', fail: 'Failed', uncertain: 'Unable to assess', pass: 'Passed',
-  };
-  const activityColor = (event: BackendAuditEvent) => event.event_type === 'human_decision'
-    ? ACTIVITY_COLORS.human
-    : event.event_type === 'rule_execution' ? ACTIVITY_COLORS.rule : ACTIVITY_COLORS.system;
-  const activityLabel = (event: BackendAuditEvent) => event.event_type === 'rule_execution'
-    ? 'RULE_EVALUATED'
-    : event.event_type === 'human_decision' ? 'REVIEW_ACTION' : event.event_type.toUpperCase();
-  const activityDetail = (event: BackendAuditEvent) => {
-    const payload = event.payload;
-    if (event.event_type === 'rule_execution') return `${event.claim_id || 'Claim'} · ${String(payload.status || 'evaluated')}`;
-    if (event.event_type === 'human_decision') return `${event.claim_id || 'Claim'} · ${String(payload.action || 'review recorded')}`;
-    return event.claim_id ? `Claim ${event.claim_id}` : 'System event recorded';
-  };
+  const stats = useMemo(() => {
+    if (!overview) return null;
+    const { cards, results } = overview;
+    const counts: Record<string, number> = {};
+    const failsByRule = new Map<string, number>();
+    for (const result of results) {
+      counts[result.status] = (counts[result.status] ?? 0) + 1;
+      if (result.status === 'FAIL') failsByRule.set(result.rule_id, (failsByRule.get(result.rule_id) ?? 0) + 1);
+    }
+    const allRules = new Set(results.map((result) => result.rule_id));
+    return {
+      counts,
+      totalResults: results.length,
+      needDecision: cards.filter((card) => card.status !== 'Passed').length,
+      unable: cards.filter((card) => card.status === 'Unable to assess').length,
+      failedClaims: cards.filter((card) => card.status === 'Failed').length,
+      rulesWithFails: failsByRule.size,
+      ruleCount: allRules.size,
+      hotspots: [...failsByRule.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5),
+      priority: [...cards].filter((card) => card.status !== 'Passed').sort((a, b) => priority(b) - priority(a)).slice(0, 6),
+    };
+  }, [overview]);
 
-  const kpis = [
-    {
-      label: 'Claims processed',
-      value: String(claims.length),
-      change: 'Accumulated locally',
-      changePos: null,
-      sub: `${reviewClaims.length} need review`,
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <rect x="2" y="3" width="14" height="12" rx="2" stroke="var(--accent-ink)" strokeWidth="1.5"/>
-          <path d="M5 7h8M5 10h5" stroke="var(--accent-ink)" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      accent: 'var(--accent)',
-    },
-    {
-      label: 'Needs review',
-      value: String((statusCounts.review || 0) + (statusCounts.fail || 0)),
-      change: 'From current claims',
-      changePos: null,
-      sub: `${statusCounts.fail || 0} failed`,
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <circle cx="9" cy="7" r="3" stroke="var(--status-uta-ink)" strokeWidth="1.5"/>
-          <path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="var(--status-uta-ink)" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      accent: 'var(--status-review)',
-    },
-    {
-      label: 'Unable to assess',
-      value: String(statusCounts.uncertain || 0),
-      change: 'Awaiting evidence',
-      changePos: null,
-      sub: '3 pending info',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <circle cx="9" cy="9" r="7" stroke="var(--status-uta-ink)" strokeWidth="1.5"/>
-          <path d="M9 6v4M9 13v.5" stroke="var(--status-uta-ink)" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      accent: 'var(--status-uta)',
-    },
-    {
-      label: 'Issues detected',
-      value: String(claims.reduce((total, claim) => total + claim.findings, 0)),
-      change: 'Across accumulated claims',
-      changePos: null,
-      sub: 'R008 most frequent',
-      icon: (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <path d="M9 2l7 13H2L9 2z" stroke="var(--status-fail-ink)" strokeWidth="1.5" strokeLinejoin="round"/>
-          <path d="M9 7v4M9 13v.5" stroke="var(--status-fail-ink)" strokeWidth="1.5" strokeLinecap="round"/>
-        </svg>
-      ),
-      accent: 'var(--status-fail)',
-    },
-  ];
-
-  const today = new Date();
-  const hour = today.getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const dateline = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-  const outcomeShare = (count: number) => (claims.length ? (count / claims.length) * 100 : 0);
-  const outcomes = [
-    { key: 'pass', label: 'Pass', count: statusCounts.pass || 0, color: 'var(--status-pass)' },
-    { key: 'fail', label: 'Fail', count: statusCounts.fail || 0, color: 'var(--status-fail)' },
-    { key: 'uncertain', label: 'Unable', count: statusCounts.uncertain || 0, color: 'var(--status-uta)' },
-    { key: 'review', label: 'Review', count: statusCounts.review || 0, color: 'var(--status-review)' },
-  ];
+  // The header shield shows the queue: waiting on a reviewer, clear, or still loading.
+  const queueState: ShieldState = !stats ? 'scanning' : stats.needDecision > 0 ? 'review' : 'pass';
 
   return (
-    <div className="dashboard-shell">
-      {/* Header */}
-      <div className="dashboard-header">
-        <div>
-          <p className="page-dateline">{dateline}</p>
-          <h1 style={{ margin: '0 0 6px' }}>{greeting}, Marwen</h1>
-          <p style={{ fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-            {loading
-              ? 'Loading claims…'
-              : `${reviewClaims.length} ${reviewClaims.length === 1 ? 'claim needs' : 'claims need'} a decision.`}
+    <div className="ov-page">
+      <header className="ov-header">
+        <StatusShield state={queueState} size={76} label={stats ? (stats.needDecision ? 'Claims are waiting on a reviewer' : 'No claims waiting') : 'Loading'} />
+        <div className="ov-header-text">
+          <h1>{greeting(now)}{firstName ? `, ${firstName}` : ''}</h1>
+          <p className="ov-lede">
+            <span className="ov-date">{now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+            {stats
+              ? stats.needDecision
+                ? `${stats.needDecision} claim${stats.needDecision === 1 ? '' : 's'} need a decision.`
+                : 'Every claim passed. Nothing is waiting on you.'
+              : error ?? 'Reading the latest claims…'}
           </p>
         </div>
-        <div className="dashboard-header-actions" style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => onNavigate('ingest')} className="btn btn-secondary">
-            Ingest data
-          </button>
-          <button onClick={() => onNavigate('review-queue')} className="btn btn-primary">
-            Open review queue →
-          </button>
+        <div className="ov-actions">
+          <button type="button" className="ov-button" onClick={() => onNavigate('ingest')}>Ingest data</button>
+          <button type="button" className="ov-button is-primary" onClick={() => onNavigate('review-queue')}>Open review queue</button>
         </div>
-      </div>
+      </header>
 
-      {/* KPI tiles */}
-      <div className="kpi-tiles">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className="kpi-tile">
-            <div className="kpi-tile-label">{kpi.label}</div>
-            <span className="kpi-tile-dot" style={{ background: kpi.accent }} aria-hidden="true" />
-            <div className="kpi-tile-value">{loading ? '—' : kpi.value}</div>
-            <div className="kpi-tile-caption">{kpi.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Main content grid */}
-      <div className="dashboard-grid">
-        {/* Review queue */}
-          <div className="dashboard-panel dashboard-queue-panel">
-          <div className="dashboard-panel-header">
+      {stats && overview && (
+        <>
+          {/* The day in four figures, as a ledger rather than boxed tiles. */}
+          <dl className="ov-ledger">
             <div>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)' }}>Priority review</h2>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginTop: 3 }}>Highest-risk claims first</p>
+              <dt>Claims processed</dt>
+              <dd>{overview.cards.length.toLocaleString('en')}</dd>
+              <span>{overview.latestRun ? `${overview.latestRun.source} batch ${overview.latestRun.run_id.slice(0, 8)}` : 'Development dataset'}</span>
             </div>
-            <button onClick={() => onNavigate('claims')} className="text-action" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>
-              View all claims →
-            </button>
-          </div>
-
-          <div className="table-scroll">
-          <table className="data-table dashboard-table">
-            <thead>
-              <tr>
-                <th>Claim</th>
-                <th>Provider</th>
-                <th>Service date</th>
-                <th>Findings</th>
-                <th>Status</th>
-                <th>Updated</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {queueItems.map(item => {
-                return (
-                  <tr
-                    key={item.id}
-                    onClick={() => onNavigate('claim-review', item.id)}
-                    onMouseEnter={() => setHoveredRow(item.id)}
-                    onMouseLeave={() => setHoveredRow(null)}
-                    style={{ background: hoveredRow === item.id ? 'var(--card-bg)' : undefined }}
-                  >
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Sentinel state={item.sentinel} size={24} />
-                        <span className="mono-id" style={{ color: 'var(--text-primary)' }}>{item.id}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{item.provider}</span>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-                        {item.dos}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                        <strong style={{ color: item.findings > 0 ? 'var(--status-fail-ink)' : 'var(--status-pass-ink)' }}>{item.findings}</strong>
-                        {item.findings === 1 ? ' finding' : ' findings'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`status-pill ${STATUS_PILL[item.status]}`}>{statusLabels[item.status]}</span>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{item.updated}</span>
-                    </td>
-                    <td>
-                      <button
-                        onClick={e => { e.stopPropagation(); onNavigate('claim-review', item.id); }}
-                        className="btn btn-secondary btn-sm"
-                      >
-                        Review
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-        </div>
-
-        <div className="dashboard-side">
-          <section className="dashboard-panel context-panel">
-            <div className="dashboard-panel-header">
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)' }}>Latest evaluation</h3>
-              <button onClick={() => onNavigate('runs')} className="text-action">Run details</button>
+            <div>
+              <dt>Need a decision</dt>
+              <dd>{stats.needDecision.toLocaleString('en')}</dd>
+              <span>{stats.failedClaims} failed, the rest uncertain</span>
             </div>
-            <dl className="evaluation-facts">
-              <div><dt>Source</dt><dd>Accumulated store</dd></div>
-              <div><dt>Claims evaluated</dt><dd>{claims.length}</dd></div>
-              <div><dt>Ruleset</dt><dd>Configured backend rules</dd></div>
-              <div><dt>Last event</dt><dd>{activity[0] ? new Date(activity[0].timestamp).toLocaleTimeString() : '—'}</dd></div>
-            </dl>
-            <div className="outcome-distribution">
-              <div className="outcome-distribution-label">Outcome distribution · {claims.length} claims</div>
-              <div className="outcome-bar" role="img" aria-label={outcomes.map((o) => `${o.label} ${o.count}`).join(', ')}>
-                {outcomes.filter((o) => o.count > 0).map((o) => (
-                  <span key={o.key} style={{ width: `${outcomeShare(o.count)}%`, background: o.color }} />
-                ))}
-              </div>
-              <div className="outcome-legend">
-                {outcomes.map((o) => (
-                  <span key={o.key}><i style={{ background: o.color }} />{o.label} {Math.round(outcomeShare(o.count))}%</span>
-                ))}
-              </div>
+            <div>
+              <dt>Unable to assess</dt>
+              <dd className="is-unable">{stats.unable.toLocaleString('en')}</dd>
+              <span>Missing evidence on the claim</span>
             </div>
-            <p className="context-note">Rule outcomes are deterministic. AI explanations are linked to the recorded evidence.</p>
-          </section>
+            <div>
+              <dt>Issues detected</dt>
+              <dd className="is-fail">{(stats.counts.FAIL ?? 0).toLocaleString('en')}</dd>
+              <span>Across {stats.rulesWithFails} of {stats.ruleCount} rules</span>
+            </div>
+          </dl>
 
-          <section className="dashboard-panel activity-panel">
-            <div className="dashboard-panel-header">
+          <section className="ov-panel" aria-labelledby="ov-priority">
+            <div className="ov-panel-head">
               <div>
-                <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)' }}>Recent activity</h3>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 3 }}>Last 60 minutes</p>
+                <h2 id="ov-priority">Priority review</h2>
+                <p>Most failed rules first</p>
               </div>
-              <button onClick={() => onNavigate('audit')} className="text-action" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>Audit trail →</button>
+              <Link to="/app/claims" className="ov-link">View all claims</Link>
             </div>
-            <div className="activity-feed">
-              {activity.length === 0 && !loading && (
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', padding: '4px 0' }}>No activity recorded yet.</p>
-              )}
-              {activity.map((a, i) => (
-                <div key={i} className="activity-entry">
-                  <span className="activity-avatar" style={{ color: activityColor(a) }} aria-hidden="true">{initials(a.actor)}</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '0.875rem', color: 'var(--text-primary)', lineHeight: 1.45 }}>
-                      <strong style={{ fontWeight: 650 }}>{a.actor}</strong>{' '}
-                      <span style={{ color: 'var(--text-secondary)' }}>{activityLabel(a).toLowerCase().replace(/_/g, ' ')}</span>{' '}
-                      <span className="mono-id" style={{ color: 'var(--accent-ink)', fontWeight: 600 }}>{activityDetail(a)}</span>
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-                      {new Date(a.timestamp).toLocaleTimeString()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {stats.priority.length === 0 ? (
+              <p className="ov-empty">No claims need a decision.</p>
+            ) : (
+              <table className="ov-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Claim</th>
+                    <th scope="col">Provider</th>
+                    <th scope="col">Service date</th>
+                    <th scope="col">Findings</th>
+                    <th scope="col">Status</th>
+                    <th scope="col"><span className="visually-hidden">Action</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.priority.map((card) => {
+                    const unable = card.findings.filter((finding) => finding.result === 'UNABLE').length;
+                    return (
+                      <tr key={card.claimId}>
+                        <td>
+                          <span className="ov-claim">
+                            <StatusShield state={SHIELD_FOR_STATUS[card.status]} size={30} animated={false} />
+                            <span className="mono">{card.claimId}</span>
+                          </span>
+                        </td>
+                        <td>{card.providerName}</td>
+                        <td className="mono">{card.serviceDate}</td>
+                        <td>
+                          <span className="is-fail-text">{card.failedCount}</span> fail · <span className="is-unable-text">{unable}</span> unable
+                        </td>
+                        <td><span className={`ov-status ${SHIELD_FOR_STATUS[card.status]}`}>{card.status}</span></td>
+                        <td className="ov-cell-action">
+                          <Link to={`/app/claims/${encodeURIComponent(card.claimId)}`} className="ov-button is-small">Review</Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </section>
-        </div>
-      </div>
+
+          <div className="ov-columns">
+            <section className="ov-panel" aria-labelledby="ov-evaluation">
+              <div className="ov-panel-head">
+                <h2 id="ov-evaluation">Latest evaluation</h2>
+              </div>
+              {overview.latestRun ? (
+                <dl className="ov-facts">
+                  <div><dt>Run</dt><dd className="mono">{overview.latestRun.run_id.slice(0, 12)}</dd></div>
+                  <div><dt>Source</dt><dd>{overview.latestRun.source}</dd></div>
+                  <div><dt>Accepted</dt><dd className="mono">{overview.latestRun.accepted_claims}</dd></div>
+                  <div><dt>Rejected</dt><dd className="mono">{overview.latestRun.rejected_records}</dd></div>
+                </dl>
+              ) : (
+                <p className="ov-empty">No ingestion run yet; showing the development dataset.</p>
+              )}
+              <div className="ov-distribution">
+                <div className="ov-distribution-label">Rule outcomes · {stats.totalResults.toLocaleString('en')} results</div>
+                <div className="ov-bar" role="img" aria-label={OUTCOMES.map((o) => `${o.label} ${stats.counts[o.status] ?? 0}`).join(', ')}>
+                  {OUTCOMES.map((outcome) => {
+                    const share = (stats.counts[outcome.status] ?? 0) / Math.max(1, stats.totalResults);
+                    return share > 0 ? <span key={outcome.status} className={outcome.className} style={{ flexGrow: share }} /> : null;
+                  })}
+                </div>
+                <ul className="ov-legend">
+                  {OUTCOMES.map((outcome) => {
+                    const count = stats.counts[outcome.status] ?? 0;
+                    if (count === 0 && outcome.status === 'NOT_IMPLEMENTED') return null;
+                    return (
+                      <li key={outcome.status}>
+                        <span className={`ov-legend-word ${outcome.className}`}>{outcome.label}</span>
+                        <span className="mono">{Math.round((count / Math.max(1, stats.totalResults)) * 100)}%</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </section>
+
+            <section className="ov-panel" aria-labelledby="ov-hotspots">
+              <div className="ov-panel-head">
+                <h2 id="ov-hotspots">Rules failing most</h2>
+                <Link to="/app/rules" className="ov-link">Rules</Link>
+              </div>
+              {stats.hotspots.length === 0 ? (
+                <p className="ov-empty">No rule has failed.</p>
+              ) : (
+                <ol className="ov-hotspots">
+                  {stats.hotspots.map(([ruleId, fails]) => (
+                    <li key={ruleId}>
+                      <span className="mono ov-rule-id">{ruleId}</span>
+                      <span className="ov-rule-title">{overview.ruleTitles.get(ruleId) ?? 'Untitled rule'}</span>
+                      <span className="ov-dots" aria-hidden="true" />
+                      <span className="ov-rule-count">{fails}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+
+            <section className="ov-panel" aria-labelledby="ov-activity">
+              <div className="ov-panel-head">
+                <h2 id="ov-activity">Recent activity</h2>
+                <Link to="/app/audit" className="ov-link">Audit trail</Link>
+              </div>
+              {overview.activity.length === 0 ? (
+                <p className="ov-empty">No reviewer or AI activity yet.</p>
+              ) : (
+                <ul className="ov-activity">
+                  {overview.activity.map((event) => (
+                    <li key={event.index}>
+                      <span className="mono ov-activity-time">{timeAgo(new Date(event.timestamp))}</span>
+                      <span>
+                        <strong>{displayName(event.actor)}</strong> {activityVerb(event)}
+                        {event.claim_id && <>, claim <Link to={`/app/claims/${encodeURIComponent(event.claim_id)}`} className="mono ov-link">{event.claim_id}</Link></>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </>
+      )}
     </div>
   );
 }

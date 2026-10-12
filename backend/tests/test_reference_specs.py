@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from collections import Counter
+from decimal import Decimal
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -32,9 +33,38 @@ def load_split(split):
     return claims, expected
 
 
-def has_duplicate_authorization_ids(claim):
-    ids = [authorization["authorization_id"] for authorization in claim["authorizations"]]
-    return len(ids) != len(set(ids))
+R009_FIELDS = ("patient_id", "service_code", "status", "valid_from", "valid_to", "max_quantity")
+
+
+def has_disagreeing_authorization_copies(claim):
+    """Two authorization records with the same id that differ in what R009 checks (an identical
+    copy is the same record: R009 and the original code agree on it)."""
+    seen = {}
+    for authorization in claim["authorizations"]:
+        content = tuple(authorization.get(field) for field in R009_FIELDS)
+        if seen.setdefault(authorization["authorization_id"], content) != content:
+            return True
+    return False
+
+
+def has_a_known_r013_violation(claim, policies):
+    """A line that breaks one of R013's checks with everything that check reads known: a quantity
+    that is not a positive whole number, a unit price that is not positive, or a quantity or price
+    above the policy's limit for a known service (whatever else on the line or claim is missing)."""
+    policy = policies.get(claim["policy_id"]) or {}
+    for line in claim["lines"]:
+        quantity, price, code = line["quantity"], line["unit_price"], line["service_code"]
+        max_price = (policy.get("max_unit_price") or {}).get(code)
+        max_quantity = (policy.get("max_quantity_per_line") or {}).get(code)
+        if quantity is not None and (Decimal(str(quantity)) <= 0 or Decimal(str(quantity)) % 1 != 0):
+            return True
+        if price is not None and Decimal(str(price)) <= 0:
+            return True
+        if quantity is not None and max_quantity is not None and Decimal(str(quantity)) > Decimal(str(max_quantity)):
+            return True
+        if price is not None and max_price is not None and Decimal(str(price)) > Decimal(str(max_price)):
+            return True
+    return False
 
 
 class ReferenceSpecTests(unittest.TestCase):
@@ -72,16 +102,49 @@ class ReferenceSpecTests(unittest.TestCase):
         for claim in mutated_claims(claims, count=3000, seed=11):
             new = self.statuses(claim)
             for rule_id in REFERENCE_RULES:
-                if rule_id == "R009" and has_duplicate_authorization_ids(claim):
-                    continue  # intentional difference, see the next test
+                if rule_id == "R009" and has_disagreeing_authorization_copies(claim):
+                    continue  # intentional difference, see test_ambiguous_authorization_reference_needs_a_human
                 old = legacy_check(claim, self.rules[rule_id], self.cfg)["status"]
+                if (rule_id == "R013" and (old, new[rule_id]) == ("UNABLE_TO_ASSESS", "FAIL")
+                        and has_a_known_r013_violation(claim, self.cfg["policies"])):
+                    continue  # intentional difference, see test_r013_a_known_violation_fails_whatever_else_is_missing
                 if new[rule_id] != old:
                     differences[(rule_id, old, new[rule_id])] += 1
         self.assertEqual(dict(differences), {})
 
+    def test_r013_a_known_violation_fails_whatever_else_is_missing(self):
+        """R013's text: "Every quantity must be a positive integer, unit_price must be greater than
+        zero ... A known violation fails." A quantity of 0 or 1.5 is wrong whatever the policy,
+        and a quantity over a known limit is wrong even if the line's price is missing. The old
+        code returned UNABLE_TO_ASSESS as soon as the policy, the service or any value of the
+        line was unknown, before looking at the rest. Decided with the product owner on
+        2026-10-12; no official claim has this combination, so the 9,000 expected outcomes are
+        unchanged."""
+        claims, _ = load_split("development")
+        claim = copy.deepcopy(next(c for c in claims if self.statuses(c)["R013"] == "PASS" and len(c["lines"]) == 1))
+        unknown_policy = {**copy.deepcopy(claim), "policy_id": "EDU-NO-SUCH-POLICY"}
+        self.assertEqual(self.statuses(unknown_policy)["R013"], "UNABLE_TO_ASSESS")  # the limits cannot be checked
+        limit = self.cfg["policies"][claim["policy_id"]]["max_quantity_per_line"][claim["lines"][0]["service_code"]]
+        for base, wrong in ((unknown_policy, {"quantity": 1.5}), (unknown_policy, {"quantity": 0}),
+                            (unknown_policy, {"unit_price": -5}), (claim, {"quantity": limit + 1, "unit_price": None})):
+            broken = copy.deepcopy(base)
+            broken["lines"][0].update(wrong)
+            self.assertEqual(legacy_check(broken, self.rules["R013"], self.cfg)["status"], "UNABLE_TO_ASSESS")
+            self.assertEqual(self.statuses(broken)["R013"], "FAIL", wrong)
+
+    def test_an_identical_copy_of_an_authorization_is_the_same_record(self):
+        """The rule text says nothing about duplicates, and a copy changes nothing R009 checks:
+        the quantities it adds up are the lines', the limit is the same in both copies."""
+        claims, _ = load_split("development")
+        for wanted in ("PASS", "FAIL"):
+            claim = copy.deepcopy(next(c for c in claims if c["authorizations"] and self.statuses(c)["R009"] == wanted))
+            claim["authorizations"] = claim["authorizations"] + [copy.deepcopy(claim["authorizations"][0])]
+            self.assertEqual(self.statuses(claim)["R009"], wanted)
+            self.assertEqual(legacy_check(claim, self.rules["R009"], self.cfg)["status"], wanted)
+
     def test_ambiguous_authorization_reference_needs_a_human(self):
-        """Two authorization records with the same id: the old code silently used the
-        last one. The reference spec refuses to guess and returns UNABLE_TO_ASSESS."""
+        """Two authorization records with the same id that disagree: the old code silently
+        used the last one. The reference spec refuses to guess and returns UNABLE_TO_ASSESS."""
         claims, _ = load_split("development")
         claim = copy.deepcopy(next(c for c in claims if c["authorizations"] and self.statuses(c)["R009"] == "PASS"))
         duplicate = {**claim["authorizations"][0], "status": "denied"}

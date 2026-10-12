@@ -50,6 +50,14 @@ OUTCOMES = ("PASS", "FAIL", "UNABLE_TO_ASSESS", "NOT_APPLICABLE")
 # Segments are lowercase identifiers, so array indexes like "/lines/0" are not
 # expressible: rules reach array elements through for_each, find, exists, ...
 PATH_PATTERN = r"^(/[a-z_][a-z0-9_]*)+$|^\$[a-z][a-z0-9_]*(/[a-z_][a-z0-9_]*)*$"
+VALUE_FORMS = {"multiply", "add", "subtract", "days_between", "sum", "count", "latest", "earliest",
+               "find", "first_present", "config"}
+PATH_HELP = (
+    "Write /field or /field/subfield for a claim field, or $name/field for the element a "
+    "for_each, find or exists is looking at. Paths never contain *, [] or list indexes: to "
+    'check every line, use {"for_each": {"path": "/lines"}, "as": "line", "steps": [...]} '
+    "and read $line/field inside it."
+)
 
 Name = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{0,31}$")]
 ShortText = Annotated[str, StringConstraints(min_length=1, max_length=300)]
@@ -526,6 +534,17 @@ def _readable_errors(error: ValidationError, limit: int = 8) -> list[str]:
     problems = []
     for item in error.errors(include_url=False)[:limit]:
         location = ".".join(str(part) for part in item["loc"]) or "spec"
+        if item["loc"] and item["loc"][-1] == "path" and item["type"] == "string_pattern_mismatch":
+            problems.append(f"{location}: {json.dumps(item['input'])} is not a valid path. {PATH_HELP}")
+            continue
+        tag = (item.get("ctx") or {}).get("tag")
+        if item["type"] == "union_tag_invalid" and tag in VALUE_FORMS:
+            # e.g. {"require": {"op": "days_between", ...}}: a value used where a condition goes.
+            problems.append(
+                f'{location}: "{tag}" is a value, not a condition. Compare it, for example '
+                f'{{"op": "at_most", "left": {{"{tag}": [..., ...]}}, "right": {{"value": 30}}}}.'
+            )
+            continue
         problems.append(f"{location}: {item['msg']}")
     if error.error_count() > limit:
         problems.append(f"... and {error.error_count() - limit} more problems")

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getConfig, type ConfigPolicy, type ConfigRule } from '../api/config';
+import ShieldLoader from '../components/ShieldLoader';
 
 interface RulesProps {
   onNavigate?: (page: string) => void;
@@ -148,7 +149,7 @@ export default function Rules({ onNavigate }: RulesProps) {
 
   const differingWindow = compareMode && policies.length > 1 && new Set(policies.map(item => item.submissionWindow)).size > 1;
 
-  if (loading) return <div className="page-shell"><p>Loading policy configuration…</p></div>;
+  if (loading) return <div className="page-shell"><ShieldLoader label="Loading policy configuration…" /></div>;
   if (error) return <div className="page-shell"><p style={{ color: 'var(--status-fail-ink)' }}>Unable to load policy configuration: {error}</p></div>;
 
   return (

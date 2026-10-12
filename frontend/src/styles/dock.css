@@ -1,0 +1,339 @@
+/* Dock navigation (claimguard-implementation-prompt.md, section 4.2). */
+
+.dock {
+  /* 56px items, smaller on short screens so the whole dock always fits. */
+  --dock-item: clamp(36px, calc((100vh - 290px) / 11), 56px);
+
+  position: fixed;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  width: 83px;
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  border-radius: 30px;
+  /* The heaviest material in the app: structure, not attention. */
+  background: var(--dock-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 48px -20px rgba(2, 6, 23, 0.6);
+}
+
+.dock-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.dock-separator {
+  width: 36px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dock-slot {
+  position: relative;
+}
+
+.dock-item,
+.dock-logo {
+  position: relative;
+  width: var(--dock-item);
+  height: var(--dock-item);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  color: var(--dock-icon);
+  cursor: pointer;
+  transition: transform 160ms var(--ease-out), color 150ms ease;
+}
+/* Hover magnification lives on this wrapper; the button keeps its own press scale. */
+.dock-scale {
+  transition: transform 180ms var(--ease-out);
+}
+.dock-item svg {
+  width: 44%;
+  height: 44%;
+}
+.dock-logo {
+  color: var(--dock-active-icon);
+}
+.dock-logo svg {
+  width: 52%;
+  height: 52%;
+}
+/* No fill on hover: the item only grows (see Dock.tsx). */
+.dock-item:hover {
+  color: #ffffff;
+}
+.dock-item.is-active {
+  background: var(--dock-active-bg);
+  color: var(--dock-active-icon);
+}
+.dock-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  width: 3px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 2px;
+  background: var(--dock-active-icon);
+}
+.dock-item:focus-visible,
+.dock-logo:focus-visible,
+.dock-avatar:focus-visible,
+.dock-theme button:focus-visible {
+  outline: 2px solid var(--dock-active-icon);
+  outline-offset: 2px;
+}
+.dock-item:active {
+  transform: scale(0.97);
+}
+
+.dock-badge {
+  position: absolute;
+  top: 4%;
+  right: 2%;
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  background: #22d3ee;
+  color: #06202a;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--dock-bg);
+}
+
+/* The name beside the hovered or focused item, clear of its scaled size. */
+.dock-label {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--dock-item) / 2 + 12px);
+  /* Pushed clear of the magnified item with a transform, so nothing re-lays out. */
+  transform: translate(calc(var(--dock-item) * (var(--label-scale, 1) - 1) / 2), -50%);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--dock-bg);
+  color: #f8fafc;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease, transform 180ms var(--ease-out);
+}
+.dock-label.is-visible {
+  opacity: 1;
+}
+
+/* Account area: larger than the nav items. */
+.dock-account {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.dock-avatar {
+  position: relative;
+  width: calc(var(--dock-item) + 4px);
+  height: calc(var(--dock-item) + 4px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: #1e293b;
+  color: #f8fafc;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dock-online {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--pass);
+  box-shadow: 0 0 0 2px var(--dock-bg);
+}
+.dock-theme {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.dock-theme button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--dock-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.dock-theme button svg {
+  width: 16px;
+  height: 16px;
+}
+.dock-theme button[aria-pressed='true'] {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* Context and account menus */
+.dock-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--dock-bg);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 40px -12px rgba(2, 6, 23, 0.6);
+}
+.dock-account-menu {
+  left: 112px;
+  bottom: 24px;
+}
+.dock-submenu {
+  position: absolute;
+  left: calc(100% + 4px);
+  top: 40px;
+}
+.dock-menu-heading {
+  padding: 8px 10px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a3b1c6;
+  font-size: 0.8125rem;
+}
+.dock-menu-item {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #e2e8f0;
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+.dock-menu-item:hover,
+.dock-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+.dock-menu-caret {
+  width: 6px;
+  height: 6px;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.dock-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Room for the dock beside the page content: the dock ends at 101px, the page
+   starts 52px later. */
+.workspace-content {
+  padding-left: 153px;
+}
+
+/* Phones: a bottom bar without magnification. */
+@media (max-width: 760px) {
+  .dock {
+    --dock-item: 44px;
+    top: auto;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    transform: none;
+    width: auto;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: 22px;
+    overflow-x: auto;
+  }
+  .dock-group {
+    flex-direction: row;
+  }
+  .dock-logo,
+  .dock-separator,
+  .dock-label,
+  .dock-theme,
+  .dock-logout {
+    display: none;
+  }
+  .dock-account {
+    flex-direction: row;
+    padding: 0;
+    border: none;
+  }
+  .dock-item.is-active::before {
+    left: 50%;
+    top: auto;
+    bottom: -4px;
+    width: 14px;
+    height: 3px;
+    margin: 0 0 0 -7px;
+  }
+  .dock-account-menu {
+    left: auto;
+    right: 12px;
+    bottom: 76px;
+  }
+  .workspace-content {
+    padding-left: 0;
+    padding-bottom: 72px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dock-item,
+  .dock-scale,
+  .dock-label,
+  .dock-theme button {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .dock,
+  .dock-menu {
+    background: #0f172a;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
