@@ -384,7 +384,8 @@ export default function AdminPanel() {
   const [data, setData] = useState<any[] | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string; leaving?: boolean } | null>(null);
+  const toastTimers = useRef<number[]>([]);
   const [dirty, setDirty] = useState(false);
   const [query, setQuery] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -392,8 +393,14 @@ export default function AdminPanel() {
   const [revealSelected, setRevealSelected] = useState(false);
 
   const showToast = (type: "success" | "error", msg: string) => {
+    // A new toast replaces the current one and restarts its timers (an older timer
+    // must not cut the new message short). It slides out the way it came in.
+    toastTimers.current.forEach(window.clearTimeout);
     setToast({ type, msg });
-    setTimeout(() => setToast(null), 3500);
+    toastTimers.current = [
+      window.setTimeout(() => setToast(current => (current ? { ...current, leaving: true } : current)), 3300),
+      window.setTimeout(() => setToast(null), 3500),
+    ];
   };
 
   const managesRules = activeFile === "rules.json";
@@ -522,7 +529,7 @@ export default function AdminPanel() {
   return (
     <div className="page-shell ad-page">
       {toast && (
-        <div className={`ad-toast is-${toast.type}`} role={toast.type === "error" ? "alert" : "status"}>{toast.msg}</div>
+        <div className={`ad-toast is-${toast.type}${toast.leaving ? " is-leaving" : ""}`} role={toast.type === "error" ? "alert" : "status"}>{toast.msg}</div>
       )}
 
       <header className="ad-head">

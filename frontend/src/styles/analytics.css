@@ -572,3 +572,14 @@
     transition: none;
   }
 }
+
+/* ── Motion: the live quality score arrives seconds after the page; fade it in
+   so it doesn't pop over the loader. Opacity only: these are numbers to read. */
+.an-quality-top,
+.an-confusion,
+.an-quality-table {
+  transition: opacity 240ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+  }
+}

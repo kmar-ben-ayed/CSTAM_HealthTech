@@ -685,3 +685,20 @@
     transition-duration: 1ms;
   }
 }
+
+/* ── Motion: the key and the active-rule pill appear in place, not abruptly. */
+.ov-legend,
+.ov-active-filter {
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ov-legend,
+  .ov-active-filter {
+    transform: none;
+    transition: opacity 150ms ease;
+  }
+}

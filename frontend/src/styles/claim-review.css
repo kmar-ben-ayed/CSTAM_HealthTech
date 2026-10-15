@@ -972,3 +972,44 @@
     transition: none;
   }
 }
+
+/* ── Motion ─────────────────────────────────────────────────────────────
+   Entrances only, via @starting-style: browsers without it show the state
+   instantly, which is the right fallback. All use --ease-out. */
+
+/* The recorded decision replaces the hold buttons: settle it in so the
+   change from "holding" to "recorded" reads as one step. */
+.claim-decided {
+  transition: opacity 220ms var(--ease-out), transform 220ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Opening a findings group: rows fade down from the header instead of
+   snapping in. Short, because groups are toggled many times a day. */
+.findings-rows {
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* Selecting another finding remounts the inspector: a near-imperceptible
+   fade so the panel's content doesn't teleport. Opacity only, no movement. */
+.inspector {
+  transition: opacity 120ms var(--ease-out);
+  @starting-style {
+    opacity: 0.4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .claim-decided,
+  .findings-rows {
+    transform: none;
+    transition: opacity 150ms ease;
+  }
+}

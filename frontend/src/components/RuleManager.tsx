@@ -464,7 +464,10 @@ function QuestionFlow({ questions, busy, onAnswer }: {
           Question {Math.min(index, questions.length - 1) + 1} of {questions.length}
         </span>
       </div>
-      <QuestionCard key={current.question_id} question={current} busy={busy} onAnswer={answer => onAnswer(current.question_id, answer)} />
+      {/* Keyed so each new question mounts fresh and plays its entrance (see .ad-question-body). */}
+      <div className="ad-question-body" key={current.question_id}>
+        <QuestionCard question={current} busy={busy} onAnswer={answer => onAnswer(current.question_id, answer)} />
+      </div>
       {questions.length > 1 && (
         <div className="ad-question-nav">
           <button type="button" className="ad-link" disabled={index === 0} onClick={() => setIndex(index - 1)}>Previous question</button>

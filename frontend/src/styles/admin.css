@@ -590,11 +590,21 @@
   box-shadow: var(--ad-shadow);
   font-size: 0.875rem;
   font-weight: 600;
-  animation: ad-toast-in 200ms var(--ease-out);
+  /* A transition, not a keyframe: a second toast fired quickly retargets instead of restarting. */
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+/* Leaves the way it came, a little faster than it arrived. */
+.ad-toast.is-leaving {
+  opacity: 0;
+  transform: translateY(8px);
+  transition-duration: 160ms;
 }
 .ad-toast.is-success { background: color-mix(in srgb, var(--pass-text) 12%, var(--surface)); color: var(--pass-text); }
 .ad-toast.is-error { background: color-mix(in srgb, var(--fail-text) 12%, var(--surface)); color: var(--fail-text); }
-@keyframes ad-toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 /* Narrow screens: list above the editor, each still scrolling on its own */
 @media (max-width: 1000px) {
@@ -614,5 +624,33 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ad-btn, .ad-tab, .ad-item, .ad-choice, .ad-option { transition: none; }
-  .ad-toast { animation: none; }
+  .ad-toast,
+  .ad-toast.is-leaving { transform: none; transition: opacity 150ms ease; }
+}
+
+/* ── Motion ─────────────────────────────────────────────────────────────
+   Entrances via @starting-style (no support = instant, which is fine). */
+
+/* Each new question settles in, so answering one visibly moves you on. */
+.ad-question-body {
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Progress steps change state rather than jump. */
+.ad-steps li {
+  transition: border-top-color 200ms ease, color 200ms ease;
+}
+.ad-step-n {
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ad-question-body {
+    transform: none;
+    transition: opacity 150ms ease;
+  }
 }
