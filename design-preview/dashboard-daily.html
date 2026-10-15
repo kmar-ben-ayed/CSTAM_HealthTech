@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClaimGuard Dashboard — soft mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Nunito:wght@400;600;700&family=Manrope:wght@400;500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --font:'Plus Jakarta Sans',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;
+  --canvas:#f4f6f8;--surface:rgba(255,255,255,.72);--surface-solid:#fff;--ink:#1c2230;--muted:#6b7385;--line:rgba(28,34,48,.07);
+  --accent:#0e7490;--accent-soft:#e3f3f6;--pass:#16a34a;--pass-soft:#e6f6ec;--fail:#dc2626;--fail-soft:#fdeceb;--unable:#d97706;--unable-soft:#fdf2e2;--na:#64748b;
+  --shadow:0 1px 2px rgba(28,34,48,.04),0 8px 24px -8px rgba(28,34,48,.10);--shadow-lift:0 2px 4px rgba(28,34,48,.05),0 18px 40px -12px rgba(28,34,48,.18);
+  --r:22px}
+:root[data-theme=dark]{
+  --canvas:#0e1116;--surface:rgba(28,33,42,.72);--surface-solid:#1a1f27;--ink:#eef1f5;--muted:#9aa3b2;--line:rgba(255,255,255,.07);
+  --accent:#22d3ee;--accent-soft:rgba(34,211,238,.12);--pass:#4ade80;--pass-soft:rgba(74,222,128,.12);--fail:#f87171;--fail-soft:rgba(248,113,113,.12);--unable:#fbbf24;--unable-soft:rgba(251,191,36,.12);
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -8px rgba(0,0,0,.5);--shadow-lift:0 18px 40px -12px rgba(0,0,0,.6)}
+*{box-sizing:border-box;margin:0}
+body{font:15px/1.55 var(--font);color:var(--ink);background:var(--canvas);padding:28px 16px 64px;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(900px 500px at 85% -10%,var(--accent-soft),transparent 60%),radial-gradient(700px 400px at -10% 30%,var(--pass-soft),transparent 60%);background-attachment:fixed}
+.page{max-width:1140px;margin:0 auto;display:grid;gap:20px}
+.tools{position:fixed;top:12px;right:12px;display:flex;gap:6px;z-index:5}
+.tools select,.tools button{font:500 12px var(--font);background:var(--surface-solid);color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;box-shadow:var(--shadow)}
+.card{background:var(--surface);backdrop-filter:blur(20px) saturate(160%);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:24px;
+  transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s cubic-bezier(.2,.8,.2,1)}
+@media (hover:hover){.card.lift:hover{transform:translateY(-2px);box-shadow:var(--shadow-lift)}}
+.eyebrow{font-weight:600;font-size:12.5px;color:var(--muted);letter-spacing:.01em}
+.mono{font-family:var(--mono);font-size:.92em}
+/* hero */
+.hero{display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:center;padding:32px}
+.shield-wrap{width:112px;height:112px;border-radius:32px;display:grid;place-items:center;background:var(--accent-soft)}
+.shield .body{fill:var(--surface-solid);stroke:var(--accent);stroke-width:4}
+.shield .core{fill:var(--accent-soft)}.shield .orbit{stroke:var(--accent);stroke-opacity:.3;stroke-width:1.5;fill:none}
+.shield .sym{stroke:var(--accent);stroke-width:5;stroke-linecap:round;fill:none}.shield .sat{fill:var(--accent)}
+h1{font-weight:700;font-size:clamp(28px,4.2vw,44px);line-height:1.08;letter-spacing:-.025em;margin:6px 0 8px;text-wrap:balance}
+h1 em{font-style:normal;color:var(--accent)}
+.sub{color:var(--muted);font-size:16px;max-width:52ch}
+.actions{display:flex;flex-direction:column;gap:10px}
+.btn{font:600 14px var(--font);border:0;border-radius:999px;padding:13px 22px;min-height:46px;cursor:pointer;white-space:nowrap;
+  transition:transform .1s ease-out,background .2s ease-out}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--ink);color:var(--canvas)}
+.btn.ghost{background:var(--surface-solid);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.btn:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+.stat{display:flex;flex-direction:column;gap:14px}
+.stat .icon{width:40px;height:40px;border-radius:14px;display:grid;place-items:center}
+.stat .icon svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.stat .n{font-weight:700;font-size:38px;line-height:1;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.t-accent{background:var(--accent-soft);color:var(--accent)}.t-fail{background:var(--fail-soft);color:var(--fail)}.t-unable{background:var(--unable-soft);color:var(--unable)}.t-pass{background:var(--pass-soft);color:var(--pass)}
+/* main grid */
+.grid{display:grid;grid-template-columns:1.6fr 1fr;gap:20px;align-items:start}
+.side{display:grid;gap:20px}
+.head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px}
+h2{font-weight:700;font-size:18px;letter-spacing:-.01em}
+a{color:var(--accent);text-decoration:none;font-weight:600;font-size:14px}
+.queue{list-style:none;padding:0;display:grid;gap:6px}
+.queue li{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;padding:12px 14px;border-radius:16px;transition:background .2s ease-out}
+@media (hover:hover){.queue li:hover{background:var(--accent-soft)}}
+.queue .who{display:flex;flex-direction:column;line-height:1.3}
+.queue .who b{font-family:var(--mono);font-weight:500;font-size:14px}
+.queue .who span{color:var(--muted);font-size:13px}
+.counts{display:flex;gap:6px;font-size:12.5px;font-weight:600}
+.counts span{padding:4px 10px;border-radius:999px}
+.go{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--surface-solid);box-shadow:inset 0 0 0 1px var(--line);color:var(--ink)}
+.go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+/* outcomes donut-free: soft segmented rows */
+.outcomes{display:grid;gap:10px}
+.oc{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;font-size:14px}
+.oc .track{grid-column:1/-1;height:8px;border-radius:999px;background:var(--line);overflow:hidden}
+.oc .fill{height:100%;border-radius:999px;transform-origin:left;animation:grow .9s cubic-bezier(.2,.8,.2,1) both}
+.oc .v{font-weight:600;font-variant-numeric:tabular-nums}
+@keyframes grow{from{transform:scaleX(0)}}
+.rules{list-style:none;padding:0;display:grid;gap:4px}
+.rules li{display:flex;align-items:center;gap:12px;padding:8px 0}
+.rules .code{font-family:var(--mono);font-size:12px;padding:4px 8px;border-radius:8px;background:var(--accent-soft);color:var(--accent)}
+.rules .name{flex:1}.rules .v{font-weight:700;font-variant-numeric:tabular-nums}
+.feed{list-style:none;padding:0;display:grid;gap:2px}
+.feed li{display:flex;gap:12px;padding:10px 0;font-size:14px}
+.feed .dotline{width:28px;height:28px;flex:none;border-radius:10px;display:grid;place-items:center}
+.feed .dotline svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.feed time{display:block;color:var(--muted);font-size:12px}
+.meta{color:var(--muted);font-size:13px;margin:-8px 0 14px}
+/* entrance */
+.rise{animation:rise .6s cubic-bezier(.2,.8,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+@media (prefers-reduced-motion:reduce){.rise,.oc .fill{animation:none}.card{transition:none}}
+@media (prefers-reduced-transparency:reduce){.card{background:var(--surface-solid);backdrop-filter:none}}
+@media (max-width:860px){.hero{grid-template-columns:1fr;padding:24px}.actions{flex-direction:row;flex-wrap:wrap}.stats{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}
+  .queue li{grid-template-columns:auto 1fr auto}.queue .counts{display:none}}
+</style>
+</head>
+<body>
+<div class="tools">
+  <select aria-label="Font" onchange="document.documentElement.style.setProperty('--font',this.value)">
+    <option value="'Plus Jakarta Sans',system-ui,sans-serif">Plus Jakarta Sans</option>
+    <option value="'Nunito',system-ui,sans-serif">Nunito (softest)</option>
+    <option value="'Manrope',system-ui,sans-serif">Manrope</option>
+    <option value="'DM Sans',system-ui,sans-serif">DM Sans</option>
+    <option value="system-ui,-apple-system,sans-serif">System (SF on Mac)</option>
+  </select>
+  <button onclick="const d=document.documentElement;d.dataset.theme=d.dataset.theme==='dark'?'light':'dark'">Theme</button>
+</div>
+
+<main class="page">
+  <section class="card hero rise">
+    <div class="shield-wrap">
+      <svg class="shield" width="84" height="84" viewBox="0 0 120 120" role="img" aria-label="Needs review">
+        <path class="body" d="M60 12c12 0 24 4 34 10v34c0 24-15 42-34 50-19-8-34-26-34-50V22c10-6 22-10 34-10z"/>
+        <circle class="core" cx="60" cy="58" r="21"/>
+        <path class="orbit" d="M8 58 a52 13 0 1 0 104 0 a52 13 0 1 0 -104 0"/>
+        <g class="sym"><path d="M45 58c4.5-7.5 25.5-7.5 30 0-4.5 7.5-25.5 7.5-30 0z"/><circle cx="60" cy="58" r="4" style="fill:var(--accent)"/></g>
+        <circle class="sat" r="4"><animateMotion dur="5s" repeatCount="indefinite" path="M8 58 a52 13 0 1 0 104 0 a52 13 0 1 0 -104 0"/></circle>
+      </svg>
+    </div>
+    <div>
+      <div class="eyebrow">Thursday, 15 October</div>
+      <h1>Good morning, Kmar.<br><em>14 claims</em> are waiting for you.</h1>
+      <p class="sub">The last run accepted 498 of 500 claims. Most flags come from one rule, so this should go quickly.</p>
+    </div>
+    <div class="actions">
+      <button class="btn primary">Open review queue</button>
+      <button class="btn ghost">Ingest data</button>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="card stat lift rise" style="animation-delay:.05s"><div class="icon t-accent"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div><div><div class="n" data-n="500">500</div><div class="eyebrow">Claims processed</div></div></div>
+    <div class="card stat lift rise" style="animation-delay:.1s"><div class="icon t-fail"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v5M12 16h.01"/></svg></div><div><div class="n" data-n="14">14</div><div class="eyebrow">Need a decision</div></div></div>
+    <div class="card stat lift rise" style="animation-delay:.15s"><div class="icon t-unable"><svg viewBox="0 0 24 24"><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 16h.01"/><circle cx="12" cy="12" r="8"/></svg></div><div><div class="n" data-n="3">3</div><div class="eyebrow">Unable to assess</div></div></div>
+    <div class="card stat lift rise" style="animation-delay:.2s"><div class="icon t-pass"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg></div><div><div class="n" data-n="41">41</div><div class="eyebrow">Issues detected</div></div></div>
+  </section>
+
+  <div class="grid">
+    <section class="card rise" style="animation-delay:.25s">
+      <div class="head"><h2>Up next</h2><a href="#">View all claims</a></div>
+      <ul class="queue">
+        <li><svg width="28" height="28" viewBox="0 0 120 120"><path d="M60 12c12 0 24 4 34 10v34c0 24-15 42-34 50-19-8-34-26-34-50V22c10-6 22-10 34-10z" fill="var(--fail-soft)" stroke="var(--fail)" stroke-width="7"/></svg>
+          <div class="who"><b>CLM-0031</b><span>PRV-118 · 3 Oct 2026</span></div><div class="counts"><span class="t-fail">4 fail</span><span class="t-unable">1 unable</span></div><a class="go" href="#" aria-label="Review CLM-0031"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a></li>
+        <li><svg width="28" height="28" viewBox="0 0 120 120"><path d="M60 12c12 0 24 4 34 10v34c0 24-15 42-34 50-19-8-34-26-34-50V22c10-6 22-10 34-10z" fill="var(--fail-soft)" stroke="var(--fail)" stroke-width="7"/></svg>
+          <div class="who"><b>CLM-0108</b><span>PRV-044 · 2 Oct 2026</span></div><div class="counts"><span class="t-fail">3 fail</span></div><a class="go" href="#" aria-label="Review CLM-0108"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a></li>
+        <li><svg width="28" height="28" viewBox="0 0 120 120"><path d="M60 12c12 0 24 4 34 10v34c0 24-15 42-34 50-19-8-34-26-34-50V22c10-6 22-10 34-10z" fill="var(--fail-soft)" stroke="var(--fail)" stroke-width="7"/></svg>
+          <div class="who"><b>CLM-0077</b><span>PRV-118 · 29 Sep 2026</span></div><div class="counts"><span class="t-fail">2 fail</span><span class="t-unable">1 unable</span></div><a class="go" href="#" aria-label="Review CLM-0077"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a></li>
+        <li><svg width="28" height="28" viewBox="0 0 120 120"><path d="M60 12c12 0 24 4 34 10v34c0 24-15 42-34 50-19-8-34-26-34-50V22c10-6 22-10 34-10z" fill="var(--unable-soft)" stroke="var(--unable)" stroke-width="7"/></svg>
+          <div class="who"><b>CLM-0214</b><span>PRV-009 · 5 Oct 2026</span></div><div class="counts"><span class="t-unable">2 unable</span></div><a class="go" href="#" aria-label="Review CLM-0214"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></a></li>
+      </ul>
+    </section>
+
+    <div class="side">
+      <section class="card rise" style="animation-delay:.3s">
+        <div class="head"><h2>Latest run</h2><span class="mono" style="color:var(--muted)">#482</span></div>
+        <p class="meta">CSV upload · 498 accepted · 2 rejected</p>
+        <div class="outcomes">
+          <div class="oc"><span>Passed</span><span class="v">82%</span><div class="track"><div class="fill" style="width:82%;background:var(--pass)"></div></div></div>
+          <div class="oc"><span>Failed</span><span class="v">13%</span><div class="track"><div class="fill" style="width:13%;background:var(--fail)"></div></div></div>
+          <div class="oc"><span>Unable</span><span class="v">3%</span><div class="track"><div class="fill" style="width:3%;background:var(--unable)"></div></div></div>
+          <div class="oc"><span>N/A</span><span class="v">2%</span><div class="track"><div class="fill" style="width:2%;background:var(--na)"></div></div></div>
+        </div>
+      </section>
+      <section class="card rise" style="animation-delay:.35s">
+        <div class="head"><h2>Rules failing most</h2></div>
+        <ul class="rules">
+          <li><span class="code">R-12</span><span class="name">Duplicate service</span><span class="v">31</span></li>
+          <li><span class="code">R-07</span><span class="name">ICD/CPT mismatch</span><span class="v">18</span></li>
+          <li><span class="code">R-03</span><span class="name">Late submission</span><span class="v">9</span></li>
+        </ul>
+      </section>
+      <section class="card rise" style="animation-delay:.4s">
+        <div class="head"><h2>Recent activity</h2></div>
+        <ul class="feed">
+          <li><span class="dotline t-pass"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg></span><div>You approved <a href="#">CLM-0042</a><time>12 min ago</time></div></li>
+          <li><span class="dotline t-fail"><svg viewBox="0 0 24 24"><path d="M12 7v6M12 17h.01"/></svg></span><div>R-12 flagged <a href="#">CLM-0031</a><time>14 min ago</time></div></li>
+          <li><span class="dotline t-accent"><svg viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6"/></svg></span><div>Run #482 finished<time>56 min ago</time></div></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</main>
+<script>
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+  document.querySelectorAll('[data-n]').forEach(el=>{const n=+el.dataset.n,t0=performance.now()+150;
+    const f=t=>{const p=Math.max(0,Math.min(1,(t-t0)/900)),e=1-Math.pow(1-p,4);el.textContent=Math.round(n*e);if(p<1)requestAnimationFrame(f)};requestAnimationFrame(f)})}
+</script>
+</body>
+</html>

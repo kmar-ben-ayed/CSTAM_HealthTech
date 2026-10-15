@@ -6,7 +6,7 @@
 // the admin corrects becomes a permanent test and the rule is drafted again;
 // it goes live only when the admin confirms.
 
-import React, { useCallback, useEffect, useId, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import ShieldLoader from './ShieldLoader';
 import {
   OUTCOMES,
@@ -39,164 +39,115 @@ type Selection =
 
 const POLL_MS = 2000;
 
-// ------------------------------------------------------------------ styles
+/** What each outcome means, in words an admin can decide on. */
+const OUTCOME_INFO: Record<string, { label: string; hint: string; tone: string }> = {
+  PASS: { label: 'Pass', hint: 'The claim meets this rule.', tone: 'pass' },
+  FAIL: { label: 'Fail', hint: 'The claim breaks this rule.', tone: 'fail' },
+  UNABLE_TO_ASSESS: { label: 'Unable to assess', hint: 'Information the rule needs is missing.', tone: 'unable' },
+  NOT_APPLICABLE: { label: 'Not applicable', hint: "The rule doesn't apply to this claim.", tone: 'na' },
+};
+const outcomeLabel = (outcome: string | null | undefined) => (outcome ? OUTCOME_INFO[outcome]?.label ?? outcome : 'No answer');
 
-const CARD: React.CSSProperties = {
-  background: 'var(--card-bg)',
-  border: '1px solid var(--card-border)',
-  borderRadius: 10,
-  padding: '14px 16px',
-  marginBottom: 14,
-};
-const LABEL: React.CSSProperties = {
-  display: 'block',
-  fontSize: '0.72rem',
-  fontWeight: 600,
-  color: 'var(--text-secondary)',
-  marginBottom: 5,
-  textTransform: 'uppercase',
-  letterSpacing: '0.055em',
-};
-const INPUT: React.CSSProperties = {
-  width: '100%',
-  padding: '9px 13px',
-  borderRadius: 8,
-  border: '1px solid var(--card-border)',
-  background: 'var(--canvas-bg)',
-  color: 'var(--text-primary)',
-  fontSize: '0.875rem',
-  fontFamily: 'inherit',
-  boxSizing: 'border-box',
-};
-const BUTTON: React.CSSProperties = {
-  background: 'transparent',
-  border: '1px solid var(--card-border)',
-  borderRadius: 8,
-  padding: '7px 14px',
-  fontSize: '0.82rem',
-  fontWeight: 600,
-  color: 'var(--text-primary)',
-  cursor: 'pointer',
-};
-const PRIMARY: React.CSSProperties = { ...BUTTON, background: 'var(--accent)', border: '1px solid var(--accent)', color: 'var(--accent-contrast)' };
-const DANGER: React.CSSProperties = { ...BUTTON, background: 'var(--status-fail-bg)', border: '1px solid var(--status-fail-border)', color: 'var(--status-fail-ink)' };
-const PRE: React.CSSProperties = {
-  whiteSpace: 'pre-wrap',
-  fontSize: '0.8rem',
-  lineHeight: 1.55,
-  background: 'var(--canvas-bg)',
-  border: '1px solid var(--card-border)',
-  borderRadius: 8,
-  padding: '10px 12px',
-  margin: 0,
-  color: 'var(--text-primary)',
-};
-
-const OUTCOME_TONE: Record<string, string> = {
-  PASS: 'pass',
-  FAIL: 'fail',
-  UNABLE_TO_ASSESS: 'uta',
-  NOT_APPLICABLE: 'na',
-};
-
-const STATE_LABEL: Record<DraftState, { text: string; tone: string }> = {
-  queued: { text: 'Queued', tone: 'na' },
-  drafting: { text: 'Drafting…', tone: 'review' },
-  checking: { text: 'Checking…', tone: 'review' },
-  awaiting_author: { text: 'Needs your answer', tone: 'uta' },
-  awaiting_confirmation: { text: 'Ready: review and confirm', tone: 'review' },
-  active: { text: 'Active', tone: 'pass' },
-  rejected: { text: 'Rejected', tone: 'fail' },
-  cancelled: { text: 'Cancelled', tone: 'na' },
-};
-
-function Pill({ tone, children }: { tone: string; children: React.ReactNode }) {
-  return (
-    <span style={{
-      display: 'inline-block',
-      padding: '2px 9px',
-      borderRadius: 999,
-      fontSize: '0.72rem',
-      fontWeight: 700,
-      background: `var(--status-${tone}-bg)`,
-      color: `var(--status-${tone}-ink)`,
-      border: `1px solid var(--status-${tone}-border)`,
-      whiteSpace: 'nowrap',
-    }}>
-      {children}
-    </span>
-  );
+function Outcome({ outcome }: { outcome: string | null | undefined }) {
+  const tone = outcome ? OUTCOME_INFO[outcome]?.tone ?? 'na' : 'na';
+  return <span className={`ad-outcome is-${tone}`}>{outcomeLabel(outcome)}</span>;
 }
 
-const OutcomePill = ({ outcome }: { outcome: string | null }) =>
-  outcome ? <Pill tone={OUTCOME_TONE[outcome] ?? 'na'}>{outcome}</Pill> : <Pill tone="na">no answer</Pill>;
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={CARD}>
-      <div style={{ ...LABEL, marginBottom: 10 }}>{title}</div>
-      {children}
-    </div>
-  );
+const STEPS = ['Drafting', 'Your answers', 'Check outcomes', 'Active'];
+function stepOf(state: DraftState): number {
+  if (state === 'awaiting_author') return 1;
+  if (state === 'awaiting_confirmation') return 2;
+  if (state === 'active') return 3;
+  return 0;
 }
+
+const STATE_TEXT: Record<DraftState, string> = {
+  queued: 'Queued',
+  drafting: 'Drafting',
+  checking: 'Checking',
+  awaiting_author: 'Needs your answer',
+  awaiting_confirmation: 'Ready for your check',
+  active: 'Active',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+};
 
 // ------------------------------------------------------------- main panel
 
 export default function RuleManager() {
-  const [rules, setRules] = useState<RuleSummary[]>([]);
+  const [rules, setRules] = useState<RuleSummary[] | null>(null);
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
     listRules().then(setRules).catch(e => setError(e.message));
   }, []);
-
   useEffect(refresh, [refresh]);
 
+  // A new selection starts at the top of the editor, not wherever the last one was scrolled to.
+  const select = (next: Selection) => {
+    setSelection(next);
+    editorRef.current?.scrollTo({ top: 0 });
+  };
+
   const selectedRuleId = selection.kind === 'rule' || selection.kind === 'revise' ? selection.ruleId : null;
+  const shown = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return (rules ?? []).filter(rule => !needle || rule.rule_id.toLowerCase().includes(needle) || rule.title.toLowerCase().includes(needle));
+  }, [rules, query]);
 
   return (
-    <div style={{ display: 'flex', flex: 1, minHeight: 0, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ width: 260, borderRight: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', background: 'var(--canvas-bg)' }}>
-        <div style={{ padding: '13px 15px', borderBottom: '1px solid var(--card-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Rules ({rules.length})</span>
-          <button style={PRIMARY} onClick={() => setSelection({ kind: 'new' })}>+ New rule</button>
+    <div className="ad-workspace">
+      <aside className="ad-list" aria-label="Rules">
+        <div className="ad-list-head">
+          <span>Rules {rules ? `(${rules.length})` : ''}</span>
+          <button type="button" className="ad-btn is-primary is-small" onClick={() => select({ kind: 'new' })}>New rule</button>
         </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: 10 }}>
-          {rules.map(rule => (
+        <label className="ad-search">
+          <span className="visually-hidden">Find a rule</span>
+          <input type="search" placeholder="Find by ID or title" value={query} onChange={event => setQuery(event.target.value)} />
+        </label>
+        <div className="ad-list-body">
+          {!rules ? (
+            <p className="ad-muted">Loading rules…</p>
+          ) : shown.length === 0 ? (
+            <p className="ad-muted">{query ? 'No rule matches.' : 'No rules yet.'}</p>
+          ) : shown.map(rule => (
             <button
               key={rule.rule_id}
-              onClick={() => setSelection({ kind: 'rule', ruleId: rule.rule_id })}
-              style={{
-                width: '100%', textAlign: 'left', padding: '9px 11px', borderRadius: 7, marginBottom: 3, cursor: 'pointer',
-                fontFamily: 'inherit', fontSize: '0.83rem',
-                background: selectedRuleId === rule.rule_id ? 'var(--accent-subtle)' : 'transparent',
-                border: `1px solid ${selectedRuleId === rule.rule_id ? 'var(--accent)' : 'transparent'}`,
-                color: 'var(--text-primary)',
-              }}
+              type="button"
+              className="ad-item"
+              aria-current={selectedRuleId === rule.rule_id || undefined}
+              onClick={() => select({ kind: 'rule', ruleId: rule.rule_id })}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6, alignItems: 'center' }}>
-                <strong>{rule.rule_id}</strong>
-                <Pill tone={rule.status === 'active' ? 'pass' : 'na'}>{rule.status}</Pill>
-              </div>
-              <div style={{ color: 'var(--text-secondary)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{rule.title}</div>
+              <span className="ad-item-top">
+                <span className="ad-mono">{rule.rule_id}</span>
+                <span className={`ad-state is-${rule.status === 'active' ? 'pass' : 'na'}`}>{rule.status === 'active' ? 'Active' : 'Inactive'}</span>
+              </span>
+              <span className="ad-item-sub">{rule.title}</span>
+              {rule.open_draft_id && <span className="ad-item-flag">Draft in progress</span>}
             </button>
           ))}
         </div>
-      </div>
+      </aside>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', minWidth: 0 }}>
-        {error && <div style={{ ...CARD, borderColor: 'var(--status-fail-border)', color: 'var(--status-fail-ink)' }}>{error}</div>}
+      <div className="ad-editor" ref={editorRef}>
+        {error && <p className="ad-error" role="alert">{error}</p>}
         {selection.kind === 'none' && (
-          <p style={{ color: 'var(--text-tertiary)' }}>Select a rule, or write a new one in plain English.</p>
+          <div className="ad-blank">
+            <p>Select a rule to see what it does, or write a new one in plain English.</p>
+            <button type="button" className="ad-btn is-primary" onClick={() => select({ kind: 'new' })}>New rule</button>
+          </div>
         )}
         {selection.kind === 'rule' && (
           <RuleView
             key={selection.ruleId}
             ruleId={selection.ruleId}
-            openDraftId={rules.find(rule => rule.rule_id === selection.ruleId)?.open_draft_id ?? null}
-            onRevise={initial => setSelection({ kind: 'revise', ruleId: selection.ruleId, initial })}
-            onOpenDraft={draftId => setSelection({ kind: 'draft', draftId })}
+            openDraftId={rules?.find(rule => rule.rule_id === selection.ruleId)?.open_draft_id ?? null}
+            onRevise={initial => select({ kind: 'revise', ruleId: selection.ruleId, initial })}
+            onOpenDraft={draftId => select({ kind: 'draft', draftId })}
             onChanged={refresh}
           />
         )}
@@ -205,7 +156,7 @@ export default function RuleManager() {
             key={selection.kind === 'revise' ? selection.ruleId : 'new'}
             ruleId={selection.kind === 'revise' ? selection.ruleId : undefined}
             initial={selection.kind === 'revise' ? selection.initial : undefined}
-            onSubmitted={draft => { refresh(); setSelection({ kind: 'draft', draftId: draft.draft_id }); }}
+            onSubmitted={draft => { refresh(); select({ kind: 'draft', draftId: draft.draft_id }); }}
           />
         )}
         {selection.kind === 'draft' && <DraftView key={selection.draftId} draftId={selection.draftId} onChanged={refresh} />}
@@ -236,44 +187,56 @@ function RuleView({ ruleId, openDraftId, onRevise, onOpenDraft, onChanged }: {
     deactivateRule(ruleId).then(() => { load(); onChanged(); }).catch(e => setError(e.message));
   };
 
-  if (error) return <div style={{ color: 'var(--status-fail-ink)' }}>{error}</div>;
+  if (error) return <p className="ad-error" role="alert">{error}</p>;
   if (!detail) return <ShieldLoader label="Loading the rule…" inline />;
   const { rule, active } = detail;
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+      <header className="ad-editor-head">
         <div>
-          <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{rule.rule_id} · {rule.title}</div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginTop: 3 }}>
-            version {rule.version} · severity {rule.severity} · {active ? `revision ${active.revision} (${active.origin})` : 'not active'}
-          </div>
+          <h2><span className="ad-mono">{rule.rule_id}</span> {rule.title}</h2>
+          <p className="ad-meta">
+            Severity {rule.severity} · version {rule.version} · {active ? `running revision ${active.revision} (${active.origin})` : 'not running'}
+          </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="ad-actions">
           {openDraftId
-            ? <button style={BUTTON} onClick={() => onOpenDraft(openDraftId)}>Open draft in progress</button>
-            : <button style={BUTTON} onClick={() => onRevise({ title: rule.title, severity: rule.severity as RuleText['severity'], logic: rule.logic, corrective_action: rule.corrective_action })}>Revise</button>}
-          {active && <button style={DANGER} onClick={deactivate}>Deactivate</button>}
+            ? <button type="button" className="ad-btn is-primary" onClick={() => onOpenDraft(openDraftId)}>Open draft in progress</button>
+            : <button type="button" className="ad-btn" onClick={() => onRevise({ title: rule.title, severity: rule.severity as RuleText['severity'], logic: rule.logic, corrective_action: rule.corrective_action })}>Revise</button>}
+          {active && <button type="button" className="ad-btn is-danger" onClick={deactivate}>Deactivate</button>}
         </div>
-      </div>
-      <Section title="Rule text"><p style={{ margin: 0, fontSize: '0.875rem' }}>{rule.logic}</p></Section>
-      {active
-        ? <Section title="What the active implementation does"><pre style={PRE}>{active.readback}</pre></Section>
-        : (
-          <Section title="Status">
-            <p style={{ margin: 0, fontSize: '0.875rem' }}>
-              This rule is not running{detail.inactive_reason ? ` (${detail.inactive_reason})` : ''}. Use Revise to draft and check an implementation.
-            </p>
-          </Section>
-        )}
+      </header>
+
+      <section className="ad-section">
+        <h3>Rule</h3>
+        <p className="ad-prose">{rule.logic}</p>
+        {rule.corrective_action && <p className="ad-prose ad-muted">Corrective action: {rule.corrective_action}</p>}
+      </section>
+      {active ? (
+        <section className="ad-section">
+          <h3>What the running implementation does</h3>
+          <pre className="ad-pre">{active.readback}</pre>
+        </section>
+      ) : (
+        <section className="ad-section">
+          <h3>Status</h3>
+          <p className="ad-prose">
+            This rule is not running{detail.inactive_reason ? ` (${detail.inactive_reason})` : ''}. Use Revise to draft and check an implementation.
+          </p>
+        </section>
+      )}
       {detail.history.length > 0 && (
-        <Section title="Activation history">
-          {detail.history.map(entry => (
-            <div key={entry.revision} style={{ fontSize: '0.8rem', marginBottom: 4 }}>
-              r{entry.revision} · {entry.origin} · {new Date(entry.activated_at).toLocaleString()} · by {entry.activated_by}
-            </div>
-          ))}
-        </Section>
+        <details className="ad-fold">
+          <summary>Activation history ({detail.history.length})</summary>
+          <ul className="ad-history">
+            {detail.history.map(entry => (
+              <li key={entry.revision}>
+                <span className="ad-mono">r{entry.revision}</span> {entry.origin} · {new Date(entry.activated_at).toLocaleString('en-GB')} · by {entry.activated_by}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </>
   );
@@ -290,41 +253,58 @@ function RuleForm({ ruleId, initial, onSubmitted }: { ruleId?: string; initial?:
   const id = useId();
   const set = (field: keyof RuleText) => (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setRule({ ...rule, [field]: event.target.value });
+  // The server requires all three; a corrective action shorter than 3 characters is rejected.
+  const ready = rule.title.trim() && rule.logic.trim() && rule.corrective_action.trim().length >= 3;
 
-  const submit = () => {
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!ready) return;
     setBusy(true);
     setError(null);
     submitDraft(rule, ruleId).then(onSubmitted).catch(e => setError(e.message)).finally(() => setBusy(false));
   };
 
   return (
-    <>
-      <div style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 6 }}>{ruleId ? `Revise ${ruleId}` : 'New rule'}</div>
-      <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: 0 }}>
-        Write the rule in plain English. Say what makes a claim fail, which claims it applies to, and what happens when
-        information is missing. The rule id is assigned by the server.
-      </p>
-      <div style={{ marginBottom: 12 }}>
-        <label style={LABEL} htmlFor={`${id}-title`}>Title</label>
-        <input id={`${id}-title`} style={INPUT} value={rule.title} onChange={set('title')} />
+    <form onSubmit={submit}>
+      <header className="ad-editor-head">
+        <div>
+          <h2>{ruleId ? <>Revise <span className="ad-mono">{ruleId}</span></> : 'New rule'}</h2>
+          <p className="ad-meta">
+            Write the rule in plain English: what makes a claim fail, which claims it applies to, and what happens when
+            information is missing. The server assigns the rule ID.
+          </p>
+        </div>
+      </header>
+      <div className="ad-form-grid">
+        <label className="ad-field">
+          <span>Title</span>
+          <input id={`${id}-title`} value={rule.title} onChange={set('title')} required autoFocus={!ruleId} />
+        </label>
+        <label className="ad-field">
+          <span>Severity</span>
+          <select id={`${id}-severity`} value={rule.severity} onChange={set('severity')}>
+            <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+          </select>
+        </label>
       </div>
-      <div style={{ marginBottom: 12 }}>
-        <label style={LABEL} htmlFor={`${id}-severity`}>Severity</label>
-        <select id={`${id}-severity`} style={INPUT} value={rule.severity} onChange={set('severity')}>
-          <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
-        </select>
+      <label className="ad-field">
+        <span>Rule</span>
+        <textarea id={`${id}-logic`} rows={6} value={rule.logic} onChange={set('logic')} required
+          placeholder="Example: For services listed as needing authorization, the claim fails when no authorization reference is given. If the service list is missing, the rule cannot be assessed." />
+      </label>
+      <label className="ad-field">
+        <span>Corrective action</span>
+        <textarea id={`${id}-action`} rows={3} value={rule.corrective_action} onChange={set('corrective_action')} required minLength={3}
+          aria-describedby={`${id}-action-hint`}
+          placeholder="Example: Add the authorization reference for the imaging line and resubmit the claim." />
+        <em id={`${id}-action-hint`}>What the provider must do to fix a claim that fails this rule. Shown to reviewers with every failure.</em>
+      </label>
+      {error && <p className="ad-error" role="alert">{error}</p>}
+      <div className="ad-bar">
+        <span className="ad-muted">The drafter will ask you about anything unclear before the rule can run.</span>
+        <button type="submit" className="ad-btn is-primary" disabled={busy || !ready}>{busy ? 'Submitting…' : 'Draft and check'}</button>
       </div>
-      <div style={{ marginBottom: 12 }}>
-        <label style={LABEL} htmlFor={`${id}-logic`}>Rule</label>
-        <textarea id={`${id}-logic`} style={{ ...INPUT, minHeight: 120 }} value={rule.logic} onChange={set('logic')} />
-      </div>
-      <div style={{ marginBottom: 12 }}>
-        <label style={LABEL} htmlFor={`${id}-action`}>Corrective action</label>
-        <textarea id={`${id}-action`} style={{ ...INPUT, minHeight: 60 }} value={rule.corrective_action} onChange={set('corrective_action')} />
-      </div>
-      {error && <div style={{ color: 'var(--status-fail-ink)', marginBottom: 10, fontSize: '0.85rem' }}>{error}</div>}
-      <button style={PRIMARY} disabled={busy} onClick={submit}>{busy ? 'Submitting…' : 'Draft and check'}</button>
-    </>
+    </form>
   );
 }
 
@@ -333,6 +313,7 @@ function RuleForm({ ruleId, initial, onSubmitted }: { ruleId?: string; initial?:
 function DraftView({ draftId, onChanged }: { draftId: string; onChanged: () => void }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
     getDraft(draftId).then(setDraft).catch(e => setError(e.message));
@@ -346,207 +327,446 @@ function DraftView({ draftId, onChanged }: { draftId: string; onChanged: () => v
     return () => window.clearInterval(timer);
   }, [running, load]);
 
-  const act = (action: Promise<Draft>) =>
-    action.then(updated => { setDraft(updated); onChanged(); }).catch(e => setError(e.message));
+  const act = (action: () => Promise<Draft>) => {
+    setBusy(true);
+    setError(null);
+    return action()
+      .then(updated => { setDraft(updated); onChanged(); })
+      .catch(e => setError(e.message))
+      .finally(() => setBusy(false));
+  };
 
-  if (error) return <div style={{ color: 'var(--status-fail-ink)' }}>{error}</div>;
-  if (!draft) return <ShieldLoader label="Loading the draft…" inline />;
-  const label = STATE_LABEL[draft.state];
+  if (!draft) return error ? <p className="ad-error" role="alert">{error}</p> : <ShieldLoader label="Loading the draft…" inline />;
   const open = draft.questions.filter(question => question.answer === null);
+  const step = stepOf(draft.state);
+  const ended = draft.state === 'rejected' || draft.state === 'cancelled';
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+      <header className="ad-editor-head">
         <div>
-          <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>{draft.rule_id} · {draft.rule.title}</div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginTop: 3 }}>
-            {draft.kind === 'new' ? 'New rule' : 'Revision'} drafted for {draft.author} · round {draft.rounds}
-          </div>
+          <h2><span className="ad-mono">{draft.rule_id}</span> {draft.rule.title}</h2>
+          <p className="ad-meta">
+            {draft.kind === 'new' ? 'New rule' : 'Revision'} by {draft.author} · round {draft.rounds} · <strong>{STATE_TEXT[draft.state]}</strong>
+          </p>
         </div>
-        <Pill tone={label.tone}>{label.text}</Pill>
-      </div>
+      </header>
 
-      <Section title="Rule text"><p style={{ margin: 0, fontSize: '0.875rem' }}>{draft.rule.logic}</p></Section>
-
-      {draft.state === 'rejected' && (
-        <Section title="Why it was rejected"><p style={{ margin: 0, fontSize: '0.875rem' }}>{draft.outcome_reason} Nothing was activated.</p></Section>
+      {!ended && (
+        <ol className="ad-steps" aria-label="Progress">
+          {STEPS.map((label, index) => (
+            <li key={label} className={index < step || draft.state === 'active' ? 'is-done' : index === step ? 'is-current' : ''} aria-current={index === step ? 'step' : undefined}>
+              <span className="ad-step-n">{index + 1}</span>{label}
+            </li>
+          ))}
+        </ol>
       )}
 
-      {open.map(question => (
-        <QuestionCard key={question.question_id} question={question}
-          onAnswer={answer => act(answerQuestion(draft.draft_id, question.question_id, answer))} />
-      ))}
+      {error && <p className="ad-error" role="alert">{error}</p>}
+
+      {running && (
+        <div className="ad-callout">
+          <ShieldLoader label={draft.state === 'checking' ? 'Checking the drafted rule against test claims…' : 'Drafting an implementation of the rule…'} inline />
+          <p className="ad-muted">This page updates by itself. It can take a minute.</p>
+        </div>
+      )}
+
+      {draft.state === 'rejected' && (
+        <section className="ad-callout is-fail">
+          <h3>Rejected</h3>
+          <p className="ad-prose">{draft.outcome_reason} Nothing was activated.</p>
+        </section>
+      )}
+      {draft.state === 'cancelled' && <p className="ad-callout ad-muted">This draft was cancelled. Nothing was activated.</p>}
+      {draft.state === 'active' && <p className="ad-callout is-pass">This rule is now running on new claims.</p>}
+
+      {open.length > 0 && <QuestionFlow questions={open} busy={busy} onAnswer={(questionId, answer) => act(() => answerQuestion(draft.draft_id, questionId, answer))} />}
+
+      <section className="ad-section">
+        <h3>Rule</h3>
+        <p className="ad-prose">{draft.rule.logic}</p>
+      </section>
+
+      {draft.author_answers.length > 0 && (
+        <details className="ad-fold">
+          <summary>Your earlier answers ({draft.author_answers.length})</summary>
+          <dl className="ad-answers">
+            {draft.author_answers.map((entry, index) => (
+              <div key={index}><dt>{entry.question}</dt><dd>{entry.answer}</dd></div>
+            ))}
+          </dl>
+        </details>
+      )}
 
       {draft.proposal && (
-        <Section title="How the drafter understood the rule">
-          <p style={{ margin: '0 0 6px', fontSize: '0.875rem' }}>{draft.proposal.intent || '—'}</p>
+        <details className="ad-fold" open={draft.state === 'awaiting_confirmation'}>
+          <summary>How the drafter understood the rule</summary>
+          <p className="ad-prose">{draft.proposal.intent || '—'}</p>
           {draft.proposal.assumptions.length > 0 && (
-            <ul style={{ margin: 0, paddingLeft: 18, fontSize: '0.84rem' }}>
-              {draft.proposal.assumptions.map(assumption => <li key={assumption}>{assumption}</li>)}
-            </ul>
+            <ul className="ad-list-plain">{draft.proposal.assumptions.map(assumption => <li key={assumption}>{assumption}</li>)}</ul>
           )}
-        </Section>
+        </details>
       )}
 
       {draft.report && (
         <ReportView
           report={draft.report}
-          onCorrect={draft.state === 'awaiting_confirmation'
-            ? corrections => act(correctDraft(draft.draft_id, corrections))
-            : undefined}
+          onCorrect={draft.state === 'awaiting_confirmation' ? corrections => act(() => correctDraft(draft.draft_id, corrections)) : undefined}
+          busy={busy}
         />
       )}
 
       {draft.examples.length > 0 && (
-        <Section title="Outcomes you confirmed (kept as permanent tests)">
-          {draft.examples.map(example => (
-            <div key={example.description} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.82rem', marginBottom: 4 }}>
-              <OutcomePill outcome={example.expected_status} /> {example.description}
-            </div>
-          ))}
-        </Section>
+        <details className="ad-fold">
+          <summary>Outcomes you set, kept as permanent tests ({draft.examples.length})</summary>
+          <ul className="ad-cases">
+            {draft.examples.map(example => (
+              <li key={example.description}><span>{example.description}</span><Outcome outcome={example.expected_status} /></li>
+            ))}
+          </ul>
+        </details>
       )}
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-        {draft.state === 'awaiting_confirmation' && (
-          <button style={PRIMARY} onClick={() => act(confirmDraft(draft.draft_id))}>I checked the outcomes: activate the rule</button>
-        )}
-        {!['active', 'rejected', 'cancelled'].includes(draft.state) && (
-          <button style={BUTTON} onClick={() => act(cancelDraft(draft.draft_id))}>Cancel draft</button>
-        )}
-      </div>
+      {!['active', 'rejected', 'cancelled'].includes(draft.state) && (
+        <div className="ad-bar is-sticky">
+          <button type="button" className="ad-btn" disabled={busy} onClick={() => {
+            if (window.confirm('Cancel this draft? Nothing will be activated.')) act(() => cancelDraft(draft.draft_id));
+          }}>Cancel draft</button>
+          {draft.state === 'awaiting_confirmation' && (
+            <button type="button" className="ad-btn is-primary" disabled={busy} onClick={() => act(() => confirmDraft(draft.draft_id))}>
+              {busy ? 'Activating…' : 'Outcomes checked: activate the rule'}
+            </button>
+          )}
+        </div>
+      )}
     </>
   );
 }
 
-function QuestionCard({ question, onAnswer }: { question: Question; onAnswer: (answer: string) => void }) {
-  const [text, setText] = useState('');
-  const [showClaim, setShowClaim] = useState(false);
+// ------------------------------------------------------------- questions
 
-  if (question.kind === 'clarification' || !question.case) {
-    const options = question.options ?? [];
+/** Open questions one at a time, so the admin always knows how many are left. */
+function QuestionFlow({ questions, busy, onAnswer }: {
+  questions: Question[];
+  busy: boolean;
+  onAnswer: (questionId: string, answer: string) => Promise<void>;
+}) {
+  const [index, setIndex] = useState(0);
+  const current = questions[Math.min(index, questions.length - 1)];
+  // Answering removes the question from the list; stay on the same position.
+  useEffect(() => { if (index > questions.length - 1) setIndex(Math.max(0, questions.length - 1)); }, [questions.length, index]);
+
+  return (
+    <section className="ad-question" aria-labelledby="ad-question-title">
+      <div className="ad-question-head">
+        <h3 id="ad-question-title">The drafter needs your answer</h3>
+        <span className="ad-question-count">
+          Question {Math.min(index, questions.length - 1) + 1} of {questions.length}
+        </span>
+      </div>
+      <QuestionCard key={current.question_id} question={current} busy={busy} onAnswer={answer => onAnswer(current.question_id, answer)} />
+      {questions.length > 1 && (
+        <div className="ad-question-nav">
+          <button type="button" className="ad-link" disabled={index === 0} onClick={() => setIndex(index - 1)}>Previous question</button>
+          <button type="button" className="ad-link" disabled={index >= questions.length - 1} onClick={() => setIndex(index + 1)}>Skip for now</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function OutcomeChoices({ options, busy, highlight, onPick }: {
+  options: string[];
+  busy: boolean;
+  /** Outcome -> who chose it, shown under that option. */
+  highlight?: Record<string, string>;
+  onPick: (outcome: string) => void;
+}) {
+  // Keys 1-4 pick an outcome, unless the admin is typing.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (busy || event.altKey || event.ctrlKey || event.metaKey || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      const pick = options[Number(event.key) - 1];
+      if (pick) { event.preventDefault(); onPick(pick); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [options, busy, onPick]);
+
+  return (
+    <div className="ad-choices" role="group" aria-label="Choose the right outcome">
+      {options.map((outcome, index) => {
+        const info = OUTCOME_INFO[outcome];
+        return (
+          <button key={outcome} type="button" className={`ad-choice is-${info?.tone ?? 'na'}`} disabled={busy} onClick={() => onPick(outcome)}>
+            <span className="ad-choice-key" aria-hidden="true">{index + 1}</span>
+            <span className="ad-choice-text">
+              <strong>{info?.label ?? outcome}</strong>
+              <span>{info?.hint}</span>
+              {highlight?.[outcome] && <em>{highlight[outcome]}</em>}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function QuestionCard({ question, busy, onAnswer }: { question: Question; busy: boolean; onAnswer: (answer: string) => void }) {
+  const [text, setText] = useState('');
+  const options = question.options ?? [];
+  const ownWords = (
+    <form className="ad-own" onSubmit={event => { event.preventDefault(); if (text.trim()) onAnswer(text.trim()); }}>
+      <label className="ad-field">
+        <span>{options.length ? 'Or answer in your own words' : 'Your answer'}</span>
+        <textarea rows={2} value={text} onChange={event => setText(event.target.value)} />
+      </label>
+      <button type="submit" className={`ad-btn${options.length ? '' : ' is-primary'}`} disabled={busy || !text.trim()}>
+        {busy ? 'Sending…' : 'Send answer'}
+      </button>
+    </form>
+  );
+
+  // A test claim where two readings of the rule disagree: the admin picks the right outcome.
+  if (question.case) {
+    const testCase = question.case;
+    const highlight: Record<string, string> = {};
+    if (testCase.drafts_say) {
+      for (const [outcome, n] of Object.entries(testCase.drafts_say)) highlight[outcome] = `${n} draft${n === 1 ? '' : 's'} chose this`;
+    } else {
+      if (testCase.drafted_rule_says) highlight[testCase.drafted_rule_says] = 'The drafted rule says this';
+      if (testCase.independent_reading_says) {
+        highlight[testCase.independent_reading_says] = highlight[testCase.independent_reading_says]
+          ? 'Both readings say this'
+          : 'The second reading says this';
+      }
+    }
+    const options = testCase.options?.length ? testCase.options : OUTCOMES;
     return (
-      <Section title="The drafter asks">
-        <p style={{ margin: '0 0 10px', fontSize: '0.875rem' }}>{question.text}</p>
-        {options.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-            {options.map(option => (
-              <button key={option} style={{ ...BUTTON, textAlign: 'left' }} onClick={() => onAnswer(option)}>{option}</button>
-            ))}
-          </div>
+      <>
+        <p className="ad-prose"><strong>{question.text || 'What should the rule decide for this claim?'}</strong></p>
+        <p className="ad-prose">{testCase.description}</p>
+        {testCase.independent_reading_reason && (
+          <p className="ad-muted">Second reading's reason: {testCase.independent_reading_reason}</p>
         )}
-        <label style={LABEL} htmlFor={`answer-${question.question_id}`}>{options.length ? 'Or answer in your own words' : 'Your answer'}</label>
-        <textarea id={`answer-${question.question_id}`} style={{ ...INPUT, minHeight: 50, marginBottom: 8 }} value={text} onChange={event => setText(event.target.value)} />
-        <button style={options.length ? BUTTON : PRIMARY} disabled={!text.trim()} onClick={() => onAnswer(text)}>Send this answer</button>
-      </Section>
+        <ClaimSummary claim={testCase.claim} />
+        <OutcomeChoices options={options} busy={busy} highlight={highlight} onPick={onAnswer} />
+        <p className="ad-hint">Press 1–{options.length} to choose. Your answer becomes a permanent test for the rule.</p>
+      </>
     );
   }
 
-  const testCase = question.case;
-  const draftsSay = testCase.drafts_say ? Object.entries(testCase.drafts_say) : null;
-  return (
-    <Section title={draftsSay ? 'The drafts disagree: what is the right outcome?' : 'Two readings disagree: what is the right outcome?'}>
-      <p style={{ margin: '0 0 8px', fontSize: '0.875rem' }}>{testCase.description}</p>
-      {draftsSay ? (
-        // Several independent drafts of the rule decide this claim differently; the answer picks the rule.
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: '0.82rem', marginBottom: 10 }}>
-          {draftsSay.map(([outcome, count]) => (
-            <span key={outcome}>
-              <OutcomePill outcome={outcome} /> {count} draft{count === 1 ? '' : 's'}
-            </span>
+  // One answer for a whole situation (e.g. a field is missing) covering several test claims.
+  if (question.kind === 'situation' && question.situation) {
+    return (
+      <>
+        <p className="ad-prose"><strong>{question.text}</strong></p>
+        <p className="ad-prose">{question.situation.text}</p>
+        <details className="ad-fold is-inner">
+          <summary>Test claims this covers ({question.situation.cases.length})</summary>
+          <ul className="ad-cases">
+            {question.situation.cases.map(item => (
+              <li key={item.description}><span>{item.description}</span><span className="ad-muted">Draft says <Outcome outcome={item.drafted_rule_says} /></span></li>
+            ))}
+          </ul>
+        </details>
+        <div className="ad-options">
+          {options.map(option => (
+            <button key={option} type="button" className="ad-option" disabled={busy} onClick={() => onAnswer(option)}>{option}</button>
           ))}
         </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 10px', fontSize: '0.82rem', marginBottom: 10 }}>
-          <span>Drafted rule says</span><span><OutcomePill outcome={testCase.drafted_rule_says ?? null} /></span>
-          <span>Independent reading says</span>
-          <span><OutcomePill outcome={testCase.independent_reading_says ?? null} /> <span style={{ color: 'var(--text-secondary)' }}>{testCase.independent_reading_reason}</span></span>
+        {ownWords}
+      </>
+    );
+  }
+
+  // Drafting stopped: use a draft that passed every check, keep drafting, or cancel.
+  if (question.kind === 'choice') {
+    const ACTION_HINT: Record<string, string> = {
+      use: 'Use this draft. It passed every check.',
+      more: 'Keep drafting with another round.',
+      examples: 'Add example outcomes, then draft again.',
+      cancel: 'Stop here. Nothing is activated.',
+    };
+    return (
+      <>
+        <p className="ad-prose"><strong>{question.text}</strong></p>
+        <div className="ad-options">
+          {options.map((option, index) => {
+            const action = question.choice?.[index]?.action;
+            return (
+              <button key={option} type="button" className={`ad-option${action === 'cancel' ? ' is-danger' : ''}`} disabled={busy} onClick={() => onAnswer(option)}>
+                <strong>{option}</strong>
+                {action && <span>{ACTION_HINT[action]}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </>
+    );
+  }
+
+  // A clarification in words, with suggested answers.
+  return (
+    <>
+      <p className="ad-prose"><strong>{question.text}</strong></p>
+      {options.length > 0 && (
+        <div className="ad-options">
+          {options.map(option => (
+            <button key={option} type="button" className="ad-option" disabled={busy} onClick={() => onAnswer(option)}>{option}</button>
+          ))}
         </div>
       )}
-      <button style={{ ...BUTTON, marginBottom: 10 }} onClick={() => setShowClaim(!showClaim)}>{showClaim ? 'Hide' : 'Show'} the test claim</button>
-      {showClaim && <pre style={{ ...PRE, maxHeight: 260, overflow: 'auto', marginBottom: 10 }}>{JSON.stringify(testCase.claim, null, 2)}</pre>}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {OUTCOMES.map((outcome: Outcome) => (
-          <button key={outcome} style={BUTTON} onClick={() => onAnswer(outcome)}>{outcome}</button>
-        ))}
-      </div>
-    </Section>
+      {ownWords}
+    </>
   );
 }
+
+/** "service_code" -> "Service code", "claim_id" -> "Claim ID". */
+const fieldName = (key: string) =>
+  key.split('_').map((word, index) => (word === 'id' ? 'ID' : index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word)).join(' ');
+
+/** A test claim as a reviewer reads it: the key fields and the service lines, raw JSON on request. */
+function ClaimSummary({ claim }: { claim: Record<string, unknown> }) {
+  const [raw, setRaw] = useState(false);
+  const scalars = Object.entries(claim).filter(([, value]) => value === null || ['string', 'number', 'boolean'].includes(typeof value));
+  const lines = Array.isArray(claim.lines) ? (claim.lines as Record<string, unknown>[]) : [];
+  const lineKeys = [...new Set(lines.flatMap(line => Object.keys(line)))];
+  const others = Object.entries(claim).filter(([key, value]) => key !== 'lines' && value !== null && typeof value === 'object');
+  const show = (value: unknown) => (value === null || value === undefined || value === '' ? <span className="ad-missing">missing</span> : String(value));
+
+  return (
+    <div className="ad-claim">
+      <div className="ad-claim-head">
+        <h4>Test claim</h4>
+        <button type="button" className="ad-link" onClick={() => setRaw(!raw)}>{raw ? 'Show summary' : 'Show raw JSON'}</button>
+      </div>
+      {raw ? (
+        <pre className="ad-pre is-scroll">{JSON.stringify(claim, null, 2)}</pre>
+      ) : (
+        <>
+          <dl className="ad-claim-fields">
+            {scalars.map(([key, value]) => <div key={key}><dt>{fieldName(key)}</dt><dd>{show(value)}</dd></div>)}
+          </dl>
+          {lines.length > 0 && (
+            <div className="ad-scroll-x">
+              <table className="ad-claim-lines">
+                <thead><tr>{lineKeys.map(key => <th key={key} scope="col">{fieldName(key)}</th>)}</tr></thead>
+                <tbody>
+                  {lines.map((line, index) => (
+                    <tr key={index}>{lineKeys.map(key => <td key={key}>{typeof line[key] === 'object' && line[key] !== null ? JSON.stringify(line[key]) : show(line[key])}</td>)}</tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {others.map(([key, value]) => (
+            <details key={key} className="ad-fold is-inner">
+              <summary>{fieldName(key)} {Array.isArray(value) ? `(${value.length})` : ''}</summary>
+              <pre className="ad-pre">{JSON.stringify(value, null, 2)}</pre>
+            </details>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- report
 
 // The independent reading is a second model's opinion: shown as advice, never a failure.
 const ADVISORY_CHECK = 'independent_reading';
 
 type Verdict = { case_id: string; expected_status: Outcome };
 
-function ReportView({ report, onCorrect }: { report: CheckReport; onCorrect?: (corrections: Verdict[]) => void }) {
+function ReportView({ report, onCorrect, busy }: { report: CheckReport; onCorrect?: (corrections: Verdict[]) => void; busy: boolean }) {
   const statuses = report.impact.statuses ?? {};
-  const codeChecksPassed = report.passed || Boolean(report.code_checks_passed);
+  const failed = report.checks.filter(check => !check.passed && check.name !== ADVISORY_CHECK);
+  const advice = report.checks.filter(check => !check.passed && check.name === ADVISORY_CHECK);
   const secondReading = report.cases.some(testCase => testCase.oracle_used !== false);
+
   return (
     <>
-      <Section title={codeChecksPassed ? 'Code checks: all passed' : 'Checks'}>
-        {report.checks.map(check => {
-          const advisory = check.name === ADVISORY_CHECK && !check.passed;
-          return (
-            <div key={check.name} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: '0.82rem', marginBottom: 5 }}>
-              <Pill tone={check.passed ? 'pass' : advisory ? 'review' : 'fail'}>{check.passed ? 'passed' : advisory ? 'advice' : 'failed'}</Pill>
-              <strong>{check.name.replace(/_/g, ' ')}</strong>
-              <span style={{ color: 'var(--text-secondary)' }}>{check.detail}</span>
-            </div>
-          );
-        })}
-      </Section>
+      <details className="ad-fold" open={failed.length > 0}>
+        <summary>
+          Code checks:{' '}
+          <span className={failed.length ? 'ad-text-fail' : 'ad-text-pass'}>
+            {report.checks.length - failed.length - advice.length} of {report.checks.length} passed
+          </span>
+          {advice.length > 0 && <span className="ad-muted"> · {advice.length} advice</span>}
+        </summary>
+        <ul className="ad-checks">
+          {report.checks.map(check => {
+            const advisory = check.name === ADVISORY_CHECK && !check.passed;
+            return (
+              <li key={check.name}>
+                <span className={check.passed ? 'ad-text-pass' : advisory ? 'ad-text-review' : 'ad-text-fail'}>
+                  {check.passed ? 'Passed' : advisory ? 'Advice' : 'Failed'}
+                </span>
+                <strong>{check.name.replace(/_/g, ' ')}</strong>
+                <span className="ad-muted">{check.detail}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+
       {report.notes && report.notes.length > 0 && (
-        <Section title="Worth a look: part of the rule may be missing">
-          {report.notes.map(note => (
-            <div key={note} style={{ fontSize: '0.8rem', padding: '4px 0', color: 'var(--text-secondary)' }}>{note}</div>
-          ))}
-        </Section>
+        <section className="ad-callout is-review">
+          <h3>Worth a look: part of the rule may be missing</h3>
+          <ul className="ad-list-plain">{report.notes.map(note => <li key={note}>{note}</li>)}</ul>
+        </section>
       )}
+
       {report.disagreements.length > 0 && (
-        <Section title={`Worth a look: ${report.disagreements.length} test claim${report.disagreements.length === 1 ? '' : 's'} read differently`}>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
-            A second model read the English rule differently on these claims. It is often wrong, so check each one:
-            if the drafted rule is right, confirm; if not, cancel and reword the rule.
-          </div>
-          {report.disagreements.map(testCase => (
-            <div key={testCase.case_id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 8, fontSize: '0.78rem', padding: '5px 0', borderBottom: '1px solid var(--card-border)' }}>
-              <span>
-                {testCase.description}
-                {testCase.oracle_reason && <span style={{ display: 'block', color: 'var(--text-tertiary)' }}>Second reading: {testCase.oracle_reason}</span>}
-              </span>
-              <span title="The drafted rule"><OutcomePill outcome={testCase.spec_status} /></span>
-              <span title="The second reading"><OutcomePill outcome={testCase.oracle_status} /></span>
-            </div>
-          ))}
-        </Section>
-      )}
-      {report.readback && <Section title="What the rule will do (generated from the implementation)"><pre style={PRE}>{report.readback}</pre></Section>}
-      {report.impact.claims ? (
-        <Section title={`Impact on ${report.impact.claims} development claims`}>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {Object.entries(statuses).map(([status, count]) => (
-              <span key={status} style={{ fontSize: '0.82rem' }}><OutcomePill outcome={status} /> {count}</span>
+        <details className="ad-fold" open>
+          <summary>{report.disagreements.length} test claim{report.disagreements.length === 1 ? '' : 's'} read differently by a second model</summary>
+          <p className="ad-muted">The second model is often wrong. If the drafted rule is right, keep its outcome; if not, correct it below or reword the rule.</p>
+          <ul className="ad-cases">
+            {report.disagreements.map(testCase => (
+              <li key={testCase.case_id}>
+                <span>
+                  {testCase.description}
+                  {testCase.oracle_reason && <span className="ad-muted ad-block">Second reading: {testCase.oracle_reason}</span>}
+                </span>
+                <span className="ad-pair"><Outcome outcome={testCase.spec_status} /><span className="ad-muted">vs</span><Outcome outcome={testCase.oracle_status} /></span>
+              </li>
             ))}
-          </div>
-        </Section>
+          </ul>
+        </details>
+      )}
+
+      {report.readback && (
+        <details className="ad-fold">
+          <summary>What the rule will do (generated from the implementation)</summary>
+          <pre className="ad-pre">{report.readback}</pre>
+        </details>
+      )}
+
+      {report.impact.claims ? (
+        <section className="ad-section">
+          <h3>Impact on {report.impact.claims} development claims</h3>
+          <p className="ad-impact">
+            {Object.entries(statuses).map(([status, n]) => <span key={status}><Outcome outcome={status} /> {n}</span>)}
+          </p>
+        </section>
       ) : null}
+
       {report.cases.length > 0 && (onCorrect
-        ? <CaseCheck key={report.readback} cases={report.cases} onCorrect={onCorrect} />
+        ? <CaseCheck key={report.readback} cases={report.cases} onCorrect={onCorrect} busy={busy} />
         : (
-          <Section title={`Generated test claims (${report.cases.length})`}>
-            <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+          <details className="ad-fold">
+            <summary>Generated test claims ({report.cases.length})</summary>
+            <ul className="ad-cases">
               {report.cases.map(testCase => (
-                <div key={testCase.case_id} style={{ display: 'grid', gridTemplateColumns: secondReading ? '1fr auto auto' : '1fr auto', gap: 8, fontSize: '0.78rem', padding: '4px 0', borderBottom: '1px solid var(--card-border)' }}>
+                <li key={testCase.case_id}>
                   <span>{testCase.description}</span>
-                  <OutcomePill outcome={testCase.spec_status} />
-                  {secondReading && <OutcomePill outcome={testCase.oracle_status} />}
-                </div>
+                  <span className="ad-pair"><Outcome outcome={testCase.spec_status} />{secondReading && <><span className="ad-muted">vs</span><Outcome outcome={testCase.oracle_status} /></>}</span>
+                </li>
               ))}
-            </div>
-            {secondReading && <div style={{ fontSize: '0.74rem', color: 'var(--text-tertiary)', marginTop: 6 }}>Columns: drafted rule, independent reading.</div>}
-          </Section>
+            </ul>
+          </details>
         ))}
     </>
   );
@@ -555,60 +775,65 @@ function ReportView({ report, onCorrect }: { report: CheckReport; onCorrect?: (c
 // The author checks what the drafted rule decides on each generated test claim
 // and corrects any outcome. Corrections become permanent tests for the rule and
 // send it back to the drafter; the rule must then reproduce every one of them.
-function CaseCheck({ cases, onCorrect }: { cases: CheckReport['cases']; onCorrect: (corrections: Verdict[]) => void }) {
+function CaseCheck({ cases, onCorrect, busy }: { cases: CheckReport['cases']; onCorrect: (corrections: Verdict[]) => void; busy: boolean }) {
   const [verdicts, setVerdicts] = useState<Record<string, Outcome>>({});
+  const [onlyFlagged, setOnlyFlagged] = useState(false);
   const changed = cases.filter(testCase => verdicts[testCase.case_id] && verdicts[testCase.case_id] !== testCase.spec_status);
+  const isFlagged = (testCase: CheckReport['cases'][number]) =>
+    testCase.oracle_used !== false && !!testCase.oracle_status && testCase.oracle_status !== testCase.spec_status;
+  const flaggedCount = cases.filter(isFlagged).length;
+  const shown = onlyFlagged ? cases.filter(isFlagged) : cases;
 
   return (
-    <Section title={`Check the outcomes (${cases.length} generated test claims)`}>
-      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
-        This is what the drafted rule decides. Change any outcome that is wrong: your answer becomes a permanent
-        test and the rule is drafted again until it matches.
+    <section className="ad-section">
+      <div className="ad-section-head">
+        <h3>Check the outcomes ({cases.length} test claims)</h3>
+        {flaggedCount > 0 && (
+          <label className="ad-toggle">
+            <input type="checkbox" checked={onlyFlagged} onChange={event => setOnlyFlagged(event.target.checked)} />
+            Only the {flaggedCount} worth a look
+          </label>
+        )}
       </div>
-      <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-        {cases.map(testCase => {
-          const verdict = verdicts[testCase.case_id] ?? testCase.spec_status;
+      <p className="ad-muted">
+        This is what the drafted rule decides. Change any outcome that is wrong: your answer becomes a permanent test and
+        the rule is drafted again until it matches.
+      </p>
+      <ul className="ad-cases is-check">
+        {shown.map(testCase => {
+          const verdict = verdicts[testCase.case_id] ?? (testCase.spec_status as Outcome);
           const isChanged = verdict !== testCase.spec_status;
-          const flagged = testCase.oracle_used !== false && testCase.oracle_status && testCase.oracle_status !== testCase.spec_status;
           return (
-            <div key={testCase.case_id} style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr auto',
-              gap: 10,
-              alignItems: 'center',
-              fontSize: '0.8rem',
-              padding: '6px 8px',
-              borderBottom: '1px solid var(--card-border)',
-              background: isChanged ? 'var(--status-uta-bg)' : 'transparent',
-            }}>
+            <li key={testCase.case_id} className={isChanged ? 'is-changed' : undefined}>
               <span>
                 {testCase.description}
-                {flagged && <span style={{ display: 'block', color: 'var(--text-tertiary)' }}>Second reading says {testCase.oracle_status}: worth a look</span>}
+                {isFlagged(testCase) && <span className="ad-muted ad-block">Second reading says {outcomeLabel(testCase.oracle_status)}: worth a look</span>}
+                {isChanged && <span className="ad-block ad-text-review">Was {outcomeLabel(testCase.spec_status)}</span>}
               </span>
               <select
                 aria-label={`Outcome for: ${testCase.description}`}
                 value={verdict}
                 onChange={event => setVerdicts(current => ({ ...current, [testCase.case_id]: event.target.value as Outcome }))}
-                style={{ ...INPUT, width: 'auto', padding: '5px 8px', fontWeight: isChanged ? 700 : 500 }}
               >
-                {OUTCOMES.map((outcome: Outcome) => <option key={outcome} value={outcome}>{outcome}</option>)}
+                {OUTCOMES.map((outcome: Outcome) => <option key={outcome} value={outcome}>{outcomeLabel(outcome)}</option>)}
               </select>
-            </div>
+            </li>
           );
         })}
-      </div>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
-        <button
-          style={changed.length ? PRIMARY : BUTTON}
-          disabled={!changed.length}
-          onClick={() => onCorrect(changed.map(testCase => ({ case_id: testCase.case_id, expected_status: verdicts[testCase.case_id] })))}
-        >
-          {changed.length ? `Send ${changed.length} correction${changed.length === 1 ? '' : 's'} and redraft` : 'No corrections'}
-        </button>
-        {changed.length > 0 && (
-          <button style={BUTTON} onClick={() => setVerdicts({})}>Undo changes</button>
-        )}
-      </div>
-    </Section>
+      </ul>
+      {changed.length > 0 && (
+        <div className="ad-bar">
+          <button type="button" className="ad-btn" onClick={() => setVerdicts({})}>Undo changes</button>
+          <button
+            type="button"
+            className="ad-btn is-primary"
+            disabled={busy}
+            onClick={() => onCorrect(changed.map(testCase => ({ case_id: testCase.case_id, expected_status: verdicts[testCase.case_id] })))}
+          >
+            {busy ? 'Sending…' : `Send ${changed.length} correction${changed.length === 1 ? '' : 's'} and redraft`}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion, useMotionTemplate, useMotionValue, useSpring, useReducedMotion } from 'framer-motion';
 import '../styles/cursor.css';
 
 // ── Custom cursor ──────────────────────────────────────────────────────────
-// A hollow circle that trails the pointer on a soft spring and a dot that
-// follows it closely. It never captures the pointer, it does not render on
-// touch devices, and over text fields it steps aside for the native caret.
+// A dot that sits exactly on the pointer and a hollow circle that follows it
+// on a fast, critically damped spring: it catches up within a few frames and
+// never overshoots. It never captures the pointer, it does not render on touch
+// devices, and over text fields it steps aside for the native caret.
 
 export interface CustomCursorProps {
   circleSize?: number;
@@ -14,8 +15,6 @@ export interface CustomCursorProps {
   dotColor?: string;
   circleStiffness?: number;
   circleDamping?: number;
-  dotStiffness?: number;
-  dotDamping?: number;
   circleBorderWidth?: number;
 }
 
@@ -43,10 +42,8 @@ function Cursor({
   dotSize = 9,
   circleColor = 'rgb(34, 211, 238)',
   dotColor = 'rgb(34, 211, 238)',
-  circleStiffness = 80,
-  circleDamping = 15,
-  dotStiffness = 320,
-  dotDamping = 31,
+  circleStiffness = 1000,
+  circleDamping = 64,
   circleBorderWidth = 1,
 }: CustomCursorProps) {
   const reduceMotion = useReducedMotion();
@@ -54,21 +51,40 @@ function Cursor({
   const y = useMotionValue(-100);
   const circleX = useSpring(x, { stiffness: circleStiffness, damping: circleDamping });
   const circleY = useSpring(y, { stiffness: circleStiffness, damping: circleDamping });
-  const dotX = useSpring(x, { stiffness: dotStiffness, damping: dotDamping });
-  const dotY = useSpring(y, { stiffness: dotStiffness, damping: dotDamping });
-  const [visible, setVisible] = useState(false);
-  const [overText, setOverText] = useState(false);
+  const [shown, setShown] = useState(false);
+  const shownRef = useRef(false);
 
   useEffect(() => {
     document.documentElement.classList.add('has-custom-cursor');
+    let lastTarget: EventTarget | null = null;
+    let overText = false;
     const onMove = (event: PointerEvent) => {
       if (event.pointerType !== 'mouse') return;
       x.set(event.clientX);
       y.set(event.clientY);
-      setVisible(true);
-      setOverText(event.target instanceof Element && event.target.closest(TEXT_FIELD) !== null);
+      // Only look up the target when it changes, and only touch React state when
+      // visibility actually flips, so moving the mouse never re-renders anything.
+      if (event.target !== lastTarget) {
+        lastTarget = event.target;
+        overText = event.target instanceof Element && event.target.closest(TEXT_FIELD) !== null;
+      }
+      const next = !overText;
+      if (next && !shownRef.current) {
+        // Appearing (page load, back into the window, off a text field): start
+        // the circle on the pointer instead of flying in from where it was.
+        circleX.jump(event.clientX);
+        circleY.jump(event.clientY);
+      }
+      if (next !== shownRef.current) {
+        shownRef.current = next;
+        setShown(next);
+      }
     };
-    const onLeave = () => setVisible(false);
+    const onLeave = () => {
+      lastTarget = null;
+      shownRef.current = false;
+      setShown(false);
+    };
     window.addEventListener('pointermove', onMove, { passive: true });
     document.documentElement.addEventListener('pointerleave', onLeave);
     return () => {
@@ -76,13 +92,12 @@ function Cursor({
       window.removeEventListener('pointermove', onMove);
       document.documentElement.removeEventListener('pointerleave', onLeave);
     };
-  }, [x, y]);
+  }, [x, y, circleX, circleY]);
 
-  const shown = visible && !overText;
-  // With reduced motion both parts sit exactly on the pointer, without trailing.
+  // With reduced motion the circle also sits exactly on the pointer.
   // A full transform string keeps the movement on the GPU, unlike Motion's x/y shorthands.
   const circleTransform = useMotionTemplate`translate3d(${reduceMotion ? x : circleX}px, ${reduceMotion ? y : circleY}px, 0)`;
-  const dotTransform = useMotionTemplate`translate3d(${reduceMotion ? x : dotX}px, ${reduceMotion ? y : dotY}px, 0)`;
+  const dotTransform = useMotionTemplate`translate3d(${x}px, ${y}px, 0)`;
 
   return (
     <div className="custom-cursor" aria-hidden="true" style={{ opacity: shown ? 1 : 0 }}>

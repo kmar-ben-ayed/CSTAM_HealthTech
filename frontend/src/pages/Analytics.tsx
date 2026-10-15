@@ -1,441 +1,705 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import ShieldLoader from '../components/ShieldLoader';
+import { ApiError } from '../api/client';
+import { getAuditEvents, type BackendAuditEvent } from '../api/audit';
+import { getDataset, getIngestedClaims, type BackendClaim, type DatasetResponse, type RuleResult } from '../api/claims';
+import { claimStatus, displayName, loadCardContext, timeAgo, type ClaimStatus } from '../api/claimCards';
+import { getQuality, type QualityMetrics, type QualityReport } from '../api/quality';
+import { onlyActive } from '../api/reviewQueue';
+import { listRules } from '../api/rules';
+import '../styles/analytics.css';
+
+// ── Analytics ──────────────────────────────────────────────────────────────
+// Everything here is counted from the ingested claims and their rule results
+// (active rules only), the audit trail, and a live score of the engine against
+// the development ground truth. Period, policy and provider narrow the claims;
+// the quality section is a fixed benchmark and ignores them.
 
 interface AnalyticsProps {
   onNavigate: (page: string) => void;
 }
 
-/* ─── SVG CHART HELPERS ─────────────────────────────────────────────────────── */
-
-const VOLUME_DATA = [
-  { date: 'Sep 1', claims: 28 }, { date: 'Sep 3', claims: 34 }, { date: 'Sep 5', claims: 42 },
-  { date: 'Sep 7', claims: 38 }, { date: 'Sep 9', claims: 51 }, { date: 'Sep 11', claims: 47 },
-  { date: 'Sep 13', claims: 55 }, { date: 'Sep 15', claims: 62 }, { date: 'Sep 17', claims: 58 },
-  { date: 'Sep 19', claims: 71 }, { date: 'Sep 21', claims: 65 }, { date: 'Sep 23', claims: 74 },
-  { date: 'Sep 25', claims: 82 }, { date: 'Sep 27', claims: 78 }, { date: 'Sep 29', claims: 88 },
-];
-
-const UTA_TREND_DATA = [
-  { date: 'Sep 1', pct: 5.2 }, { date: 'Sep 5', pct: 6.1 }, { date: 'Sep 9', pct: 4.8 },
-  { date: 'Sep 13', pct: 5.5 }, { date: 'Sep 17', pct: 4.2 }, { date: 'Sep 21', pct: 3.9 },
-  { date: 'Sep 25', pct: 4.8 }, { date: 'Sep 29', pct: 4.3 },
-];
-
-function AreaChart({ data, color, fillColor, width = 600, height = 160 }: {
-  data: { date: string; claims: number }[];
-  color: string;
-  fillColor: string;
-  width?: number;
-  height?: number;
-}) {
-  const pad = { top: 10, right: 20, bottom: 28, left: 42 };
-  const w = width - pad.left - pad.right;
-  const h = height - pad.top - pad.bottom;
-  const maxVal = Math.max(...data.map(d => d.claims));
-  const minVal = 0;
-
-  const toX = (i: number) => pad.left + (i / (data.length - 1)) * w;
-  const toY = (v: number) => pad.top + h - ((v - minVal) / (maxVal - minVal)) * h;
-
-  const pts = data.map((d, i) => `${toX(i)},${toY(d.claims)}`).join(' ');
-  const areaPath = `M ${toX(0)},${toY(0)} ${data.map((d, i) => `L ${toX(i)},${toY(d.claims)}`).join(' ')} L ${toX(data.length - 1)},${pad.top + h} L ${toX(0)},${pad.top + h} Z`;
-
-  const gridLines = 4;
-
-  return (
-    <svg width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
-      {/* Grid lines */}
-      {Array.from({ length: gridLines }).map((_, i) => {
-        const y = pad.top + (i / (gridLines - 1)) * h;
-        const val = Math.round(maxVal - (i / (gridLines - 1)) * (maxVal - minVal));
-        return (
-          <g key={i}>
-            <line x1={pad.left} y1={y} x2={pad.left + w} y2={y} stroke="var(--canvas-bg-secondary)" strokeWidth="1" />
-            <text x={pad.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="var(--text-tertiary)" fontFamily="var(--font-sans)">{val}</text>
-          </g>
-        );
-      })}
-
-      {/* X-axis labels — show every 3rd */}
-      {data.filter((_, i) => i % 3 === 0).map((d, idx) => {
-        const origIdx = idx * 3;
-        return (
-          <text key={d.date} x={toX(origIdx)} y={height - 4} textAnchor="middle" fontSize="10" fill="var(--text-tertiary)" fontFamily="var(--font-sans)">{d.date}</text>
-        );
-      })}
-
-      {/* Area fill */}
-      <path d={areaPath} fill={fillColor} />
-      {/* Line */}
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Data dots — endpoints only */}
-      {[data[0], data[data.length - 1]].map((d, i) => {
-        const idx = i === 0 ? 0 : data.length - 1;
-        return <circle key={i} cx={toX(idx)} cy={toY(d.claims)} r="3" fill={color} />;
-      })}
-    </svg>
-  );
+interface Loaded {
+  claims: BackendClaim[];
+  results: Map<string, RuleResult[]>;
+  ruleTitles: Map<string, string>;
+  providerNames: Map<string, string>;
+  audit: BackendAuditEvent[];
+  auditTotal: number;
 }
 
-function LineChart({ data, color, width = 300, height = 80 }: {
-  data: { date: string; pct: number }[];
-  color: string;
-  width?: number;
-  height?: number;
-}) {
-  const pad = { top: 6, right: 12, bottom: 6, left: 12 };
-  const w = width - pad.left - pad.right;
-  const h = height - pad.top - pad.bottom;
-  const maxVal = Math.max(...data.map(d => d.pct)) + 1;
-  const minVal = Math.max(0, Math.min(...data.map(d => d.pct)) - 1);
-
-  const toX = (i: number) => pad.left + (i / (data.length - 1)) * w;
-  const toY = (v: number) => pad.top + h - ((v - minVal) / (maxVal - minVal)) * h;
-
-  const pts = data.map((d, i) => `${toX(i)},${toY(d.pct)}`).join(' ');
-  const area = `M ${toX(0)},${pad.top + h} ${data.map((d, i) => `L ${toX(i)},${toY(d.pct)}`).join(' ')} L ${toX(data.length - 1)},${pad.top + h} Z`;
-
-  return (
-    <svg width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-      <path d={area} fill={`color-mix(in srgb, ${color} 8%, transparent)`} />
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function HorizontalBar({ label, ruleId, count, maxCount, color, onRuleClick }: {
-  label: string; ruleId: string; count: number; maxCount: number; color: string; onRuleClick: (id: string) => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const pct = (count / maxCount) * 100;
-
-  return (
-    <div
-      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', cursor: 'default' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent)', minWidth: 36 }}>{ruleId}</span>
-      <span style={{ fontSize: '0.8125rem', color: 'var(--text-primary)', minWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-      <div style={{ flex: 1, position: 'relative', height: 8, background: 'var(--canvas-bg-secondary)', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width 0.3s ease' }} />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 70, justifyContent: 'flex-end' }}>
-        <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', minWidth: 28, textAlign: 'right' }}>{count}</span>
-        {hovered && (
-          <button
-            onClick={() => onRuleClick(ruleId)}
-            style={{ background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '0.75rem', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}
-          >
-            View rule →
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const FINDINGS_BY_RULE = [
-  { ruleId: 'R008', label: 'Authorization reference', count: 42, color: 'var(--status-fail-ink)' },
-  { ruleId: 'R003', label: 'Service date validity', count: 31, color: 'var(--status-uta-ink)' },
-  { ruleId: 'R005', label: 'Duplicate service check', count: 18, color: 'var(--status-fail-ink)' },
-  { ruleId: 'R009', label: 'Authorization validity', count: 15, color: 'var(--status-uta-ink)' },
-  { ruleId: 'R004', label: 'Benefit coverage', count: 11, color: 'var(--status-fail-ink)' },
-  { ruleId: 'R013', label: 'Diagnosis–procedure alignment', count: 8, color: 'var(--status-uta-ink)' },
-  { ruleId: 'R002', label: 'Provider eligibility', count: 5, color: 'var(--status-fail-ink)' },
+const ALL = 'all';
+const STATUS_ORDER: ClaimStatus[] = ['Passed', 'Failed', 'Unable to assess', 'Needs review'];
+const STATUS_CLASS: Record<ClaimStatus, string> = {
+  Passed: 'is-pass',
+  Failed: 'is-fail',
+  'Unable to assess': 'is-unable',
+  'Needs review': 'is-review',
+};
+const OUTCOMES = [
+  { status: 'PASS', label: 'Pass', className: 'is-pass' },
+  { status: 'FAIL', label: 'Fail', className: 'is-fail' },
+  { status: 'UNABLE_TO_ASSESS', label: 'Unable to assess', className: 'is-unable' },
+  { status: 'NOT_APPLICABLE', label: 'Not applicable', className: 'is-na' },
+  { status: 'NOT_IMPLEMENTED', label: 'Not run', className: 'is-na' },
+] as const;
+const ACTIONS: Array<{ key: string; label: string; className: string }> = [
+  { key: 'confirm_issue', label: 'Confirmed', className: 'is-fail' },
+  { key: 'dismiss_with_reason', label: 'Dismissed', className: 'is-pass' },
+  { key: 'request_information', label: 'Info requested', className: 'is-unable' },
+  { key: 'mark_corrected_for_recheck', label: 'Corrected', className: 'is-review' },
 ];
 
-const OUTCOME_DATA = [
-  { label: 'PASS', count: 1007, pct: 78.4, color: 'var(--status-pass-ink)', bg: 'var(--status-pass-bg)', border: 'var(--status-pass-border)' },
-  { label: 'NEEDS REVIEW', count: 216, pct: 16.8, color: 'var(--status-review-ink)', bg: 'var(--status-review-bg)', border: 'var(--status-review-border)' },
-  { label: 'UNABLE TO ASSESS', count: 62, pct: 4.8, color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
-  { label: 'FAIL', count: 47, pct: 3.7, color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
-];
-
-const MISSING_EVIDENCE = [
-  { label: 'Authorization reference', pct: 46 },
-  { label: 'Coverage information', pct: 28 },
-  { label: 'Supporting documentation', pct: 17 },
-  { label: 'Rendering provider NPI', pct: 9 },
-];
-
-const DATE_RANGES = ['Last 7 days', 'Last 30 days', 'Last 90 days', 'All time'];
-const DATASETS = ['All datasets', 'Development Suite (10 claims)', 'Meridian Q3 Batch', 'Pacific Medical Batch'];
-const POLICY_OPTIONS = ['All policies', 'EDU-BASIC', 'EDU-PLUS'];
-
-export default function Analytics({ onNavigate }: AnalyticsProps) {
-  const [dateRange, setDateRange] = useState('Last 30 days');
-  const [dataset, setDataset] = useState('All datasets');
-  const [policyFilter, setPolicyFilter] = useState('All policies');
-
-  const kpis = [
-    { label: 'Claims processed', value: '1,284', sub: '+12% vs prior period', subPos: true, color: 'var(--accent)', onClick: () => onNavigate('claims') },
-    { label: 'Validation pass rate', value: '78.4%', sub: 'Of all evaluated claims', subPos: null, color: 'var(--status-pass-ink)', onClick: null },
-    { label: 'Unable to assess', value: '4.8%', sub: 'Missing evidence', subPos: null, color: 'var(--status-uta-ink)', onClick: null },
-    { label: 'Review rate', value: '16.8%', sub: 'Human review required', subPos: null, color: 'var(--status-review-ink)', onClick: () => onNavigate('review-queue') },
-  ];
-
-  const maxFindings = Math.max(...FINDINGS_BY_RULE.map(r => r.count));
-
-  const handleRuleClick = (ruleId: string) => {
-    onNavigate('rules');
+async function loadAnalytics(signal: AbortSignal): Promise<Loaded> {
+  const [dataset, context, rules, audit] = await Promise.all([
+    getIngestedClaims(undefined, signal).catch((cause: unknown): Promise<DatasetResponse> => {
+      if (cause instanceof ApiError && cause.status === 404) return getDataset('development', 500, signal);
+      throw cause;
+    }),
+    loadCardContext(signal),
+    listRules(signal).catch(() => []),
+    getAuditEvents(500, signal).catch(() => ({ total_count: 0, events: [] })),
+  ]);
+  const active = new Set(rules.filter((rule) => rule.status === 'active').map((rule) => rule.rule_id));
+  return {
+    claims: dataset.claims,
+    results: new Map(dataset.claims.map((claim) => [claim.claim_id, onlyActive(dataset.evaluations[claim.claim_id] ?? [], active)])),
+    ruleTitles: new Map(rules.map((rule) => [rule.rule_id, rule.title])),
+    providerNames: context.providerNames,
+    audit: audit.events,
+    auditTotal: audit.total_count,
   };
+}
+
+// ── Formatting ──────────────────────────────────────────────────────────────
+const count = (value: number) => value.toLocaleString('en');
+const share = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : '—');
+const percent = (value: number | null) => (value === null ? '—' : `${(value * 100).toFixed(1)}%`);
+const monthLabel = (month: string) =>
+  new Date(`${month}-01T00:00:00`).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+/** Monday of the week a date falls in, as YYYY-MM-DD. */
+function weekOf(date: string): string {
+  const day = new Date(`${date}T00:00:00`);
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+  return day.toISOString().slice(0, 10);
+}
+
+/** Evidence paths for the same field on different lines count as one field. */
+function fieldOf(path: string): string {
+  return path.replace(/\/\d+(?=\/|$)/g, '/*');
+}
+
+const isMissing = (value: unknown) => value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+
+// ── Small pieces ────────────────────────────────────────────────────────────
+function Card({ title, note, action, children, className = '' }: {
+  title: string;
+  note?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`an-card ${className}`} aria-label={title}>
+      <header className="an-card-head">
+        <div>
+          <h2>{title}</h2>
+          {note && <p>{note}</p>}
+        </div>
+        {action}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function Meter({ value, max, className }: { value: number; max: number; className: string }) {
+  return (
+    <span className="an-meter" aria-hidden="true">
+      <span className={className} style={{ transform: `scaleX(${max ? value / max : 0})` }} />
+    </span>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="an-empty">{children}</p>;
+}
+
+/** Claims per submission week, stacked: passed below, needing a decision above. */
+function WeeklyChart({ weeks }: { weeks: Array<{ week: string; passed: number; waiting: number }> }) {
+  const [active, setActive] = useState<number | null>(null);
+  const width = 720;
+  const height = 200;
+  const pad = { top: 12, right: 8, bottom: 26, left: 36 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const max = Math.max(1, ...weeks.map((week) => week.passed + week.waiting));
+  const step = Math.pow(10, Math.floor(Math.log10(max)));
+  const top = Math.ceil(max / step) * step;
+  const ticks = [0, top / 2, top];
+  const slot = plotW / weeks.length;
+  const barW = Math.min(36, slot * 0.64);
+  const y = (value: number) => pad.top + plotH - (value / top) * plotH;
+  const labelEvery = Math.ceil(weeks.length / 8);
+  const shown = active !== null ? weeks[active] : null;
 
   return (
-    <div className="page-shell">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-        <div>
-          <span className="sc-eyebrow"> Insights</span>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', margin: '12px 0 4px' }}>Analytics</h1>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Understand claim validation trends, rule performance, and review workload over time.</p>
-        </div>
-      </div>
-
-      {/* Scope / filter bar */}
-      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 9, padding: '10px 16px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16, boxShadow: 'var(--card-shadow)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="var(--text-tertiary)" strokeWidth="1.2"/><path d="M7 4v3.5l2 1.5" stroke="var(--text-tertiary)" strokeWidth="1.2" strokeLinecap="round"/></svg>
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>Period</span>
-          <select value={dateRange} onChange={e => setDateRange(e.target.value)} style={{ background: 'transparent', border: 'none', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
-            {DATE_RANGES.map(r => <option key={r}>{r}</option>)}
-          </select>
-        </div>
-        <div style={{ width: 1, height: 18, background: 'var(--canvas-bg-secondary)' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="2" width="11" height="10" rx="2" stroke="var(--text-tertiary)" strokeWidth="1.2"/><path d="M4 6h6M4 8.5h4" stroke="var(--text-tertiary)" strokeWidth="1.2" strokeLinecap="round"/></svg>
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>Dataset</span>
-          <select value={dataset} onChange={e => setDataset(e.target.value)} style={{ background: 'transparent', border: 'none', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
-            {DATASETS.map(r => <option key={r}>{r}</option>)}
-          </select>
-        </div>
-        <div style={{ width: 1, height: 18, background: 'var(--canvas-bg-secondary)' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1l6 2.5v4.5C13 11 10 13.5 7 14 4 13.5 1 11 1 8V3.5L7 1z" stroke="var(--text-tertiary)" strokeWidth="1.2" strokeLinejoin="round"/></svg>
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', fontWeight: 500 }}>Policy</span>
-          <select value={policyFilter} onChange={e => setPolicyFilter(e.target.value)} style={{ background: 'transparent', border: 'none', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'inherit', cursor: 'pointer', outline: 'none' }}>
-            {POLICY_OPTIONS.map(r => <option key={r}>{r}</option>)}
-          </select>
-        </div>
-        <div style={{ marginLeft: 'auto', fontFamily: "var(--font-sans)", fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
-          Showing: <strong style={{ color: 'var(--text-primary)' }}>1,284</strong> claims
-        </div>
-      </div>
-
-      {/* KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
-        {kpis.map(kpi => (
-          <div
-            key={kpi.label}
-            className="kpi-card"
-            onClick={kpi.onClick ? kpi.onClick : undefined}
-            style={{ cursor: kpi.onClick ? 'pointer' : 'default', transition: 'all 0.15s ease', position: 'relative' }}
-            onMouseEnter={e => { if (kpi.onClick) { e.currentTarget.style.boxShadow = 'var(--card-shadow-md)'; e.currentTarget.style.borderColor = 'var(--border)'; } }}
-            onMouseLeave={e => { e.currentTarget.style.boxShadow = 'var(--card-shadow)'; e.currentTarget.style.borderColor = 'var(--border)'; }}
-          >
-            {kpi.onClick && (
-              <div style={{ position: 'absolute', top: 14, right: 14 }}>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="var(--text-tertiary)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </div>
-            )}
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.625rem', fontWeight: 700, color: kpi.color, letterSpacing: '-0.04em', marginBottom: 4 }}>{kpi.value}</div>
-            <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{kpi.label}</div>
-            <div style={{ fontSize: '0.75rem', color: kpi.subPos === true ? 'var(--status-pass-ink)' : kpi.subPos === false ? 'var(--status-fail-ink)' : 'var(--text-tertiary)' }}>{kpi.sub}</div>
-          </div>
+    <div className="an-chart">
+      <svg viewBox={`0 0 ${width} ${height}`} role="group" aria-label="Claims per submission week">
+        {ticks.map((tick) => (
+          <g key={tick}>
+            <line className="an-grid" x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} />
+            <text className="an-axis" x={pad.left - 8} y={y(tick) + 4} textAnchor="end">{count(tick)}</text>
+          </g>
         ))}
-      </div>
-
-      {/* Volume trend — full width */}
-      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px 24px', marginBottom: 16, boxShadow: 'var(--card-shadow)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-          <div>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 2 }}>Claims processed over time</h3>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Daily volume · {dateRange}</p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: 'var(--accent)' }} />
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Claims processed</span>
-          </div>
-        </div>
-        <AreaChart data={VOLUME_DATA} color="var(--accent)" fillColor="var(--accent-subtle)" />
-      </div>
-
-      {/* Two-col row: Outcome distribution + Review workload */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        {/* Outcome distribution */}
-        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 2 }}>Validation outcomes</h3>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Distribution across {(1007 + 216 + 62 + 47).toLocaleString()} evaluated claims</p>
-          </div>
-          <div style={{ padding: '16px 20px' }}>
-            {/* Stacked bar */}
-            <div style={{ display: 'flex', height: 10, borderRadius: 6, overflow: 'hidden', marginBottom: 18 }}>
-              {OUTCOME_DATA.map(o => <div key={o.label} style={{ width: `${o.pct}%`, background: o.color, transition: 'width 0.3s ease' }} />)}
-            </div>
-            {OUTCOME_DATA.map(o => (
-              <div key={o.label} style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 2, background: o.color, flexShrink: 0 }} />
-                  <span style={{ color: 'var(--text-primary)', fontFamily: "var(--font-sans)", fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.03em' }}>{o.label}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: o.color, minWidth: 44, textAlign: 'right' }}>{o.count}</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', minWidth: 40, textAlign: 'right' }}>{o.pct}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Review workload */}
-        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 2 }}>Human review workload</h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Reviewer actions · {dateRange}</p>
-            </div>
-            <button onClick={() => onNavigate('review-queue')} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>View queue</button>
-          </div>
-          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { label: 'Claims requiring review', value: 216, color: 'var(--status-review-ink)', dot: 'var(--status-review)', sub: '16.8% of total' },
-              { label: 'Confirmed findings', value: 148, color: 'var(--status-fail-ink)', dot: 'var(--status-fail)', sub: '68.5% of reviewed' },
-              { label: 'Dismissed findings', value: 42, color: 'var(--status-pass-ink)', dot: 'var(--status-pass)', sub: '19.4% of reviewed' },
-              { label: 'Requests for information', value: 26, color: 'var(--status-uta-ink)', dot: 'var(--status-uta)', sub: '12.0% of reviewed' },
-              { label: 'Re-checks completed', value: 19, color: 'var(--accent)', sub: 'After correction' },
-            ].map(m => (
-              <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: m.dot, flexShrink: 0 }} />
-                  <span style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{m.label}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '1rem', fontWeight: 700, color: m.color }}>{m.value}</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{m.sub}</span>
-                </div>
-              </div>
-            ))}
-            <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', margin: '4px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Avg. time to review</span>
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)' }}>4m 12s</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Findings by rule — full width */}
-      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)', marginBottom: 16 }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 2 }}>Findings by rule</h3>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Total rule-level findings across all evaluated claims. Click a rule to view its definition.</p>
-          </div>
-          <button onClick={() => onNavigate('rules')} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', fontSize: '0.8125rem', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 5 }}>
-            View all rules
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </button>
-        </div>
-        <div style={{ padding: '16px 24px' }}>
-          {FINDINGS_BY_RULE.map(r => (
-            <div key={r.ruleId} style={{ borderBottom: '1px solid var(--card-bg)' }}>
-              <HorizontalBar
-                ruleId={r.ruleId}
-                label={r.label}
-                count={r.count}
-                maxCount={maxFindings}
-                color={r.color}
-                onRuleClick={handleRuleClick}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Two-col row: Unable to assess + Validation quality */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {/* Unable to assess */}
-        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 2 }}>Unable to assess</h3>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>4.8% rate · 62 claims this period</p>
-              </div>
-              <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.6875rem', fontWeight: 700, color: 'var(--status-uta-ink)', background: 'var(--status-uta-bg)', border: '1px solid var(--status-uta-border)', borderRadius: 5, padding: '2px 8px' }}>4.8%</span>
-            </div>
-          </div>
-          <div style={{ padding: '14px 20px 6px' }}>
-            <div style={{ marginBottom: 16 }}>
-              <LineChart data={UTA_TREND_DATA} color="var(--status-uta)" />
-              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', textAlign: 'center', marginTop: 4, fontFamily: "var(--font-sans)" }}>Rate trend · Sep 1 – Sep 29</div>
-            </div>
-            <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', marginBottom: 14 }} />
-            <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>Top missing evidence</div>
-            {MISSING_EVIDENCE.map(m => (
-              <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{m.label}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ width: 60, height: 5, background: 'var(--canvas-bg-secondary)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${m.pct}%`, background: 'var(--status-uta)', borderRadius: 3 }} />
-                  </div>
-                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--status-uta-ink)', minWidth: 32, textAlign: 'right' }}>{m.pct}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Validation quality */}
-        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 2 }}>Validation quality</h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>Based on evaluation runs with ground truth</p>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--status-uta-bg)', border: '1px solid var(--status-uta-border)', borderRadius: 5, padding: '3px 9px', color: 'var(--status-uta-ink)' }}>
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M5 1l4 7H1L5 1z" stroke="currentColor" strokeWidth="1"/><path d="M5 3.5v2.5M5 7.5v.3" stroke="currentColor" strokeWidth="1" strokeLinecap="round"/></svg>
-              <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--status-uta-ink)' }}>Evaluation data</span>
-            </div>
-          </div>
-          <div style={{ padding: '16px 20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
-              {[
-                { label: 'Status accuracy', value: '98.2%', color: 'var(--text-primary)', desc: 'Correct across all claims' },
-                { label: 'Issue precision', value: '97.8%', color: 'var(--status-pass-ink)', desc: 'True positive rate' },
-                { label: 'Issue recall', value: '96.2%', color: 'var(--accent)', desc: 'Sensitivity' },
-                { label: 'Issue F1', value: '97.0%', color: 'var(--status-review-ink)', desc: 'Harmonic mean' },
-              ].map(m => (
-                <div key={m.label} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 7, padding: '12px 14px' }}>
-                  <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.125rem', fontWeight: 700, color: m.color, letterSpacing: '-0.02em', marginBottom: 3 }}>{m.value}</div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 1 }}>{m.label}</div>
-                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{m.desc}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ height: 1, background: 'var(--canvas-bg-secondary)', marginBottom: 14 }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                { label: 'False alarm rate', value: '1.2%', color: 'var(--status-fail-ink)', desc: 'False positives / (FP + TN)' },
-                { label: 'False abstention rate', value: '0.8%', color: 'var(--status-uta-ink)', desc: 'UTA when assessable' },
-              ].map(m => (
-                <div key={m.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--text-primary)' }}>{m.label}</div>
-                    <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>{m.desc}</div>
-                  </div>
-                  <span style={{ fontFamily: "var(--font-sans)", fontSize: '1rem', fontWeight: 700, color: m.color }}>{m.value}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 14, background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
-              <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
-                Metrics based on <strong style={{ color: 'var(--text-primary)' }}>RUN-4817 – RUN-4821</strong> · Ground truth from annotated sample. Numbers are evaluation estimates, not production claims.
-              </div>
-            </div>
-          </div>
-        </div>
+        {weeks.map((week, index) => {
+          const x = pad.left + index * slot + (slot - barW) / 2;
+          const label = new Date(`${week.week}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+          return (
+            <g
+              key={week.week}
+              className={`an-bar${active === index ? ' is-active' : ''}`}
+              tabIndex={0}
+              role="img"
+              aria-label={`Week of ${label}: ${week.passed} passed, ${week.waiting} need a decision`}
+              onMouseEnter={() => setActive(index)}
+              onMouseLeave={() => setActive(null)}
+              onFocus={() => setActive(index)}
+              onBlur={() => setActive(null)}
+            >
+              <rect className="an-bar-hit" x={pad.left + index * slot} y={pad.top} width={slot} height={plotH} />
+              <rect className="is-pass" x={x} y={y(week.passed)} width={barW} height={y(0) - y(week.passed)} rx="2" />
+              <rect className="is-waiting" x={x} y={y(week.passed + week.waiting)} width={barW} height={y(week.passed) - y(week.passed + week.waiting)} rx="2" />
+              {index % labelEvery === 0 && (
+                <text className="an-axis" x={x + barW / 2} y={height - 6} textAnchor="middle">{label}</text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="an-chart-foot">
+        <span className="an-key"><i className="is-pass" />Passed every rule</span>
+        <span className="an-key"><i className="is-waiting" />Needs a decision</span>
+        <span className="an-chart-readout" aria-live="polite">
+          {shown
+            ? `Week of ${new Date(`${shown.week}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}: ${shown.passed} passed · ${shown.waiting} need a decision`
+            : 'Hover or focus a week for its numbers'}
+        </span>
       </div>
     </div>
+  );
+}
+
+// ── Page ────────────────────────────────────────────────────────────────────
+export default function Analytics({ onNavigate }: AnalyticsProps) {
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState(ALL);
+  const [policy, setPolicy] = useState(ALL);
+  const [provider, setProvider] = useState(ALL);
+  // Scoring re-runs the engine on the labelled claims (a few seconds), so it
+  // loads on its own and never holds up the rest of the page.
+  const [quality, setQuality] = useState<{ state: 'loading' | 'ready' | 'error'; report?: QualityReport }>({ state: 'loading' });
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadAnalytics(controller.signal)
+      .then(setLoaded)
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError('Analytics could not be loaded.');
+      });
+    getQuality('development', controller.signal)
+      .then((report) => setQuality({ state: 'ready', report }))
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setQuality({ state: 'error' });
+      });
+    return () => controller.abort();
+  }, []);
+
+  const options = useMemo(() => {
+    if (!loaded) return null;
+    const months = new Set<string>();
+    const policies = new Set<string>();
+    const providers = new Set<string>();
+    for (const claim of loaded.claims) {
+      if (claim.submission_date) months.add(claim.submission_date.slice(0, 7));
+      if (claim.policy_id) policies.add(claim.policy_id);
+      if (claim.provider_id) providers.add(claim.provider_id);
+    }
+    return {
+      months: [...months].sort().reverse(),
+      policies: [...policies].sort(),
+      providers: [...providers].sort(),
+    };
+  }, [loaded]);
+
+  const view = useMemo(() => {
+    if (!loaded) return null;
+    const claims = loaded.claims.filter((claim) =>
+      (period === ALL || claim.submission_date?.startsWith(period))
+      && (policy === ALL || claim.policy_id === policy)
+      && (provider === ALL || claim.provider_id === provider));
+    const inScope = new Set(claims.map((claim) => claim.claim_id));
+
+    const statusOf = new Map<string, ClaimStatus>();
+    const byStatus: Record<ClaimStatus, number> = { Passed: 0, Failed: 0, 'Unable to assess': 0, 'Needs review': 0 };
+    const outcomes: Record<string, number> = {};
+    const rules = new Map<string, { fail: number; unable: number; failedClaims: number }>();
+    const missing = new Map<string, number>();
+    const weeks = new Map<string, { passed: number; waiting: number }>();
+    let totalResults = 0;
+    let unableResults = 0;
+
+    for (const claim of claims) {
+      const results = loaded.results.get(claim.claim_id) ?? [];
+      const status = claimStatus(results);
+      statusOf.set(claim.claim_id, status);
+      byStatus[status] += 1;
+      if (claim.submission_date) {
+        const week = weeks.get(weekOf(claim.submission_date)) ?? { passed: 0, waiting: 0 };
+        if (status === 'Passed') week.passed += 1;
+        else week.waiting += 1;
+        weeks.set(weekOf(claim.submission_date), week);
+      }
+      const failedHere = new Set<string>();
+      for (const result of results) {
+        totalResults += 1;
+        outcomes[result.status] = (outcomes[result.status] ?? 0) + 1;
+        const rule = rules.get(result.rule_id) ?? { fail: 0, unable: 0, failedClaims: 0 };
+        if (result.status === 'FAIL') {
+          rule.fail += 1;
+          failedHere.add(result.rule_id);
+        }
+        if (result.status === 'UNABLE_TO_ASSESS') {
+          rule.unable += 1;
+          unableResults += 1;
+          const evidence = Array.isArray(result.evidence) ? (result.evidence as Array<{ path?: unknown; value?: unknown }>) : [];
+          const fields = new Set(evidence.filter((item) => typeof item?.path === 'string' && isMissing(item.value)).map((item) => fieldOf(item.path as string)));
+          for (const field of fields) missing.set(field, (missing.get(field) ?? 0) + 1);
+        }
+        rules.set(result.rule_id, rule);
+      }
+      for (const ruleId of failedHere) rules.get(ruleId)!.failedClaims += 1;
+    }
+
+    // Review activity on the claims in scope, newest first.
+    const events = loaded.audit.filter((event) =>
+      event.claim_id && inScope.has(event.claim_id) && (event.event_type === 'human_decision' || event.event_type === 'claim_decision'));
+    const actions: Record<string, number> = {};
+    const reviewedClaims = new Set<string>();
+    const decisions = new Map<string, string>(); // latest claim decision per claim
+    const reviewers = new Map<string, { actions: number; decisions: number; claims: Set<string>; last: string }>();
+    for (const event of [...events].sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))) {
+      const person = reviewers.get(event.actor) ?? { actions: 0, decisions: 0, claims: new Set<string>(), last: event.timestamp };
+      person.last = event.timestamp;
+      person.claims.add(event.claim_id!);
+      if (event.event_type === 'human_decision') {
+        const action = String(event.payload.action);
+        actions[action] = (actions[action] ?? 0) + 1;
+        reviewedClaims.add(event.claim_id!);
+        person.actions += 1;
+      } else {
+        const decision = String(event.payload.decision);
+        if (decision === 'reopen') decisions.delete(event.claim_id!);
+        else decisions.set(event.claim_id!, decision);
+        person.decisions += 1;
+      }
+      reviewers.set(event.actor, person);
+    }
+    const decided = [...decisions.values()];
+    const waiting = claims.length - byStatus.Passed;
+    const undecided = claims.filter((claim) => statusOf.get(claim.claim_id) !== 'Passed' && !decisions.has(claim.claim_id)).length;
+
+    // Actions per day over the last 14 days with activity in scope.
+    const days = new Map<string, number>();
+    for (const event of events) days.set(event.timestamp.slice(0, 10), (days.get(event.timestamp.slice(0, 10)) ?? 0) + 1);
+
+    return {
+      claims,
+      byStatus,
+      waiting,
+      outcomes,
+      totalResults,
+      unableResults,
+      rules: [...rules.entries()]
+        .filter(([, rule]) => rule.fail + rule.unable > 0)
+        .sort((a, b) => b[1].fail - a[1].fail || b[1].unable - a[1].unable),
+      unableRules: [...rules.entries()].filter(([, rule]) => rule.unable > 0).sort((a, b) => b[1].unable - a[1].unable),
+      missing: [...missing.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6),
+      weeks: [...weeks.entries()].sort().map(([week, value]) => ({ week, ...value })),
+      actions,
+      reviewedClaims: reviewedClaims.size,
+      approved: decided.filter((decision) => decision === 'approve').length,
+      rejected: decided.filter((decision) => decision === 'reject').length,
+      undecided,
+      reviewers: [...reviewers.entries()].sort((a, b) => b[1].actions + b[1].decisions - (a[1].actions + a[1].decisions)),
+      days: [...days.entries()].sort().slice(-14),
+    };
+  }, [loaded, period, policy, provider]);
+
+  const ruleTitle = (rule: string) => loaded?.ruleTitles.get(rule) ?? 'Untitled rule';
+  const filtered = period !== ALL || policy !== ALL || provider !== ALL;
+
+  if (error) {
+    return (
+      <div className="page-shell an-page">
+        <h1>Analytics</h1>
+        <p className="an-error" role="alert">{error}</p>
+      </div>
+    );
+  }
+  if (!loaded || !view || !options) {
+    return (
+      <div className="page-shell an-page">
+        <ShieldLoader label="Counting claims and rule results…" />
+      </div>
+    );
+  }
+
+  const totalActions = ACTIONS.reduce((sum, action) => sum + (view.actions[action.key] ?? 0), 0);
+  const maxRuleFail = Math.max(1, ...view.rules.map(([, rule]) => rule.fail));
+  const maxDay = Math.max(1, ...view.days.map(([, n]) => n));
+  const report = quality.report;
+
+  return (
+    <div className="page-shell an-page">
+      <header className="an-head">
+        <div>
+          <h1>Analytics</h1>
+          <p>Claim outcomes, rule findings and review work, counted from the ingested claims and the audit trail.</p>
+        </div>
+      </header>
+
+      <div className="an-filters" role="group" aria-label="Filter claims">
+        <label>
+          <span>Period</span>
+          <select value={period} onChange={(event) => setPeriod(event.target.value)}>
+            <option value={ALL}>All submission dates</option>
+            {options.months.map((month) => <option key={month} value={month}>{monthLabel(month)}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Policy</span>
+          <select value={policy} onChange={(event) => setPolicy(event.target.value)}>
+            <option value={ALL}>All policies</option>
+            {options.policies.map((id) => <option key={id} value={id}>{id}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Provider</span>
+          <select value={provider} onChange={(event) => setProvider(event.target.value)}>
+            <option value={ALL}>All providers</option>
+            {options.providers.map((id) => (
+              <option key={id} value={id}>{loaded.providerNames.get(id) ? `${loaded.providerNames.get(id)} (${id})` : id}</option>
+            ))}
+          </select>
+        </label>
+        <p className="an-scope" aria-live="polite">
+          <strong>{count(view.claims.length)}</strong> of {count(loaded.claims.length)} claims
+          {filtered && (
+            <button
+              type="button"
+              className="an-link"
+              onClick={() => {
+                setPeriod(ALL);
+                setPolicy(ALL);
+                setProvider(ALL);
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </p>
+      </div>
+
+      {view.claims.length === 0 ? (
+        <Empty>No claims match these filters.</Empty>
+      ) : (
+        <>
+          <div className="an-kpis">
+            <div className="an-kpi">
+              <span className="an-kpi-label">Claims</span>
+              <span className="an-kpi-value">{count(view.claims.length)}</span>
+              <span className="an-kpi-sub">{count(view.totalResults)} rule checks</span>
+            </div>
+            <div className="an-kpi">
+              <span className="an-kpi-label">Passed every rule</span>
+              <span className="an-kpi-value is-pass">{share(view.byStatus.Passed, view.claims.length)}</span>
+              <span className="an-kpi-sub">{count(view.byStatus.Passed)} claims</span>
+            </div>
+            <button type="button" className="an-kpi is-link" onClick={() => onNavigate('review-queue')}>
+              <span className="an-kpi-label">Need a decision</span>
+              <span className="an-kpi-value is-fail">{count(view.waiting)}</span>
+              <span className="an-kpi-sub">{share(view.waiting, view.claims.length)} of claims · open the queue</span>
+            </button>
+            <div className="an-kpi">
+              <span className="an-kpi-label">Unable to assess</span>
+              <span className="an-kpi-value is-unable">{count(view.byStatus['Unable to assess'])}</span>
+              <span className="an-kpi-sub">{share(view.byStatus['Unable to assess'], view.claims.length)} of claims</span>
+            </div>
+          </div>
+
+          <Card title="Claims by submission week" note="Each bar is the claims submitted that week, split by whether they still need a reviewer.">
+            {view.weeks.length ? <WeeklyChart weeks={view.weeks} /> : <Empty>These claims have no submission dates.</Empty>}
+          </Card>
+
+          <div className="an-grid-2">
+            <Card title="Claim status" note={`${count(view.claims.length)} claims`}>
+              <ul className="an-rows">
+                {STATUS_ORDER.map((status) => (
+                  <li key={status}>
+                    <span className={`an-word ${STATUS_CLASS[status]}`}>{status}</span>
+                    <Meter value={view.byStatus[status]} max={view.claims.length} className={STATUS_CLASS[status]} />
+                    <span className="an-num">{count(view.byStatus[status])}</span>
+                    <span className="an-share">{share(view.byStatus[status], view.claims.length)}</span>
+                  </li>
+                ))}
+              </ul>
+              <h3 className="an-subhead">Rule results</h3>
+              <ul className="an-rows">
+                {OUTCOMES.filter((o) => o.status !== 'NOT_IMPLEMENTED' || view.outcomes[o.status]).map((outcome) => (
+                  <li key={outcome.status}>
+                    <span className={`an-word ${outcome.className}`}>{outcome.label}</span>
+                    <Meter value={view.outcomes[outcome.status] ?? 0} max={view.totalResults} className={outcome.className} />
+                    <span className="an-num">{count(view.outcomes[outcome.status] ?? 0)}</span>
+                    <span className="an-share">{share(view.outcomes[outcome.status] ?? 0, view.totalResults)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+
+            <Card
+              title="Review workload"
+              note={loaded.auditTotal > loaded.audit.length ? `From the latest ${count(loaded.audit.length)} audit events` : 'From the audit trail'}
+              action={<button type="button" className="an-button" onClick={() => onNavigate('review-queue')}>Review queue</button>}
+            >
+              <dl className="an-facts">
+                <div><dt>Waiting for a decision</dt><dd>{count(view.undecided)}</dd></div>
+                <div><dt>Claims approved</dt><dd className="is-pass">{count(view.approved)}</dd></div>
+                <div><dt>Claims rejected</dt><dd className="is-fail">{count(view.rejected)}</dd></div>
+                <div><dt>Claims with a rule reviewed</dt><dd>{count(view.reviewedClaims)}</dd></div>
+              </dl>
+              <h3 className="an-subhead">Rule review actions · {count(totalActions)}</h3>
+              {totalActions === 0 ? (
+                <Empty>No reviewer has acted on these claims yet.</Empty>
+              ) : (
+                <ul className="an-rows">
+                  {ACTIONS.map((action) => (
+                    <li key={action.key}>
+                      <span className={`an-word ${action.className}`}>{action.label}</span>
+                      <Meter value={view.actions[action.key] ?? 0} max={totalActions} className={action.className} />
+                      <span className="an-num">{count(view.actions[action.key] ?? 0)}</span>
+                      <span className="an-share">{share(view.actions[action.key] ?? 0, totalActions)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </div>
+
+          <Card
+            title="Findings by rule"
+            note="Failures and unassessable results per rule, most failures first."
+            action={<button type="button" className="an-button" onClick={() => onNavigate('rules')}>Rules</button>}
+          >
+            {view.rules.length === 0 ? (
+              <Empty>Every rule passed on these claims.</Empty>
+            ) : (
+              <table className="an-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Rule</th>
+                    <th scope="col" className="an-col-bar">Failures</th>
+                    <th scope="col" className="an-right">Failed</th>
+                    <th scope="col" className="an-right">Unable</th>
+                    <th scope="col" className="an-right">Claims failing</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {view.rules.map(([ruleId, rule]) => (
+                    <tr key={ruleId}>
+                      <th scope="row">
+                        <span className="an-rule-id">{ruleId}</span> {ruleTitle(ruleId)}
+                      </th>
+                      <td className="an-col-bar"><Meter value={rule.fail} max={maxRuleFail} className="is-fail" /></td>
+                      <td className="an-right an-num">{count(rule.fail)}</td>
+                      <td className="an-right an-num">{count(rule.unable)}</td>
+                      <td className="an-right an-share">{share(rule.failedClaims, view.claims.length)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+
+          <div className="an-grid-2">
+            <Card title="Unable to assess" note={`${count(view.unableResults)} rule results could not be decided from the claim's data.`}>
+              {view.unableResults === 0 ? (
+                <Empty>Every rule could be assessed on these claims.</Empty>
+              ) : (
+                <>
+                  <h3 className="an-subhead">By rule</h3>
+                  <ul className="an-rows">
+                    {view.unableRules.slice(0, 5).map(([ruleId, rule]) => (
+                      <li key={ruleId}>
+                        <span className="an-label"><span className="an-rule-id">{ruleId}</span> {ruleTitle(ruleId)}</span>
+                        <Meter value={rule.unable} max={view.unableRules[0][1].unable} className="is-unable" />
+                        <span className="an-num">{count(rule.unable)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <h3 className="an-subhead">Fields most often missing</h3>
+                  {view.missing.length === 0 ? (
+                    <Empty>The evidence doesn't point at a missing field.</Empty>
+                  ) : (
+                    <ul className="an-rows">
+                      {view.missing.map(([field, n]) => (
+                        <li key={field}>
+                          <span className="an-label an-mono">{field}</span>
+                          <Meter value={n} max={view.missing[0][1]} className="is-unable" />
+                          <span className="an-num">{count(n)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </Card>
+
+            <Card title="Reviewer activity" note="Rule actions and claim decisions on these claims.">
+              {view.reviewers.length === 0 ? (
+                <Empty>No reviewer activity on these claims yet.</Empty>
+              ) : (
+                <>
+                  <table className="an-table is-compact">
+                    <thead>
+                      <tr>
+                        <th scope="col">Reviewer</th>
+                        <th scope="col" className="an-right">Rule actions</th>
+                        <th scope="col" className="an-right">Decisions</th>
+                        <th scope="col" className="an-right">Claims</th>
+                        <th scope="col" className="an-right">Last active</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {view.reviewers.map(([actor, person]) => (
+                        <tr key={actor}>
+                          <th scope="row">{displayName(actor)}</th>
+                          <td className="an-right an-num">{count(person.actions)}</td>
+                          <td className="an-right an-num">{count(person.decisions)}</td>
+                          <td className="an-right an-num">{count(person.claims.size)}</td>
+                          <td className="an-right an-share">{timeAgo(new Date(person.last))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <h3 className="an-subhead">Actions per day</h3>
+                  <ul className="an-days">
+                    {view.days.map(([day, n]) => (
+                      <li key={day} title={`${day}: ${n} actions`}>
+                        <span className="an-day-bar" style={{ transform: `scaleY(${n / maxDay})` }} aria-hidden="true" />
+                        <span className="an-day-n">{n}</span>
+                        <span className="an-day-label">{new Date(`${day}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Card>
+          </div>
+        </>
+      )}
+
+      <Card
+        title="Validation quality"
+        className="an-quality"
+        note={report
+          ? `The current engine scored live against ${count(report.claims)} labelled development claims (${count(report.overall.count)} rule checks). A failed rule is a positive. The filters above don't apply here.`
+          : 'The current engine scored live against the labelled development claims.'}
+      >
+        {quality.state === 'loading' ? (
+          <ShieldLoader label="Scoring the rules against the ground truth…" />
+        ) : !report ? (
+          <Empty>The quality score is unavailable: the scoring service did not respond.</Empty>
+        ) : (
+          <>
+            <div className="an-quality-top">
+              <div className="an-f1">
+                <span className="an-f1-label">F1 score</span>
+                <span className="an-f1-value">{percent(report.overall.issue_f1)}</span>
+                <span className="an-f1-sub">Balance of precision and recall on failed rules</span>
+              </div>
+              <dl className="an-facts is-quality">
+                <QualityFact label="Precision" value={report.overall.issue_precision} hint="Flags that were right" />
+                <QualityFact label="Recall" value={report.overall.issue_recall} hint="Real failures caught" />
+                <QualityFact label="Status accuracy" value={report.overall.status_accuracy} hint="Exact status match" />
+                <QualityFact label="False alarm rate" value={report.overall.false_alarm_rate} hint="Flags on clean results" lowerIsBetter />
+              </dl>
+            </div>
+            <p className="an-confusion">
+              <span><strong>{count(report.overall.tp)}</strong> true flags</span>
+              <span><strong>{count(report.overall.fp)}</strong> false flags</span>
+              <span><strong>{count(report.overall.fn)}</strong> missed</span>
+              <span><strong>{count(report.overall.false_abstentions)}</strong> needless "unable"</span>
+              <span><strong>{count(report.overall.missed_abstentions)}</strong> missed "unable"</span>
+            </p>
+            <table className="an-table is-compact an-quality-table">
+              <thead>
+                <tr>
+                  <th scope="col">Rule</th>
+                  <th scope="col" className="an-right">Checks</th>
+                  <th scope="col" className="an-right">True flags</th>
+                  <th scope="col" className="an-right">False flags</th>
+                  <th scope="col" className="an-right">Missed</th>
+                  <th scope="col" className="an-right">Precision</th>
+                  <th scope="col" className="an-right">Recall</th>
+                  <th scope="col" className="an-right">F1</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(report.by_rule).map(([ruleId, metrics]) => (
+                  <QualityRow key={ruleId} ruleId={ruleId} title={ruleTitle(ruleId)} metrics={metrics} />
+                ))}
+              </tbody>
+            </table>
+            {report.unscored_rules.length > 0 && (
+              <p className="an-footnote">
+                Not scored (no ground truth yet): {report.unscored_rules.map((rule) => `${rule} ${ruleTitle(rule)}`).join(', ')}.
+              </p>
+            )}
+          </>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function QualityFact({ label, value, hint, lowerIsBetter = false }: { label: string; value: number | null; hint: string; lowerIsBetter?: boolean }) {
+  const good = value !== null && (lowerIsBetter ? value <= 0.02 : value >= 0.95);
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd className={value === null ? '' : good ? 'is-pass' : 'is-unable'}>{percent(value)}</dd>
+      <span>{hint}</span>
+    </div>
+  );
+}
+
+function QualityRow({ ruleId, title, metrics }: { ruleId: string; title: string; metrics: QualityMetrics }) {
+  const weak = metrics.issue_f1 !== null && metrics.issue_f1 < 0.95;
+  return (
+    <tr className={weak ? 'is-weak' : undefined}>
+      <th scope="row"><span className="an-rule-id">{ruleId}</span> {title}</th>
+      <td className="an-right an-num">{count(metrics.count)}</td>
+      <td className="an-right an-num">{count(metrics.tp)}</td>
+      <td className={`an-right an-num${metrics.fp ? ' is-fail' : ''}`}>{count(metrics.fp)}</td>
+      <td className={`an-right an-num${metrics.fn ? ' is-fail' : ''}`}>{count(metrics.fn)}</td>
+      <td className="an-right an-num">{percent(metrics.issue_precision)}</td>
+      <td className="an-right an-num">{percent(metrics.issue_recall)}</td>
+      <td className="an-right an-num"><strong>{percent(metrics.issue_f1)}</strong>{weak && <span className="an-flag"> · check</span>}</td>
+    </tr>
   );
 }

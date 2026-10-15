@@ -19,6 +19,7 @@ from AI_agent.llm_adapter import (
     deterministic_fallback,
     validate_explanation,
 )
+from api_app.quality import score_quality
 from audit.chain import verify_chain
 from audit.logger import AuditLogger, AuditWriteError
 from audit.store import AuditStore
@@ -31,7 +32,7 @@ from normalisation.fhir_adapter import (
     parse_bundles_text,
 )
 from normalisation.schema_subset import validate as validate_claim_schema
-from rule_engine.engine_core import baseline, validate_transport
+from rule_engine.engine_core import baseline, load_jsonl, validate_transport
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -153,16 +154,27 @@ class IngestionStore:
                     "SELECT fingerprint, response FROM ingestion_fingerprints ORDER BY rowid DESC"
                 ).fetchall()
         runs = []
-        for fingerprint, raw_response in rows:
+        known = {"PASS", "FAIL", "UNABLE_TO_ASSESS", "NOT_APPLICABLE", "NOT_IMPLEMENTED"}
+        # Rows come newest first; sequence numbers runs in the order they happened (1 = first).
+        for position, (fingerprint, raw_response) in enumerate(rows):
             response = self._read_response(raw_response)
             source = fingerprint.split(":", 1)[0].upper()
             accepted = len(response.get("claims", []))
             rejected = len(response.get("rejected", []))
             status_counts = {"PASS": 0, "FAIL": 0, "UNABLE_TO_ASSESS": 0, "NOT_APPLICABLE": 0, "NOT_IMPLEMENTED": 0}
             rule_counts: dict[str, dict[str, int]] = {}
+            rejected_reasons: dict[str, int] = {}
+            for record in response.get("rejected", []):
+                reason = str(record.get("reason") or "UNKNOWN")
+                rejected_reasons[reason] = rejected_reasons.get(reason, 0) + 1
+            invalid_results: dict[str, int] = {}
             for results in response.get("evaluations", {}).values():
                 for result in results:
                     status = result.get("status", "NOT_IMPLEMENTED")
+                    if status not in known:
+                        # A rule returned a status outside the contract (e.g. lowercase "fail").
+                        rule_id = result.get("rule_id", "UNKNOWN")
+                        invalid_results[rule_id] = invalid_results.get(rule_id, 0) + 1
                     status_counts[status] = status_counts.get(status, 0) + 1
                     rule_id = result.get("rule_id", "UNKNOWN")
                     counts = rule_counts.setdefault(rule_id, {"PASS": 0, "FAIL": 0, "UNABLE_TO_ASSESS": 0, "NOT_APPLICABLE": 0, "NOT_IMPLEMENTED": 0})
@@ -174,8 +186,11 @@ class IngestionStore:
                 "rejected_records": rejected,
                 "total_records": accepted + rejected,
                 "status": "completed",
+                "sequence": len(rows) - position,
                 "status_counts": status_counts,
                 "rule_counts": rule_counts,
+                "rejected_reasons": rejected_reasons,
+                "invalid_results": invalid_results,
             })
         return runs
 
@@ -296,6 +311,25 @@ class DatasetService:
             "claims": claims,
             "evaluations": {row["claim_id"]: row["results"] for row in evaluations},
         }
+
+    def quality(self, split: str) -> dict[str, Any]:
+        """The current engine scored against the split's ground truth."""
+        if split not in DATASET_SPLITS:
+            raise ApiProblem(404, "dataset_not_found", "Unknown dataset")
+        folder = self.backend_root / "data" / split
+        gold_path = folder / "expected_results.jsonl"
+        if not gold_path.exists():
+            raise ApiProblem(404, "ground_truth_not_found", "This dataset has no expected results to score against")
+        claims = load_claim_file(folder / "claims.jsonl")
+        try:
+            gold = load_jsonl(gold_path)
+        except (OSError, ValueError) as error:
+            raise ApiProblem(503, "ground_truth_unreadable", "The expected results could not be read") from error
+        labeled = {row["claim_id"] for row in gold}
+        claims = [claim for claim in claims if claim["claim_id"] in labeled]
+        evaluations = self.claims_service.evaluate_many(claims, record_audit=False)
+        predictions = [result for row in evaluations for result in row["results"]]
+        return {"dataset": split, **score_quality(gold, predictions)}
 
 
 def _decode_records(text: str) -> tuple[list[Any], list[dict[str, Any]]]:
@@ -547,6 +581,13 @@ class AuditService:
             raise ApiProblem(503, "audit_unavailable", "Could not safely record the review decision") from error
         return {"audit_index": entry.index, "entry_hash": entry.entry_hash}
 
+    def record_claim_decision(self, claim_id: str, decision: dict[str, Any]) -> dict[str, Any]:
+        try:
+            entry = self.logger.log_claim_decision(claim_id, decision)
+        except AuditWriteError as error:
+            raise ApiProblem(503, "audit_unavailable", "Could not safely record the claim decision") from error
+        return {"audit_index": entry.index, "entry_hash": entry.entry_hash}
+
     def recent_events(self, limit: int) -> dict[str, Any]:
         try:
             entries = self.store.all_entries()
@@ -556,6 +597,7 @@ class AuditService:
             "rule_execution": ("evaluation_id", "rule_id", "rule_version", "status", "severity", "requires_human_review", "confidence", "confidence_kind", "method"),
             "ai_decision": ("rule_id", "provider", "fallback_used", "finding_hash", "explanation", "assessment"),
             "human_decision": ("rule_id", "action", "original_status", "decision_timestamp"),
+            "claim_decision": ("decision", "decision_timestamp"),
             # Rule authoring (claim_id is "rule:<RULE_ID>" for these events)
             "rule_draft_submitted": ("draft_id", "kind", "logic_sha256"),
             "rule_draft_question": ("draft_id", "question_id", "question_kind"),
@@ -570,7 +612,7 @@ class AuditService:
         for entry in reversed(entries[-limit:]):
             fields = allowed_fields.get(entry.event_type, ())
             payload = {key: entry.payload[key] for key in fields if key in entry.payload}
-            if entry.event_type == "human_decision":
+            if entry.event_type in ("human_decision", "claim_decision"):
                 payload["reason_recorded"] = bool(entry.payload.get("reason_hash"))
             recent.append({
                 "index": entry.index,

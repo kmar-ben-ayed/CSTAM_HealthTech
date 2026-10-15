@@ -125,6 +125,19 @@ class AuditLogger:
         }
         return self.log("human_decision", decision["claim_id"], decision["actor"], payload)
 
+    def log_claim_decision(self, claim_id: str, decision: dict[str, Any]) -> AuditEntry:
+        reason = decision.get("reason", "")
+        payload = {
+            "decision": decision["decision"],
+            "decision_timestamp": (
+                decision["created_at"].isoformat()
+                if hasattr(decision["created_at"], "isoformat")
+                else str(decision["created_at"])
+            ),
+            "reason_hash": hashlib.sha256(reason.encode("utf-8")).hexdigest() if reason else None,
+        }
+        return self.log("claim_decision", claim_id, decision["actor"], payload)
+
     def log_ai_decision(
         self,
         claim_id: str,

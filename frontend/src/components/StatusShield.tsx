@@ -68,14 +68,19 @@ interface StatusShieldProps {
   /** Accessible name; without one the shield is decorative. */
   label?: string;
   className?: string;
+  /** Speed multiplier for the orbit and pulse (1 = the state's own speed). */
+  tempo?: number;
 }
 
-export default function StatusShield({ state, size = 64, animated = true, label, className = '' }: StatusShieldProps) {
+const scaleDuration = (duration: string, tempo: number) => `${(parseFloat(duration) / tempo).toFixed(2)}s`;
+
+export default function StatusShield({ state, size = 64, animated = true, label, className = '', tempo = 1 }: StatusShieldProps) {
   const reduceMotion = useReducedMotion();
   // Small marks (in tables) are just the shield and its symbol, as in the design.
   const compact = size < 44;
   const moving = animated && !reduceMotion && !compact;
-  const config = STATES[state];
+  const base = STATES[state];
+  const config = { ...base, orbit: scaleDuration(base.orbit, tempo), pulse: scaleDuration(base.pulse, tempo) };
 
   return (
     <svg

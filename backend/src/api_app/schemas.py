@@ -73,6 +73,23 @@ class ReviewDecisionRequest(StrictModel):
         return value
 
 
+class ClaimDecisionRequest(StrictModel):
+    """A reviewer's decision on a whole claim. "reopen" withdraws the previous one."""
+
+    decision: Literal["approve", "reject", "reopen"]
+    actor: str = Field(min_length=1, max_length=128)
+    reason: str = Field(min_length=1, max_length=2000)
+    created_at: datetime
+
+    @field_validator("actor", "reason")
+    @classmethod
+    def reject_whitespace_only(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
 class ExampleClaim(StrictModel):
     """A claim (in the claim format) and the outcome the author expects the rule to give it."""
 

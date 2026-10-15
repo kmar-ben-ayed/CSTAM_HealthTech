@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import { getExplanation, type BackendClaim, type ExplanationResponse, type ReviewAction } from '../api/claims';
 import type { CardRuleResult } from '../api/claimCards';
 
@@ -47,6 +47,10 @@ export const RESULT_LABEL: Record<CardRuleResult, string> = {
   NA: 'Not applicable',
 };
 
+// Explanations already drafted this session, per claim and rule, so reselecting
+// a finding doesn't ask the language model again.
+const explanationCache = new Map<string, ExplanationResponse>();
+
 function formatValue(value: unknown): string {
   if (value === undefined) return 'missing';
   try {
@@ -65,9 +69,14 @@ interface InspectorProps {
   error: string | null;
   onChoose: (action: ActionKey, reason: string) => void;
   onUndo: () => void;
+  /** Narrow screens: return to the findings list. */
+  onBack: () => void;
 }
 
-export default function FindingInspector({ claim, finding, choice, recorded, error, onChoose, onUndo }: InspectorProps) {
+const FindingInspector = forwardRef<HTMLElement, InspectorProps>(function FindingInspector(
+  { claim, finding, choice, recorded, error, onChoose, onUndo, onBack },
+  ref,
+) {
   const [explanation, setExplanation] = useState<ExplanationResponse | null>(null);
   const [explanationError, setExplanationError] = useState(false);
   const [dismissing, setDismissing] = useState(false);
@@ -76,11 +85,17 @@ export default function FindingInspector({ claim, finding, choice, recorded, err
 
   useEffect(() => {
     const controller = new AbortController();
-    setExplanation(null);
+    const key = `${claim.claim_id}:${finding.ruleId}`;
     setExplanationError(false);
     setDismissing(false);
+    const cachedExplanation = explanationCache.get(key);
+    setExplanation(cachedExplanation ?? null);
+    if (cachedExplanation) return;
     getExplanation(claim, finding.ruleId, 'openai', controller.signal)
-      .then(setExplanation)
+      .then((response) => {
+        explanationCache.set(key, response);
+        setExplanation(response);
+      })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setExplanationError(true);
@@ -97,17 +112,26 @@ export default function FindingInspector({ claim, finding, choice, recorded, err
     onChoose(action, ACTIONS.find((item) => item.key === action)!.description);
   };
 
-  // Keys 1 to 4 trigger the actions while focus is inside the inspector.
-  const onKeyDown = (event: React.KeyboardEvent) => {
-    if (event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement) return;
-    const index = Number(event.key) - 1;
-    if (!Number.isInteger(index) || index < 0 || index >= ACTIONS.length) return;
-    event.preventDefault();
-    choose(ACTIONS[index].key);
-  };
+  // Keys 1 to 4 trigger the actions anywhere on the page, except while typing.
+  const chooseRef = useRef(choose);
+  chooseRef.current = choose;
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))) return;
+      const index = Number(event.key) - 1;
+      if (!Number.isInteger(index) || index < 0 || index >= ACTIONS.length) return;
+      event.preventDefault();
+      chooseRef.current(ACTIONS[index].key);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
-    <aside className="inspector" aria-label={`Inspecting finding ${finding.ruleId}`} onKeyDown={onKeyDown}>
+    <aside ref={ref} tabIndex={-1} className="inspector" aria-label={`Inspecting finding ${finding.ruleId}`}>
+      <button type="button" className="text-link inspector-back" onClick={onBack}>Back to findings</button>
       <h2 className="inspector-title">
         <span className="mono">{finding.ruleId}</span> {finding.title}
       </h2>
@@ -164,6 +188,11 @@ export default function FindingInspector({ claim, finding, choice, recorded, err
         ) : (
           <>
             {recorded && !choice && <p className="inspector-muted">Last recorded decision: {recorded}.</p>}
+            {!choice && (
+              <p className="inspector-shortcuts">
+                Shortcut: press <kbd>1</kbd>–<kbd>4</kbd>
+              </p>
+            )}
             <ol className="review-actions">
               {ACTIONS.map((action, index) => {
                 const chosen = choice?.action === action.key;
@@ -218,4 +247,6 @@ export default function FindingInspector({ claim, finding, choice, recorded, err
       </section>
     </aside>
   );
-}
+});
+
+export default FindingInspector;

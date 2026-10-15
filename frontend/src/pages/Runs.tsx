@@ -1,366 +1,346 @@
-import { useEffect, useState } from 'react';
-import Sentinel from '../components/Sentinel';
-import type { SentinelState } from '../components/Sentinel';
-import { getIngestionRuns, type IngestionRun } from '../api/runs';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import ShieldLoader from '../components/ShieldLoader';
+import { chronological, getIngestionRuns, type IngestionRun } from '../api/runs';
+import { listRules, type RuleSummary } from '../api/rules';
+import '../styles/runs.css';
 
-type DisplayRun = IngestionRun & {
-  id: string;
-  dataset: string;
-  ruleset: string;
-  model: string;
-  claims: number;
-  duration: string;
-  precision: number;
-  recall: number;
-  f1: number;
-  accuracy: number;
-  far: number;
-  fabr: number;
-  started: string;
-  sentinel: SentinelState;
+// ── Runs ───────────────────────────────────────────────────────────────────
+// Every ingestion run as the backend stored it: records accepted and rejected
+// (with why), and the rule results it produced. The list opens a run's detail
+// at ?run=<id>, so a run can be linked to. Runs carry no timestamps, so they are
+// numbered in the order they happened.
+
+const STATUSES = [
+  { key: 'PASS', label: 'Pass', className: 'is-pass' },
+  { key: 'FAIL', label: 'Fail', className: 'is-fail' },
+  { key: 'UNABLE_TO_ASSESS', label: 'Unable to assess', className: 'is-unable' },
+  { key: 'NOT_APPLICABLE', label: 'Not applicable', className: 'is-na' },
+  { key: 'NOT_IMPLEMENTED', label: 'Not run', className: 'is-na' },
+] as const;
+const KNOWN = new Set<string>(STATUSES.map((status) => status.key));
+
+const REASON_LABEL: Record<string, string> = {
+  ENVELOPE_INVALID: 'Record envelope invalid',
+  INVALID_RECORD: 'Invalid record',
+  DUPLICATE_CLAIM_ID: 'Duplicate claim ID',
+  PARSE_ERROR: 'Not valid JSON',
 };
 
+const count = (value: number) => value.toLocaleString('en');
+const share = (part: number, whole: number) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : '—');
+
+interface RunStats {
+  run: IngestionRun;
+  number: number;
+  checks: number;
+  pass: number;
+  fail: number;
+  unable: number;
+  invalid: number;
+}
+
+function statsOf(run: IngestionRun, number: number): RunStats {
+  const counts = run.status_counts ?? {};
+  const known = (key: string) => counts[key] ?? 0;
+  const invalid = Object.entries(counts).filter(([key]) => !KNOWN.has(key)).reduce((sum, [, n]) => sum + n, 0);
+  return {
+    run,
+    number,
+    checks: Object.values(counts).reduce((sum, n) => sum + n, 0),
+    pass: known('PASS'),
+    fail: known('FAIL'),
+    unable: known('UNABLE_TO_ASSESS'),
+    invalid,
+  };
+}
+
+function Meter({ value, max, className }: { value: number; max: number; className: string }) {
+  return (
+    <span className="rn-meter" aria-hidden="true">
+      <span className={className} style={{ transform: `scaleX(${max ? value / max : 0})` }} />
+    </span>
+  );
+}
+
 export default function Runs() {
-  const [runs, setRuns] = useState<DisplayRun[]>([]);
-  const [selectedRun, setSelectedRun] = useState<DisplayRun | null>(null);
-  const [view, setView] = useState<'table' | 'detail'>('table');
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const [runs, setRuns] = useState<IngestionRun[] | null>(null);
+  const [rules, setRules] = useState<RuleSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    getIngestionRuns(controller.signal).then(({ runs: responseRuns }) => {
-      const mapped = responseRuns.map((run) => ({
-        ...run,
-        id: run.run_id,
-        dataset: run.source,
-        ruleset: 'Backend rules',
-        model: 'Deterministic engine',
-        claims: run.accepted_claims,
-        status_counts: run.status_counts || {},
-        rule_counts: run.rule_counts || {},
-        duration: '—',
-        precision: 0,
-        recall: 0,
-        f1: 0,
-        accuracy: 0,
-        far: 0,
-        fabr: 0,
-        started: '—',
-        sentinel: 'pass' as SentinelState,
-      }));
-      setRuns(mapped);
-      setSelectedRun(mapped[0] || null);
-    }).catch(() => {
-      setRuns([]);
-      setSelectedRun(null);
-    });
+    Promise.all([getIngestionRuns(controller.signal), listRules(controller.signal).catch(() => [])])
+      .then(([response, catalogue]) => {
+        setRuns(response.runs);
+        setRules(catalogue);
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError('The runs could not be loaded.');
+      });
     return () => controller.abort();
   }, []);
 
-  const openRun = (run: DisplayRun) => {
-    setSelectedRun(run);
-    setView('detail');
-  };
+  // Newest first in the list; numbers follow the order the runs happened.
+  const list = useMemo(() => {
+    if (!runs) return [];
+    return chronological(runs).map((run, index) => statsOf(run, run.sequence ?? index + 1)).reverse();
+  }, [runs]);
 
-  if (view === 'detail' && selectedRun) {
-    const run = selectedRun;
-    const statusCounts = run.status_counts || {};
-    const ruleCounts = run.rule_counts || {};
-    const evaluationTotal = Object.values(statusCounts).reduce((total, count) => total + count, 0);
-    const statusDist = Object.entries(statusCounts)
-      .filter(([, count]) => count > 0)
-      .map(([status, count]) => ({
-        status: status.replaceAll('_', ' '),
-        count,
-        pct: evaluationTotal ? (count / evaluationTotal) * 100 : 0,
-        color: status === 'PASS' ? 'var(--status-pass)' : status === 'FAIL' ? 'var(--status-fail)' : 'var(--status-uta)',
-      }));
-    const ruleBreakdown = Object.entries(ruleCounts).map(([id, counts]) => ({
-      id,
-      name: id,
-      pass: counts.PASS || 0,
-      fail: counts.FAIL || 0,
-      uta: counts.UNABLE_TO_ASSESS || 0,
-      na: counts.NOT_APPLICABLE || 0,
-    }));
-    const metrics = [
-      { label: 'Accepted claims', value: String(run.accepted_claims), desc: 'Claims accepted from this upload', color: 'var(--accent)' },
-      { label: 'Rejected records', value: String(run.rejected_records), desc: 'Records rejected during ingestion', color: 'var(--status-fail-ink)' },
-      { label: 'Pass rate', value: `${evaluationTotal ? ((statusCounts.PASS || 0) / evaluationTotal * 100).toFixed(1) : '0.0'}%`, desc: 'Rule evaluations returning PASS', color: 'var(--status-pass-ink)' },
-      { label: 'Failures', value: String(statusCounts.FAIL || 0), desc: 'Rule evaluations returning FAIL', color: 'var(--status-fail-ink)' },
-      { label: 'Unable to assess', value: String(statusCounts.UNABLE_TO_ASSESS || 0), desc: 'Evaluations missing required evidence', color: 'var(--status-uta-ink)' },
-      { label: 'Rule evaluations', value: String(evaluationTotal), desc: 'All stored rule outcomes', color: 'var(--status-review-ink)' },
-    ];
+  const selectedId = params.get('run');
+  const selected = list.find((item) => item.run.run_id === selectedId) ?? null;
+  const openRun = (id: string | null) => setParams(id ? { run: id } : {});
 
+  if (error) {
     return (
-      <div className="page-shell">
-        {/* Back */}
-        <button
-          onClick={() => setView('table')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.875rem', fontFamily: 'inherit', fontWeight: 500, marginBottom: 24, padding: '4px 0' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          Runs
-        </button>
-
-        {/* Run header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-            <Sentinel state={run.sentinel} size={52} />
-            <div>
-              <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '0.02em', marginBottom: 4 }}>
-                {run.id}
-              </div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {[
-                  { label: 'Dataset', value: run.dataset },
-                  { label: 'Ruleset', value: run.ruleset },
-                  { label: 'AI model', value: run.model },
-                  { label: 'Claims', value: String(run.claims) },
-                  { label: 'Duration', value: run.duration },
-                ].map(f => (
-                  <span key={f.label} style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                    <span style={{ color: 'var(--text-tertiary)' }}>{f.label}: </span>
-                    <span style={{ fontFamily: "var(--font-sans)", fontWeight: 500, color: 'var(--text-primary)' }}>{f.value}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{run.started}</span>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              background: run.status === 'completed' ? 'var(--status-pass-bg)' : 'var(--status-fail-bg)',
-              color: run.status === 'completed' ? 'var(--status-pass-ink)' : 'var(--status-fail-ink)',
-              border: `1px solid ${run.status === 'completed' ? 'var(--status-pass-border)' : 'var(--status-fail-border)'}`,
-              borderRadius: 20, padding: '4px 12px',
-              fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-            }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: run.status === 'completed' ? 'var(--status-pass)' : 'var(--status-fail)' }} />
-              {run.status}
-            </span>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
-          {/* Metrics */}
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Performance metrics</h3>
-            </div>
-            <div style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-              {metrics.map(m => (
-                <div key={m.label} style={{ textAlign: 'center' }}>
-                  <div style={{
-                    fontFamily: "var(--font-sans)",
-                    fontSize: '1.5rem',
-                    fontWeight: 700,
-                    color: m.color,
-                    letterSpacing: '-0.03em',
-                    marginBottom: 4,
-                  }}>
-                    {m.value}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{m.label}</div>
-                  <div style={{ fontSize: '0.6875rem', color: 'var(--text-tertiary)', lineHeight: 1.4 }}>{m.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Status distribution */}
-          <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Status distribution</h3>
-            </div>
-            <div style={{ padding: '16px 20px' }}>
-              {/* Stacked bar */}
-              <div style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', marginBottom: 16 }}>
-                {statusDist.map(s => (
-                  <div key={s.status} style={{ width: `${s.pct}%`, background: s.color, transition: 'width 0.3s ease' }} />
-                ))}
-              </div>
-              {statusDist.map(s => (
-                <div key={s.status} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color }} />
-                    <span style={{ fontSize: '0.8125rem', color: 'var(--text-primary)' }}>{s.status}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 700, color: s.color }}>{s.count}</span>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{s.pct}%</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Rule breakdown table */}
-        <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Rule findings breakdown</h3>
-          </div>
-          <div className="table-scroll">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Rule</th>
-                <th>Name</th>
-                <th>Pass</th>
-                <th>Fail</th>
-                <th>Unable to assess</th>
-                <th>Not applicable</th>
-                <th>Distribution</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ruleBreakdown.map(r => {
-                const total = r.pass + r.fail + r.uta + r.na;
-                return (
-                  <tr key={r.id}>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--accent-ink)' }}>{r.id}</span></td>
-                    <td><span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{r.name}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: 'var(--status-pass-ink)' }}>{r.pass}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: r.fail > 0 ? 'var(--status-fail-ink)' : 'var(--text-tertiary)' }}>{r.fail}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: r.uta > 0 ? 'var(--status-uta-ink)' : 'var(--text-tertiary)' }}>{r.uta}</span></td>
-                    <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 700, color: 'var(--text-tertiary)' }}>{r.na}</span></td>
-                    <td>
-                      <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', width: 120 }} role="img" aria-label={`${r.id}: ${r.pass} pass, ${r.fail} fail, ${r.uta} unable to assess, ${r.na} not applicable`}>
-                        <div style={{ width: `${(r.pass / total) * 100}%`, background: 'var(--status-pass)' }} />
-                        <div style={{ width: `${(r.fail / total) * 100}%`, background: 'var(--status-fail)' }} />
-                        <div style={{ width: `${(r.uta / total) * 100}%`, background: 'var(--status-uta)' }} />
-                        <div style={{ width: `${(r.na / total) * 100}%`, background: 'var(--status-na)' }} />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
-        </div>
+      <div className="page-shell rn-page">
+        <h1>Runs</h1>
+        <p className="rn-error" role="alert">{error}</p>
       </div>
     );
   }
+  if (!runs) {
+    return (
+      <div className="page-shell rn-page">
+        <ShieldLoader label="Loading ingestion runs…" />
+      </div>
+    );
+  }
+  if (selectedId && !selected) {
+    return (
+      <div className="page-shell rn-page">
+        <button type="button" className="rn-back" onClick={() => openRun(null)}>All runs</button>
+        <p className="rn-empty">This run was not found. It may have been removed from the ingestion store.</p>
+      </div>
+    );
+  }
+  if (selected) return <RunDetail stats={selected} rules={rules} onBack={() => openRun(null)} />;
+
+  const accepted = list.reduce((sum, item) => sum + item.run.accepted_claims, 0);
+  const rejected = list.reduce((sum, item) => sum + item.run.rejected_records, 0);
+  const withProblems = list.filter((item) => item.invalid > 0 || item.run.accepted_claims === 0).length;
 
   return (
-    <div className="page-shell">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+    <div className="page-shell rn-page">
+      <header className="rn-head">
         <div>
-          <span className="sc-eyebrow"> Batch processing</span>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', margin: '12px 0 4px' }}>
-            Evaluation Runs
-          </h1>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-            Track batch processing runs and performance metrics
+          <h1>Runs</h1>
+          <p>Each time data is ingested, the claims are checked against the active rules. Newest run first.</p>
+        </div>
+        <button type="button" className="rn-primary" onClick={() => navigate('/app/ingest')}>Ingest data</button>
+      </header>
+
+      <dl className="rn-summary">
+        <div><dt>Runs</dt><dd>{count(list.length)}</dd></div>
+        <div><dt>Claims accepted</dt><dd>{count(accepted)}</dd></div>
+        <div><dt>Records rejected</dt><dd className={rejected ? 'is-fail' : ''}>{count(rejected)}</dd></div>
+        <div><dt>Runs needing attention</dt><dd className={withProblems ? 'is-unable' : ''}>{count(withProblems)}</dd></div>
+      </dl>
+
+      <section className="rn-card" aria-label="Ingestion runs">
+        {list.length === 0 ? (
+          <p className="rn-empty">
+            No runs yet. <button type="button" className="rn-link" onClick={() => navigate('/app/ingest')}>Ingest data</button> to create the first one.
+          </p>
+        ) : (
+          <div className="rn-scroll">
+            <table className="rn-table">
+              <thead>
+                <tr>
+                  <th scope="col">Run</th>
+                  <th scope="col">Source</th>
+                  <th scope="col" className="rn-right">Records</th>
+                  <th scope="col" className="rn-right">Accepted</th>
+                  <th scope="col" className="rn-right">Rejected</th>
+                  <th scope="col" className="rn-right">Rule checks</th>
+                  <th scope="col" className="rn-col-bar">Pass rate</th>
+                  <th scope="col" className="rn-right">Failures</th>
+                  <th scope="col">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((item) => (
+                  <tr key={item.run.run_id} onClick={() => openRun(item.run.run_id)}>
+                    <th scope="row">
+                      <button
+                        type="button"
+                        className="rn-run"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openRun(item.run.run_id);
+                        }}
+                      >
+                        Run {item.number}
+                      </button>
+                      <span className="rn-id">{item.run.run_id.slice(0, 8)}</span>
+                    </th>
+                    <td>{item.run.source}</td>
+                    <td className="rn-right rn-num">{count(item.run.total_records)}</td>
+                    <td className="rn-right rn-num">{count(item.run.accepted_claims)}</td>
+                    <td className={`rn-right rn-num${item.run.rejected_records ? ' is-fail' : ''}`}>{count(item.run.rejected_records)}</td>
+                    <td className="rn-right rn-num">{count(item.checks)}</td>
+                    <td className="rn-col-bar">
+                      {item.checks ? (
+                        <span className="rn-rate">
+                          <Meter value={item.pass} max={item.checks} className="is-pass" />
+                          <span className="rn-share">{share(item.pass, item.checks)}</span>
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td className="rn-right rn-num is-fail">{count(item.fail)}</td>
+                    <td className="rn-notes">
+                      {item.run.accepted_claims === 0 && <span className="rn-note is-fail">Every record rejected</span>}
+                      {item.invalid > 0 && <span className="rn-note is-unable">{count(item.invalid)} invalid results</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function RunDetail({ stats, rules, onBack }: { stats: RunStats; rules: RuleSummary[]; onBack: () => void }) {
+  const { run } = stats;
+  const titles = new Map(rules.map((rule) => [rule.rule_id, rule.title]));
+  const active = new Set(rules.filter((rule) => rule.status === 'active').map((rule) => rule.rule_id));
+  const counts = run.status_counts ?? {};
+  const reasons = Object.entries(run.rejected_reasons ?? {}).sort((a, b) => b[1] - a[1]);
+  const invalidRules = Object.entries(run.invalid_results ?? {});
+  const ruleRows = Object.entries(run.rule_counts ?? {})
+    .map(([ruleId, ruleCounts]) => {
+      const total = Object.values(ruleCounts).reduce((sum, n) => sum + n, 0);
+      const invalid = Object.entries(ruleCounts).filter(([key]) => !KNOWN.has(key)).reduce((sum, [, n]) => sum + n, 0);
+      return { ruleId, total, invalid, pass: ruleCounts.PASS ?? 0, fail: ruleCounts.FAIL ?? 0, unable: ruleCounts.UNABLE_TO_ASSESS ?? 0, na: ruleCounts.NOT_APPLICABLE ?? 0 };
+    })
+    .sort((a, b) => a.ruleId.localeCompare(b.ruleId));
+  const maxFail = Math.max(1, ...ruleRows.map((row) => row.fail));
+
+  return (
+    <div className="page-shell rn-page">
+      <button type="button" className="rn-back" onClick={onBack}>All runs</button>
+
+      <header className="rn-head">
+        <div>
+          <h1>Run {stats.number}</h1>
+          <p>
+            {run.source} upload · <span className="rn-id">{run.run_id}</span>
           </p>
         </div>
-        <button style={{
-          background: 'var(--accent)',
-          border: 'none',
-          borderRadius: 7,
-          padding: '8px 16px',
-          color: 'var(--card-bg)',
-          fontSize: '0.875rem',
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 2v10M2 7h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          New run
-        </button>
-      </div>
+      </header>
 
-      {/* Summary metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 24 }}>
-        {[
-          { label: 'Total runs', value: String(runs.length), sub: 'Stored ingestion batches', color: 'var(--accent)' },
-          { label: 'Avg precision', value: '—', sub: 'Not recorded by backend', color: 'var(--status-pass-ink)' },
-          { label: 'Claims processed', value: String(runs.reduce((total, run) => total + run.claims, 0)), sub: 'Across stored batches', color: 'var(--status-review-ink)' },
-          { label: 'Avg latency', value: '—', sub: 'Not recorded by backend', color: 'var(--status-uta-ink)' },
-        ].map(m => (
-          <div key={m.label} className="kpi-card">
-            <div style={{ fontFamily: "var(--font-sans)", fontSize: '1.5rem', fontWeight: 700, color: m.color, letterSpacing: '-0.04em', marginBottom: 4 }}>
-              {m.value}
-            </div>
-            <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{m.label}</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{m.sub}</div>
-          </div>
-        ))}
-      </div>
+      <dl className="rn-summary">
+        <div><dt>Records</dt><dd>{count(run.total_records)}</dd></div>
+        <div><dt>Accepted</dt><dd>{count(run.accepted_claims)}</dd></div>
+        <div><dt>Rejected</dt><dd className={run.rejected_records ? 'is-fail' : ''}>{count(run.rejected_records)}</dd></div>
+        <div><dt>Rule checks</dt><dd>{count(stats.checks)}</dd></div>
+      </dl>
 
-      {/* Runs table */}
-      <div style={{ background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--card-shadow)' }}>
-        <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Run ID</th>
-              <th>Dataset</th>
-              <th>Ruleset</th>
-              <th>AI model</th>
-              <th>Claims</th>
-              <th>Status</th>
-              <th>Precision</th>
-              <th>Recall</th>
-              <th>F1</th>
-              <th>Duration</th>
-              <th>Started</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map(run => (
-              <tr key={run.id} onClick={() => openRun(run)} style={{ cursor: 'pointer' }}>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Sentinel state={run.sentinel} size={18} />
-                    <span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)' }}>{run.id}</span>
-                  </div>
-                </td>
-                <td><span style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{run.dataset}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{run.ruleset}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{run.model}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{run.claims}</span></td>
-                <td>
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    background: run.status === 'completed' ? 'var(--status-pass-bg)' : 'var(--status-fail-bg)',
-                    color: run.status === 'completed' ? 'var(--status-pass-ink)' : 'var(--status-fail-ink)',
-                    border: `1px solid ${run.status === 'completed' ? 'var(--status-pass-border)' : 'var(--status-fail-border)'}`,
-                    borderRadius: 999, padding: '3px 9px',
-                    fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-                  }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: run.status === 'completed' ? 'var(--status-pass)' : 'var(--status-fail)' }} />
-                    {run.status}
-                  </span>
-                </td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: 'var(--status-pass-ink)' }}>{run.precision > 0 ? `${run.precision}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: 'var(--accent-ink)' }}>{run.recall > 0 ? `${run.recall}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontWeight: 600, color: 'var(--status-review-ink)' }}>{run.f1 > 0 ? `${run.f1}%` : '–'}</span></td>
-                <td><span style={{ fontFamily: "var(--font-sans)", fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{run.duration}</span></td>
-                <td><span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>{run.started}</span></td>
-                <td>
-                  <button
-                    onClick={e => { e.stopPropagation(); openRun(run); }}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--accent-ink)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '0.8125rem', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 30, padding: '4px 10px', borderRadius: 7 }}
-                  >
-                    View
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 6h7M6.5 3l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  </button>
-                </td>
-              </tr>
+      {(reasons.length > 0 || invalidRules.length > 0) && (
+        <section className="rn-card rn-pad" aria-label="Problems in this run">
+          <h2>Needs attention</h2>
+          <ul className="rn-problems">
+            {reasons.map(([reason, n]) => (
+              <li key={reason}>
+                <span className="is-fail">{count(n)} record{n === 1 ? '' : 's'} rejected</span>: {REASON_LABEL[reason] ?? reason}
+                <span className="rn-code">{reason}</span>
+              </li>
             ))}
-          </tbody>
-        </table>
-        </div>
+            {invalidRules.map(([ruleId, n]) => (
+              <li key={ruleId}>
+                <span className="is-unable">{count(n)} invalid results from {ruleId}</span>
+                {titles.get(ruleId) ? ` (${titles.get(ruleId)})` : ''}: the rule returned a status outside PASS, FAIL, UNABLE_TO_ASSESS and NOT_APPLICABLE, so these results are not counted as failures.
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <div className="rn-grid">
+        <section className="rn-card rn-pad" aria-labelledby="rn-outcomes">
+          <h2 id="rn-outcomes">Rule results</h2>
+          {stats.checks === 0 ? (
+            <p className="rn-empty is-inline">This run produced no rule results.</p>
+          ) : (
+            <ul className="rn-rows">
+              {STATUSES.filter((status) => status.key !== 'NOT_IMPLEMENTED' || counts[status.key]).map((status) => (
+                <li key={status.key}>
+                  <span className={`rn-word ${status.className}`}>{status.label}</span>
+                  <Meter value={counts[status.key] ?? 0} max={stats.checks} className={status.className} />
+                  <span className="rn-num">{count(counts[status.key] ?? 0)}</span>
+                  <span className="rn-share">{share(counts[status.key] ?? 0, stats.checks)}</span>
+                </li>
+              ))}
+              {stats.invalid > 0 && (
+                <li>
+                  <span className="rn-word is-unable">Invalid status</span>
+                  <Meter value={stats.invalid} max={stats.checks} className="is-unable" />
+                  <span className="rn-num">{count(stats.invalid)}</span>
+                  <span className="rn-share">{share(stats.invalid, stats.checks)}</span>
+                </li>
+              )}
+            </ul>
+          )}
+        </section>
+
+        <section className="rn-card rn-pad" aria-labelledby="rn-claims">
+          <h2 id="rn-claims">Per claim</h2>
+          {run.accepted_claims === 0 ? (
+            <p className="rn-empty is-inline">No claims were accepted, so no rules ran.</p>
+          ) : (
+            <dl className="rn-facts">
+              <div><dt>Rule checks per claim</dt><dd>{(stats.checks / run.accepted_claims).toFixed(1)}</dd></div>
+              <div><dt>Failures per claim</dt><dd className="is-fail">{(stats.fail / run.accepted_claims).toFixed(2)}</dd></div>
+              <div><dt>Unable to assess per claim</dt><dd className="is-unable">{(stats.unable / run.accepted_claims).toFixed(2)}</dd></div>
+              <div><dt>Acceptance rate</dt><dd>{share(run.accepted_claims, run.total_records)}</dd></div>
+            </dl>
+          )}
+        </section>
       </div>
+
+      {ruleRows.length > 0 && (
+        <section className="rn-card" aria-labelledby="rn-rules">
+          <h2 id="rn-rules" className="rn-pad-head">Results by rule</h2>
+          <div className="rn-scroll">
+            <table className="rn-table">
+              <thead>
+                <tr>
+                  <th scope="col">Rule</th>
+                  <th scope="col" className="rn-right">Checks</th>
+                  <th scope="col" className="rn-right">Pass</th>
+                  <th scope="col" className="rn-right">Fail</th>
+                  <th scope="col" className="rn-right">Unable</th>
+                  <th scope="col" className="rn-right">N/A</th>
+                  <th scope="col" className="rn-col-bar">Failures</th>
+                </tr>
+              </thead>
+              <tbody className="is-static">
+                {ruleRows.map((row) => (
+                  <tr key={row.ruleId}>
+                    <th scope="row">
+                      <span className="rn-rule">{row.ruleId}</span> {titles.get(row.ruleId) ?? 'Rule no longer in the catalogue'}
+                      {!active.has(row.ruleId) && rules.length > 0 && <span className="rn-note is-muted">inactive</span>}
+                      {row.invalid > 0 && <span className="rn-note is-unable">{count(row.invalid)} invalid</span>}
+                    </th>
+                    <td className="rn-right rn-num">{count(row.total)}</td>
+                    <td className="rn-right rn-num">{count(row.pass)}</td>
+                    <td className={`rn-right rn-num${row.fail ? ' is-fail' : ''}`}>{count(row.fail)}</td>
+                    <td className={`rn-right rn-num${row.unable ? ' is-unable' : ''}`}>{count(row.unable)}</td>
+                    <td className="rn-right rn-num">{count(row.na)}</td>
+                    <td className="rn-col-bar"><Meter value={row.fail} max={maxFail} className="is-fail" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

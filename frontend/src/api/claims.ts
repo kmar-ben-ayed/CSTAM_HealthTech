@@ -208,6 +208,19 @@ export async function postReview(
   });
 }
 
+export type ClaimDecision = 'approve' | 'reject' | 'reopen';
+
+/** Records a decision on the whole claim; "reopen" withdraws the previous one. */
+export async function postClaimDecision(claimId: string, decision: ClaimDecision, reason: string, signal?: AbortSignal): Promise<ReviewResponse> {
+  const actor = sessionStorage.getItem('claimguard-demo-actor') || 'unknown-reviewer';
+  return apiFetch<ReviewResponse>(`/api/v1/claims/${encodeURIComponent(claimId)}/decision`, {
+    method: 'POST',
+    body: JSON.stringify({ decision, actor, reason, created_at: new Date().toISOString() }),
+    headers: { 'X-Actor': actor },
+    signal,
+  });
+}
+
 function formatDate(value?: string): string {
   if (!value) return '—';
   const date = new Date(`${value}T00:00:00`);

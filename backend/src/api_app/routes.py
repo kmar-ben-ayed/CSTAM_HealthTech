@@ -2,9 +2,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path as PathParam, Query, Request
 
 from api_app.schemas import (
+    ClaimDecisionRequest,
     ClaimRequest,
     ClaimsBatchRequest,
     CsvIngestRequest,
@@ -247,6 +248,11 @@ def get_dataset(split: str, request: Request, limit: int | None = Query(default=
     return _service(request, "dataset_service").get_dataset(split, limit)
 
 
+@v1_router.get("/quality/{split}", tags=["datasets"])
+def get_quality(split: str, request: Request):
+    return _service(request, "dataset_service").quality(split)
+
+
 @v1_router.get("/claims", tags=["claims"])
 def get_ingested_claims(request: Request, limit: int | None = Query(default=None, ge=1)):
     return _service(request, "ingestion_service").store.latest(limit)
@@ -305,30 +311,44 @@ def explain(payload: ExplanationRequest, request: Request):
     )
 
 
-@v1_router.post("/reviews", status_code=201, tags=["reviews"])
-def record_review(payload: ReviewDecisionRequest, request: Request):
-    decision = payload.model_dump(mode="json")
-
+def _apply_header_actor(decision: dict[str, Any], request: Request) -> None:
     # The X-Actor header may *name* the actor, but it must not be able to write
     # an unvalidated identity into the audit trail. Applying it after schema
     # validation meant a blank or 300-character header silently overrode an
     # already-validated body field.
     header_actor = request.headers.get("X-Actor")
-    if header_actor is not None:
-        cleaned = header_actor.strip()
-        if not cleaned:
-            raise HTTPException(
-                status_code=422,
-                detail={"errors": ["X-Actor header must not be blank."]},
-            )
-        if len(cleaned) > MAX_ACTOR_LENGTH:
-            raise HTTPException(
-                status_code=422,
-                detail={"errors": [f"X-Actor header must be at most {MAX_ACTOR_LENGTH} characters."]},
-            )
-        decision["actor"] = cleaned
+    if header_actor is None:
+        return
+    cleaned = header_actor.strip()
+    if not cleaned:
+        raise HTTPException(
+            status_code=422,
+            detail={"errors": ["X-Actor header must not be blank."]},
+        )
+    if len(cleaned) > MAX_ACTOR_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail={"errors": [f"X-Actor header must be at most {MAX_ACTOR_LENGTH} characters."]},
+        )
+    decision["actor"] = cleaned
 
+
+@v1_router.post("/reviews", status_code=201, tags=["reviews"])
+def record_review(payload: ReviewDecisionRequest, request: Request):
+    decision = payload.model_dump(mode="json")
+    _apply_header_actor(decision, request)
     return _service(request, "audit_service").record_review(decision)
+
+
+@v1_router.post("/claims/{claim_id}/decision", status_code=201, tags=["reviews"])
+def record_claim_decision(
+    payload: ClaimDecisionRequest,
+    request: Request,
+    claim_id: str = PathParam(min_length=1, max_length=128),
+):
+    decision = payload.model_dump(mode="json")
+    _apply_header_actor(decision, request)
+    return _service(request, "audit_service").record_claim_decision(claim_id, decision)
 
 
 @v1_router.get("/audit/events", tags=["audit"])

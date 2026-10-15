@@ -1,557 +1,361 @@
-import { useEffect, useState } from 'react';
-import Sentinel from '../components/Sentinel';
-import { datasetToClaimRows, getIngestedClaims, type ClaimRow } from '../api/claims';
+import { useEffect, useMemo, useState } from 'react';
+import ShieldLoader from '../components/ShieldLoader';
+import { ApiError } from '../api/client';
+import { getAuditEvents, type BackendAuditEvent } from '../api/audit';
+import { getDataset, getIngestedClaims, type DatasetResponse } from '../api/claims';
+import { displayName, loadCardContext, timeAgo, toClaimCardData } from '../api/claimCards';
+import { onlyActive } from '../api/reviewQueue';
+import { listRules } from '../api/rules';
+import '../styles/review-queue.css';
+
+// ── Review queue ───────────────────────────────────────────────────────────
+// Claims that need a reviewer, from the ingested claims (active rules only).
+// Where each claim stands comes from the audit trail: the latest action on
+// each of its rules, and any decision on the claim as a whole.
 
 interface ReviewQueueProps {
   onNavigate: (page: string, claimId?: string) => void;
 }
 
+type Stage = 'not-started' | 'in-progress' | 'waiting' | 'recheck' | 'decided';
+type Tab = 'open' | 'waiting' | 'recheck' | 'decided';
+type Sort = 'priority' | 'oldest' | 'recent';
 type Priority = 'High' | 'Medium' | 'Low';
-type ReviewStatus =
-  | 'In Review'
-  | 'Waiting for Info'
-  | 'Ready for Re-check'
-  | 'Completed';
-type ValidationOutcome = 'PASS' | 'FAIL' | 'NEEDS REVIEW' | 'UNABLE TO ASSESS';
 
 interface QueueItem {
   claimId: string;
   provider: string;
+  submitted: string;
+  fail: number;
+  unable: number;
   priority: Priority;
-  validationOutcome: ValidationOutcome;
-  reviewStatus: ReviewStatus;
-  topFinding: string;
-  age: string;
-  lastAction: string;
-  serviceDate: string;
-  amount: string;
+  topFinding: { ruleId: string; title: string } | null;
+  stage: Stage;
+  decision: 'approved' | 'rejected' | null;
+  lastEvent: BackendAuditEvent | null;
 }
 
-const PRIORITY_STYLE: Record<Priority, { bg: string; text: string; border: string }> = {
-  High: { bg: 'var(--status-fail-bg)', text: 'var(--status-fail-ink)', border: 'var(--status-fail-border)' },
-  Medium: { bg: 'var(--status-uta-bg)', text: 'var(--status-uta-ink)', border: 'var(--status-uta-border)' },
-  Low: { bg: 'var(--status-pass-bg)', text: 'var(--status-pass-ink)', border: 'var(--status-pass-border)' },
+const PAGE_SIZE = 25;
+
+const STAGE_LABEL: Record<Stage, string> = {
+  'not-started': 'Not started',
+  'in-progress': 'In progress',
+  waiting: 'Waiting for info',
+  recheck: 'Ready for re-check',
+  decided: 'Decided',
 };
 
-const VALIDATION_STYLE: Record<ValidationOutcome, { bg: string; text: string; border: string }> = {
-  PASS: { bg: 'var(--status-pass-bg)', text: 'var(--status-pass)', border: 'var(--status-pass-border)' },
-  FAIL: { bg: 'var(--status-fail-bg)', text: 'var(--status-fail)', border: 'var(--status-fail-border)' },
-  'NEEDS REVIEW': { bg: 'var(--status-review-bg)', text: 'var(--status-review)', border: 'var(--status-review-border)' },
-  'UNABLE TO ASSESS': { bg: 'var(--status-uta-bg)', text: 'var(--status-uta)', border: 'var(--status-uta-border)' },
-};
-
-const REVIEW_STATUS_STYLE: Record<ReviewStatus, { color: string; dot: string }> = {
-  'In Review': { color: 'var(--accent)', dot: 'var(--accent)' },
-  'Waiting for Info': { color: 'var(--status-uta-ink)', dot: 'var(--status-uta)' },
-  'Ready for Re-check': { color: 'var(--status-pass-ink)', dot: 'var(--status-pass)' },
-  Completed: { color: 'var(--text-secondary)', dot: 'var(--text-secondary)' },
-};
-
-type FilterTab = 'all' | 'high' | 'waiting' | 'recheck';
-
-const FILTER_TABS: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'high', label: 'High Priority' },
-  { key: 'waiting', label: 'Waiting for Info' },
-  { key: 'recheck', label: 'Ready for Re-check' },
+const TABS: Array<{ key: Tab; label: string }> = [
+  { key: 'open', label: 'Open' },
+  { key: 'waiting', label: 'Waiting for info' },
+  { key: 'recheck', label: 'Ready for re-check' },
+  { key: 'decided', label: 'Decided' },
 ];
 
-function Badge({
-  label,
-  bg,
-  text,
-  border,
-}: {
-  label: string;
-  bg: string;
-  text: string;
-  border: string;
-}) {
-  return (
-    <span
-      style={{
-        background: bg,
-        color: text,
-        border: `1px solid ${border}`,
-        borderRadius: 20,
-        padding: '2px 9px',
-        fontSize: '0.6875rem',
-        fontWeight: 700,
-        letterSpacing: '0.04em',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {label}
-    </span>
-  );
+const ACTION_VERB: Record<string, string> = {
+  confirm_issue: 'confirmed',
+  dismiss_with_reason: 'dismissed',
+  request_information: 'requested information on',
+  mark_corrected_for_recheck: 'marked corrected',
+};
+
+async function loadQueue(signal: AbortSignal): Promise<QueueItem[]> {
+  const [dataset, context, rules, audit] = await Promise.all([
+    getIngestedClaims(undefined, signal).catch((cause: unknown): Promise<DatasetResponse> => {
+      if (cause instanceof ApiError && cause.status === 404) return getDataset('development', 500, signal);
+      throw cause;
+    }),
+    loadCardContext(signal),
+    listRules(signal).catch(() => []),
+    getAuditEvents(500, signal).catch(() => ({ total_count: 0, events: [] })),
+  ]);
+  const active = new Set(rules.filter((rule) => rule.status === 'active').map((rule) => rule.rule_id));
+  const titles = new Map(rules.map((rule) => [rule.rule_id, rule.title]));
+
+  // Oldest first, so the last write wins for each rule and each claim.
+  const events = audit.events
+    .filter((event) => event.event_type === 'human_decision' || event.event_type === 'claim_decision')
+    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+  const ruleActions = new Map<string, Map<string, string>>();
+  const decisions = new Map<string, 'approved' | 'rejected'>();
+  const lastEvent = new Map<string, BackendAuditEvent>();
+  for (const event of events) {
+    if (!event.claim_id) continue;
+    lastEvent.set(event.claim_id, event);
+    if (event.event_type === 'human_decision') {
+      const actions = ruleActions.get(event.claim_id) ?? new Map<string, string>();
+      actions.set(String(event.payload.rule_id), String(event.payload.action));
+      ruleActions.set(event.claim_id, actions);
+    } else if (event.payload.decision === 'reopen') {
+      decisions.delete(event.claim_id);
+    } else {
+      decisions.set(event.claim_id, event.payload.decision === 'approve' ? 'approved' : 'rejected');
+    }
+  }
+
+  return dataset.claims.flatMap((claim) => {
+    const results = onlyActive(dataset.evaluations[claim.claim_id] ?? [], active);
+    const card = toClaimCardData(claim, results, context);
+    if (card.status === 'Passed') return [];
+    const unable = results.filter((result) => result.status === 'UNABLE_TO_ASSESS').length;
+    const top = card.findings[0];
+    const actions = [...(ruleActions.get(claim.claim_id)?.values() ?? [])];
+    const decision = decisions.get(claim.claim_id) ?? null;
+    const stage: Stage = decision
+      ? 'decided'
+      : actions.includes('request_information')
+        ? 'waiting'
+        : actions.includes('mark_corrected_for_recheck')
+          ? 'recheck'
+          : actions.length
+            ? 'in-progress'
+            : 'not-started';
+    return [{
+      claimId: claim.claim_id,
+      provider: card.providerName,
+      submitted: claim.submission_date ?? '',
+      fail: card.failedCount,
+      unable,
+      priority: card.failedCount >= 3 ? 'High' : card.failedCount > 0 ? 'Medium' : 'Low',
+      topFinding: top ? { ruleId: top.ruleId, title: titles.get(top.ruleId) ?? top.text } : null,
+      stage,
+      decision,
+      lastEvent: lastEvent.get(claim.claim_id) ?? null,
+    }];
+  });
 }
 
+function lastActionText(event: BackendAuditEvent | null): string {
+  if (!event) return 'No action yet';
+  const who = displayName(event.actor);
+  if (event.event_type === 'claim_decision') {
+    const decision = String(event.payload.decision);
+    return `${who} ${decision === 'approve' ? 'approved the claim' : decision === 'reject' ? 'rejected the claim' : 'reopened the claim'}`;
+  }
+  return `${who} ${ACTION_VERB[String(event.payload.action)] ?? 'reviewed'} ${String(event.payload.rule_id ?? '')}`.trim();
+}
+
+const formatDate = (date: string) =>
+  date ? new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
 export default function ReviewQueue({ onNavigate }: ReviewQueueProps) {
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
-  const [sortBy, setSortBy] = useState<'age' | 'priority' | 'status'>('priority');
-  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+  const [items, setItems] = useState<QueueItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('open');
+  const [sort, setSort] = useState<Sort>('priority');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    getIngestedClaims(undefined, controller.signal).then((response) => {
-      const rows = datasetToClaimRows(response).filter((row) => row.status !== 'pass');
-      setQueueItems(rows.map((row: ClaimRow) => ({
-        claimId: row.id,
-        provider: row.provider,
-        priority: row.status === 'fail' ? 'High' : row.status === 'review' ? 'Medium' : 'Low',
-        validationOutcome: row.status === 'fail' ? 'FAIL' : row.status === 'review' ? 'NEEDS REVIEW' : 'UNABLE TO ASSESS',
-        reviewStatus: 'In Review',
-        topFinding: row.rule === '—' ? 'Evaluation requires review' : row.rule,
-        age: 'Current batch',
-        lastAction: 'Flagged by backend evaluation',
-        serviceDate: row.dos,
-        amount: row.amount,
-      })));
-    }).catch(() => setQueueItems([]));
+    loadQueue(controller.signal)
+      .then(setItems)
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setError('The review queue could not be loaded.');
+      });
     return () => controller.abort();
   }, []);
 
-  const filtered = queueItems.filter((item) => {
-    if (activeFilter === 'high') return item.priority === 'High';
-    if (activeFilter === 'waiting') return item.reviewStatus === 'Waiting for Info';
-    if (activeFilter === 'recheck') return item.reviewStatus === 'Ready for Re-check';
-    return true;
-  });
+  // Any change to what is shown starts again at the first page.
+  useEffect(() => setPage(0), [tab, sort, query]);
 
-  const highPriority = filtered.filter((i) => i.priority === 'High');
-  const workload = [
-    { label: 'High priority', count: queueItems.filter((item) => item.priority === 'High').length, color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)', border: 'var(--status-fail-border)' },
-    { label: 'Waiting for info', count: queueItems.filter((item) => item.reviewStatus === 'Waiting for Info').length, color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)', border: 'var(--status-uta-border)' },
-    { label: 'In review', count: queueItems.filter((item) => item.reviewStatus === 'In Review').length, color: 'var(--accent)', bg: 'var(--accent-subtle)', border: 'var(--status-pass-border)' },
-  ];
+  const counts = useMemo(() => {
+    const all = items ?? [];
+    return {
+      open: all.filter((item) => item.stage !== 'decided').length,
+      waiting: all.filter((item) => item.stage === 'waiting').length,
+      recheck: all.filter((item) => item.stage === 'recheck').length,
+      decided: all.filter((item) => item.stage === 'decided').length,
+      high: all.filter((item) => item.stage !== 'decided' && item.priority === 'High').length,
+      started: all.filter((item) => item.stage !== 'decided' && item.stage !== 'not-started').length,
+    };
+  }, [items]);
 
-  const handleStartReview = (claimId: string, idx: number) => {
-    onNavigate('claim-review', claimId);
-  };
+  const shown = useMemo(() => {
+    if (!items) return [];
+    const needle = query.trim().toLowerCase();
+    const inTab = items.filter((item) =>
+      tab === 'open' ? item.stage !== 'decided' : tab === 'decided' ? item.stage === 'decided' : item.stage === tab);
+    const matching = needle
+      ? inTab.filter((item) => item.claimId.toLowerCase().includes(needle) || item.provider.toLowerCase().includes(needle))
+      : inTab;
+    const lastAt = (item: QueueItem) => (item.lastEvent ? Date.parse(item.lastEvent.timestamp) : 0);
+    return [...matching].sort((a, b) =>
+      sort === 'oldest'
+        ? a.submitted.localeCompare(b.submitted) || b.fail - a.fail
+        : sort === 'recent'
+          ? lastAt(b) - lastAt(a) || b.fail - a.fail
+          : b.fail * 100 + b.unable - (a.fail * 100 + a.unable) || a.submitted.localeCompare(b.submitted));
+  }, [items, tab, sort, query]);
+
+  if (error) {
+    return (
+      <div className="page-shell rq-page">
+        <h1>Review queue</h1>
+        <p className="rq-error" role="alert">{error}</p>
+      </div>
+    );
+  }
+  if (!items) {
+    return (
+      <div className="page-shell rq-page">
+        <ShieldLoader label="Building the review queue…" />
+      </div>
+    );
+  }
+
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const current = Math.min(page, pages - 1);
+  const rows = shown.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
+  const open = (claimId: string) => onNavigate('claim-review', claimId);
 
   return (
-    <div className="page-shell review-queue-shell">
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div className="review-queue-heading" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <span className="sc-eyebrow"> Human in the loop</span>
-            <h1
-              style={{
-                fontSize: '1.375rem',
-                fontWeight: 700,
-                color: 'var(--text-primary)',
-                letterSpacing: '-0.025em',
-                margin: '12px 0 4px',
-              }}
-            >
-              Review Queue
-            </h1>
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{queueItems.length}</strong> claims need your attention
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              style={{
-                background: 'var(--card-bg)',
-                border: '1px solid var(--card-border)',
-                borderRadius: 7,
-                padding: '7px 28px 7px 10px',
-                fontSize: '0.8125rem',
-                color: 'var(--text-primary)',
-                fontFamily: 'inherit',
-                cursor: 'pointer',
-                outline: 'none',
-                appearance: 'none',
-                backgroundImage:
-                  "url(\"data:image/svg+xml,%3Csvg width='10' height='10' viewBox='0 0 10 10' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4l3 3 3-3' stroke='%2394a3b8' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 8px center',
-              }}
-            >
-              <option value="priority">Sort: Priority</option>
-              <option value="age">Sort: Age</option>
-              <option value="status">Sort: Status</option>
-            </select>
-          </div>
+    <div className="page-shell rq-page">
+      <header className="rq-head">
+        <div>
+          <h1>Review queue</h1>
+          <p>
+            {counts.open === 0
+              ? 'No claims are waiting for a decision.'
+              : `${counts.open.toLocaleString('en')} claim${counts.open === 1 ? '' : 's'} waiting for a decision, most failed rules first.`}
+          </p>
         </div>
-      </div>
-
-      {/* Workload summary */}
-      <div className="review-queue-summary" style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
-        {workload.map((w) => (
-          <div
-            key={w.label}
-            style={{
-              background: w.bg,
-              border: `1px solid ${w.border}`,
-              borderRadius: 10,
-              padding: '14px 18px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 14,
-            }}
-          >
-            <div
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: w.color,
-                flexShrink: 0,
-                boxShadow: `0 0 0 3px color-mix(in srgb, ${w.color} 15%, transparent)`,
-              }}
-            />
-            <div>
-              <div
-                style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 700,
-                  color: w.color,
-                  fontFamily: "var(--font-sans)",
-                  lineHeight: 1,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                {w.count}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, marginTop: 2 }}>
-                {w.label}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Filter tabs */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          marginBottom: 16,
-          background: 'var(--card-bg)',
-          border: '1px solid var(--card-border)',
-          borderRadius: 8,
-          padding: 4,
-          width: 'fit-content',
-        }}
-      >
-        {FILTER_TABS.map((tab) => {
-          const isActive = activeFilter === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveFilter(tab.key)}
-              style={{
-                background: isActive ? 'var(--canvas-bg-secondary)' : 'transparent',
-                border: isActive ? '1px solid var(--border)' : '1px solid transparent',
-                borderRadius: 6,
-                padding: '5px 12px',
-                fontSize: '0.8125rem',
-                fontWeight: isActive ? 600 : 500,
-                color: isActive ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Queue session context banner (when high priority filter active) */}
-      {activeFilter === 'high' && highPriority.length > 0 && (
-        <div
-          style={{
-            background: 'linear-gradient(135deg, rgba(15,122,130,0.06), rgba(150,101,15,0.04))',
-            border: '1px solid var(--status-review-border)',
-            borderRadius: 8,
-            padding: '10px 16px',
-            marginBottom: 12,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Sentinel state="scanning" size={20} showLabel={false} />
-            <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Review session — {highPriority.length} high-priority claims
-            </span>
-          </div>
+        {counts.open > 0 && (
           <button
-            onClick={() => handleStartReview(highPriority[0].claimId, 0)}
-            style={{
-              background: 'var(--accent)',
-              border: 'none',
-              borderRadius: 6,
-              padding: '6px 14px',
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              color: 'var(--card-bg)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
+            type="button"
+            className="rq-primary"
+            onClick={() => {
+              // Always the most urgent open claim, whatever tab or sort is showing.
+              const next = items
+                .filter((item) => item.stage !== 'decided')
+                .sort((a, b) => b.fail * 100 + b.unable - (a.fail * 100 + a.unable))[0];
+              if (next) open(next.claimId);
             }}
           >
-            Start session →
+            Start reviewing
           </button>
-        </div>
-      )}
+        )}
+      </header>
 
-      {/* Queue table */}
-      <div
-        style={{
-          background: 'var(--card-bg)',
-          border: '1px solid var(--card-border)',
-          borderRadius: 10,
-          overflow: 'hidden',
-          boxShadow: 'var(--card-shadow)',
-        }}
-      >
-        {filtered.length === 0 ? (
-          /* Empty state */
-          <div style={{ padding: '64px 32px', textAlign: 'center' }}>
-            <div style={{ marginBottom: 20 }}>
-              <Sentinel state="pass" size={56} showLabel={false} />
-            </div>
-            <div style={{ fontSize: '1.0625rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
-              You're all caught up
-            </div>
-            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-              There are no claims waiting for your review.
-            </div>
-            <div
-              style={{
-                marginTop: 12,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                background: 'var(--status-pass-bg)',
-                border: '1px solid var(--status-pass-border)',
-                borderRadius: 20,
-                padding: '4px 14px',
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                color: 'var(--status-pass-ink)',
-              }}
+      <dl className="rq-summary">
+        <div><dt>High priority</dt><dd className="is-fail">{counts.high.toLocaleString('en')}</dd><span>3 or more failed rules</span></div>
+        <div><dt>Started</dt><dd>{counts.started.toLocaleString('en')}</dd><span>At least one rule reviewed</span></div>
+        <div><dt>Waiting for info</dt><dd className="is-unable">{counts.waiting.toLocaleString('en')}</dd><span>Information requested</span></div>
+        <div><dt>Decided</dt><dd className="is-pass">{counts.decided.toLocaleString('en')}</dd><span>Approved or rejected</span></div>
+      </dl>
+
+      <div className="rq-toolbar">
+        <div className="rq-tabs" role="group" aria-label="Queue view">
+          {TABS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={tab === key}
+              className="rq-tab"
+              onClick={() => setTab(key)}
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6l3 3 5-5" stroke="var(--status-pass-ink)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Queue clear
-            </div>
-          </div>
+              {label} <span className="rq-tab-count">{counts[key].toLocaleString('en')}</span>
+            </button>
+          ))}
+        </div>
+        <div className="rq-tools">
+          <label className="rq-search">
+            <span className="visually-hidden">Search by claim ID or provider</span>
+            <input type="search" placeholder="Claim ID or provider" value={query} onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          <label className="rq-sort">
+            <span>Sort</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
+              <option value="priority">Most failed rules</option>
+              <option value="oldest">Oldest submission</option>
+              <option value="recent">Recently worked on</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <section className="rq-card" aria-label="Claims">
+        {rows.length === 0 ? (
+          <p className="rq-empty">
+            {query
+              ? 'No claims match this search.'
+              : tab === 'open'
+                ? 'Every claim has a decision. Nothing is waiting.'
+                : tab === 'waiting'
+                  ? 'No claim is waiting for information.'
+                  : tab === 'recheck'
+                    ? 'No claim is ready for a re-check.'
+                    : 'No claim has been approved or rejected yet.'}
+          </p>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: 1000 }}>
+          <div className="rq-scroll">
+            <table className="rq-table">
               <thead>
                 <tr>
-                  <th>Claim ID</th>
-                  <th>Provider</th>
-                  <th>Priority</th>
-                  <th>Validation</th>
-                  <th>Review Status</th>
-                  <th style={{ minWidth: 220 }}>Top Finding</th>
-                  <th>Age</th>
-                  <th>Last Action</th>
-                  <th></th>
+                  <th scope="col">Claim</th>
+                  <th scope="col">Provider</th>
+                  <th scope="col">Findings</th>
+                  <th scope="col">Top finding</th>
+                  <th scope="col">Stage</th>
+                  <th scope="col">Submitted</th>
+                  <th scope="col">Last action</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item, idx) => {
-                  const prStyle = PRIORITY_STYLE[item.priority];
-                  const valStyle = VALIDATION_STYLE[item.validationOutcome];
-                  const revStyle = REVIEW_STATUS_STYLE[item.reviewStatus];
-                  return (
-                    <tr
-                      key={item.claimId}
-                      onClick={() => handleStartReview(item.claimId, idx)}
-                    >
-                      <td>
-                        <span
-                          style={{
-                            fontFamily: "var(--font-sans)",
-                            fontWeight: 600,
-                            color: 'var(--accent)',
-                            fontSize: '0.8125rem',
-                          }}
-                        >
-                          {item.claimId}
-                        </span>
-                      </td>
-                      <td>
-                        <div
-                          style={{
-                            fontSize: '0.875rem',
-                            color: 'var(--text-primary)',
-                            fontWeight: 500,
-                            maxWidth: 180,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {item.provider}
-                        </div>
-                      </td>
-                      <td>
-                        <Badge
-                          label={item.priority}
-                          bg={prStyle.bg}
-                          text={prStyle.text}
-                          border={prStyle.border}
-                        />
-                      </td>
-                      <td>
-                        <Badge
-                          label={item.validationOutcome}
-                          bg={valStyle.bg}
-                          text={valStyle.text}
-                          border={valStyle.border}
-                        />
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <div
-                            style={{
-                              width: 7,
-                              height: 7,
-                              borderRadius: '50%',
-                              background: revStyle.dot,
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span
-                            style={{
-                              fontSize: '0.8125rem',
-                              color: revStyle.color,
-                              fontWeight: 600,
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {item.reviewStatus}
-                          </span>
-                        </div>
-                      </td>
-                      <td>
-                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                          {item.topFinding}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontFamily: "var(--font-sans)",
-                            fontSize: '0.8125rem',
-                            color: 'var(--text-secondary)',
-                            fontWeight: 500,
-                          }}
-                        >
-                          {item.age}
-                        </span>
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            fontSize: '0.8125rem',
-                            color: 'var(--text-tertiary)',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {item.lastAction}
-                        </span>
-                      </td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => handleStartReview(item.claimId, idx)}
-                          style={{
-                            background: 'var(--card-bg)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 6,
-                            padding: '5px 12px',
-                            fontSize: '0.8125rem',
-                            fontWeight: 600,
-                            color: 'var(--text-primary)',
-                            cursor: 'pointer',
-                            fontFamily: 'inherit',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.15s ease',
-                          }}
-                        >
-                          Open →
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {rows.map((item) => (
+                  <tr key={item.claimId} onClick={() => open(item.claimId)}>
+                    <th scope="row">
+                      {/* The row is clickable for the mouse; this button is the keyboard and screen-reader target. */}
+                      <button type="button" className="rq-claim" onClick={(event) => { event.stopPropagation(); open(item.claimId); }}>
+                        {item.claimId}
+                      </button>
+                      <span className={`rq-priority is-${item.priority.toLowerCase()}`}>{item.priority}</span>
+                    </th>
+                    <td className="rq-provider">{item.provider}</td>
+                    <td className="rq-findings">
+                      {item.fail > 0 && <span className="is-fail">{item.fail} failed</span>}
+                      {item.fail > 0 && item.unable > 0 && ' · '}
+                      {item.unable > 0 && <span className="is-unable">{item.unable} unable</span>}
+                      {item.fail === 0 && item.unable === 0 && <span>Flagged for review</span>}
+                    </td>
+                    <td className="rq-top">
+                      {item.topFinding ? (
+                        <><span className="rq-rule">{item.topFinding.ruleId}</span> {item.topFinding.title}</>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      <span className={`rq-stage is-${item.stage}`}>
+                        {item.decision ? `Claim ${item.decision}` : STAGE_LABEL[item.stage]}
+                      </span>
+                    </td>
+                    <td className="rq-date">{formatDate(item.submitted)}</td>
+                    <td className="rq-last">
+                      {lastActionText(item.lastEvent)}
+                      {item.lastEvent && <span>{timeAgo(new Date(item.lastEvent.timestamp))}</span>}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* Footer */}
-        {filtered.length > 0 && (
-          <div
-            style={{
-              padding: '12px 20px',
-              borderTop: '1px solid var(--card-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <span style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
-              Showing {filtered.length} of {queueItems.length} claims
+        {shown.length > 0 && (
+          <footer className="rq-foot">
+            <span>
+              {(current * PAGE_SIZE + 1).toLocaleString('en')}–{Math.min(shown.length, (current + 1) * PAGE_SIZE).toLocaleString('en')} of {shown.length.toLocaleString('en')}
             </span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  padding: '5px 12px',
-                  fontSize: '0.8125rem',
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                ← Prev
-              </button>
-              <span
-                style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: '0.8125rem',
-                  color: 'var(--text-secondary)',
-                  padding: '0 4px',
-                }}
-              >
-                1 / 4
-              </span>
-              <button
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--border)',
-                  borderRadius: 6,
-                  padding: '5px 12px',
-                  fontSize: '0.8125rem',
-                  color: 'var(--text-primary)',
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Next →
-              </button>
-            </div>
-          </div>
+            {pages > 1 && (
+              <div className="rq-pager">
+                <button type="button" disabled={current === 0} onClick={() => setPage(current - 1)}>Previous</button>
+                <span aria-live="polite">Page {current + 1} of {pages}</span>
+                <button type="button" disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>Next</button>
+              </div>
+            )}
+          </footer>
         )}
-      </div>
+      </section>
     </div>
   );
 }

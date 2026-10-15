@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shield Orbit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --font:'Manrope',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;
+  --canvas:#f3f5f8;--surface:rgba(255,255,255,.72);--solid:#fff;--ink:#1b2130;--muted:#5b6374;--line:rgba(27,33,48,.08);
+  --accent:#0e7490;--accent-soft:#e2f2f5;--pass:#16a34a;--pass-ink:#15803d;--pass-soft:#e5f5eb;--fail:#dc2626;--fail-ink:#b91c1c;--fail-soft:#fdeceb;--unable:#d97706;--unable-ink:#b45309;--unable-soft:#fdf1df;
+  --shadow:0 1px 2px rgba(27,33,48,.04),0 12px 32px -12px rgba(27,33,48,.16);--r:24px;--spring:cubic-bezier(.3,1.4,.5,1);--ease:cubic-bezier(.2,.8,.2,1)}
+:root[data-theme=dark]{
+  --canvas:#0c0f14;--surface:rgba(26,31,40,.72);--solid:#171c24;--ink:#eef1f5;--muted:#a3abb9;--line:rgba(255,255,255,.08);
+  --accent:#22d3ee;--accent-soft:rgba(34,211,238,.12);--pass:#4ade80;--pass-ink:#4ade80;--pass-soft:rgba(74,222,128,.12);--fail:#f87171;--fail-ink:#fca5a5;--fail-soft:rgba(248,113,113,.13);--unable:#fbbf24;--unable-ink:#fcd34d;--unable-soft:rgba(251,191,36,.13);
+  --shadow:0 12px 32px -12px rgba(0,0,0,.6)}
+*{box-sizing:border-box;margin:0}
+body{font:15px/1.55 var(--font);color:var(--ink);background:var(--canvas);-webkit-font-smoothing:antialiased;min-height:100vh;
+  background-image:radial-gradient(700px 500px at 50% 18%,var(--accent-soft),transparent 65%),radial-gradient(500px 400px at 100% 100%,var(--pass-soft),transparent 60%);background-attachment:fixed}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 80px;display:grid;gap:24px}
+.card{background:var(--surface);backdrop-filter:blur(20px) saturate(160%);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:20px}
+.eyebrow{font-weight:600;font-size:12.5px;color:var(--muted)}
+.mono{font-family:var(--mono);font-size:.9em}
+h1{font-weight:800;font-size:clamp(28px,3.2vw,38px);line-height:1.08;letter-spacing:-.03em}
+h2{font-weight:700;font-size:17px;letter-spacing:-.01em}
+.btn{border:0;border-radius:999px;padding:13px 22px;min-height:46px;font-weight:700;font-size:14px;cursor:pointer;background:var(--ink);color:var(--canvas);transition:transform .12s ease-out;width:100%}
+.btn:active{transform:scale(.96)}
+.btn.sm{width:auto;min-height:40px;padding:9px 16px;font-size:13px}
+.btn.ghost{background:var(--solid);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.chip{display:inline-block;padding:3px 10px;border-radius:999px;font-weight:700;font-size:12px}
+.t-fail{background:var(--fail-soft);color:var(--fail-ink)}.t-unable{background:var(--unable-soft);color:var(--unable-ink)}.t-pass{background:var(--pass-soft);color:var(--pass-ink)}.t-accent{background:var(--accent-soft);color:var(--accent)}
+
+/* header */
+.top{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;padding:0 4px}
+.theme{border:0;border-radius:999px;padding:9px 16px;min-height:40px;background:var(--solid);box-shadow:var(--shadow);font-weight:600;font-size:13px;cursor:pointer;transition:transform .12s ease-out}
+.theme:active{transform:scale(.96)}
+
+/* stage */
+.stage{display:grid;grid-template-columns:270px 1fr 300px;gap:24px;align-items:center}
+.col{display:grid;gap:14px;align-content:center}
+/* planet stat cards */
+.planet{display:flex;gap:14px;align-items:center;padding:16px 18px;transition:transform .35s var(--ease)}
+@media (hover:hover){.planet:hover{transform:translateX(4px)}}
+.orb{position:relative;width:46px;height:46px;flex:none;border-radius:50%;background:var(--c-soft)}
+.orb::before{content:"";position:absolute;inset:13px;border-radius:50%;background:var(--c)}
+.orb::after{content:"";position:absolute;width:7px;height:7px;border-radius:50%;background:var(--c);top:50%;left:50%;margin:-3.5px;
+  animation:moon var(--d,4s) linear infinite}
+@keyframes moon{from{transform:rotate(0) translateX(21px)}to{transform:rotate(360deg) translateX(21px)}}
+.planet .n{font-weight:800;font-size:28px;letter-spacing:-.03em;line-height:1}
+
+/* orbit */
+.orbit{position:relative;aspect-ratio:1;width:100%;max-width:620px;margin:0 auto;touch-action:manipulation}
+.orbit svg.rings{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.rings circle{fill:none;stroke:var(--line);stroke-width:.35}
+.dot{position:absolute;left:0;top:0;width:var(--s);height:var(--s);border-radius:50%;border:0;padding:0;cursor:pointer;background:transparent;
+  will-change:transform;transition:opacity .35s var(--ease),filter .35s}
+/* invisible 44px hit area around small dots */
+.dot::before{content:"";position:absolute;inset:min(0px,calc((var(--s) - 44px) / 2));border-radius:50%}
+.dot .in{position:absolute;inset:0;border-radius:50%;background:var(--c);box-shadow:0 0 0 6px color-mix(in srgb,var(--c) 16%,transparent);transition:transform .3s var(--spring),box-shadow .35s}
+/* unable-only claims are hollow, so status isn't colour alone */
+.dot.hollow .in{background:var(--solid);border:3px solid var(--c)}
+.dot:hover .in,.dot:focus-visible .in,.dot.active .in{transform:scale(1.5)}
+.dot.fade{opacity:.15;filter:grayscale(1)}
+.dot.glow .in{box-shadow:0 0 0 6px color-mix(in srgb,var(--c) 22%,transparent),0 0 22px 4px color-mix(in srgb,var(--c) 55%,transparent)}
+.dot.ping::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--c);animation:ping .9s ease-out 2}
+@keyframes ping{to{transform:scale(2.4);opacity:0}}
+.center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+.center .num{font-weight:800;font-size:clamp(30px,3.6vw,46px);letter-spacing:-.04em;line-height:1;margin-top:2px;display:inline-block}
+.center .num.bump{animation:bump .5s var(--spring)}
+@keyframes bump{40%{transform:scale(1.25)}}
+.tip{position:absolute;z-index:5;width:240px;pointer-events:none;opacity:0;transform:translateY(6px) scale(.96);transition:opacity .18s,transform .3s var(--ease)}
+.tip.show{opacity:1;transform:none}
+.tip.pinned{pointer-events:auto;background:var(--solid)}
+.tip .acts{display:none;gap:8px;margin-top:12px}
+.tip.pinned .acts{display:flex}
+.tip .hint{font-size:12px;color:var(--muted)}
+.tip.pinned .hint{display:none}
+.legend{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:4px;font-size:12.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;border-radius:50%}
+
+/* shield */
+.shield .body{fill:var(--solid);stroke:var(--sc);stroke-width:4;transition:stroke .5s}
+.shield .core{fill:color-mix(in srgb,var(--sc) 14%,transparent);transform-origin:60px 58px;animation:pulse var(--pd) ease-in-out infinite}
+.shield .orbitp{stroke:var(--sc);stroke-opacity:.3;stroke-width:1.5;fill:none}
+.shield .sym{stroke:var(--sc);stroke-width:5;stroke-linecap:round;fill:none}.shield .sym .f{fill:var(--sc);stroke:none}
+.shield .sat{fill:var(--sc)}
+.shield.gulp{animation:gulp .5s var(--spring)}
+@keyframes gulp{40%{transform:scale(1.12)}}
+@keyframes pulse{50%{transform:scale(1.14);opacity:.7}}
+
+/* filter chips */
+.filters{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+.fchip{border:0;border-radius:999px;padding:8px 14px;min-height:40px;font-weight:700;font-size:13px;cursor:pointer;background:var(--solid);box-shadow:inset 0 0 0 1px var(--line);display:flex;gap:8px;align-items:center;
+  transition:transform .3s var(--spring),background .25s,color .25s}
+.fchip:active{transform:scale(.95)}
+.fchip .c{font-family:var(--mono);font-size:12px;opacity:.75}
+.fchip[aria-pressed=true]{background:var(--ink);color:var(--canvas)}
+
+/* feed */
+.feed{list-style:none;padding:0;display:grid;gap:6px;max-height:420px;overflow:hidden;
+  mask-image:linear-gradient(#000 80%,transparent)}
+.feed li{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:14px;font-size:14px;transition:background .2s}
+.feed li[data-claim]{cursor:pointer}
+@media (hover:hover){.feed li[data-claim]:hover{background:var(--accent-soft)}}
+.feed li.new{animation:drop .6s var(--spring)}
+@keyframes drop{from{opacity:0;transform:translateY(-14px) scale(.96)}}
+.feed .ic{width:28px;height:28px;flex:none;border-radius:10px;display:grid;place-items:center}
+.feed .ic svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.feed time{display:block;font-size:12px;color:var(--muted)}
+
+/* heatmap */
+.heatcard{display:grid;grid-template-columns:1fr 280px;gap:28px;align-items:center}
+.heat{display:grid;grid-template-columns:auto repeat(7,1fr);gap:6px;font-size:12px}
+.heat .rl{border:0;background:none;font-family:var(--mono);color:var(--muted);padding:6px 10px 6px 0;text-align:left;cursor:pointer;align-self:center;font-size:12px;transition:transform .12s ease-out}
+.heat .rl:active{transform:scale(.96)}
+.heat .rl[aria-pressed=true]{color:var(--ink);font-weight:500}
+.heat .dl{text-align:center;color:var(--muted)}
+.heat .cell{height:30px;border-radius:9px;position:relative;opacity:0;transform:scale(.6);transition:transform .25s var(--spring)}
+.heat .cell::before{content:"";position:absolute;inset:0;border-radius:inherit;background:var(--fail);opacity:var(--o)}
+.heat .cell b{position:relative;display:grid;place-items:center;height:100%;font-size:12px;font-weight:700;color:var(--ink)}
+.heat .cell.strong b{color:#fff}
+.heat.on .cell{animation:cell .5s var(--spring) forwards;animation-delay:var(--dl)}
+@keyframes cell{to{opacity:1;transform:none}}
+.heat .cell:hover{transform:scale(1.12)!important}
+.heat .row-dim{filter:grayscale(1);opacity:.35!important}
+.insight{font-size:15px;line-height:1.5}
+.insight b{color:var(--fail-ink)}
+
+/* undo toast */
+.toast{position:fixed;left:50%;bottom:24px;z-index:40;display:flex;gap:14px;align-items:center;background:var(--ink);color:var(--canvas);padding:10px 10px 10px 20px;border-radius:999px;
+  box-shadow:var(--shadow);font-weight:600;font-size:14px;transform:translate(-50%,140%);transition:transform .45s var(--spring)}
+.toast.show{transform:translate(-50%,0)}
+.toast button{border:0;border-radius:999px;padding:8px 14px;min-height:36px;background:color-mix(in srgb,var(--canvas) 18%,transparent);color:var(--canvas);font-weight:700;cursor:pointer}
+
+@media (max-width:1000px){.stage{grid-template-columns:1fr}.orbit-col{order:-1}.col{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.heatcard{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="top">
+    <div><div class="eyebrow" id="date"></div><h1 id="greet">Good morning, Kmar.</h1></div>
+    <button class="theme" id="theme">Dark mode</button>
+  </header>
+
+  <section class="stage">
+    <!-- left: planet stats -->
+    <div class="col">
+      <div class="card planet" style="--c:var(--accent);--c-soft:var(--accent-soft);--d:6s"><span class="orb"></span><div><div class="n" data-count="500">500</div><div class="eyebrow">Claims processed</div></div></div>
+      <div class="card planet" style="--c:var(--fail);--c-soft:var(--fail-soft);--d:3s"><span class="orb"></span><div><div class="n" data-count="41">41</div><div class="eyebrow">Issues detected</div></div></div>
+      <div class="card planet" style="--c:var(--unable);--c-soft:var(--unable-soft);--d:4.5s"><span class="orb"></span><div><div class="n" id="unableN">3</div><div class="eyebrow">Unable to assess</div></div></div>
+      <div class="card planet" style="--c:var(--pass);--c-soft:var(--pass-soft);--d:8s"><span class="orb"></span><div><div class="n">82%</div><div class="eyebrow">Passed in run #482</div></div></div>
+    </div>
+
+    <!-- center: orbit -->
+    <div class="orbit-col">
+      <p class="sr" id="orbitHelp">Claims waiting for a decision, ordered by priority. Use the arrow keys to move between claims and Enter to open one.</p>
+      <div class="orbit" id="orbit" role="group" aria-label="Claims waiting for a decision" aria-describedby="orbitHelp">
+        <svg class="rings" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="22"/><circle cx="50" cy="50" r="33"/><circle cx="50" cy="50" r="44"/></svg>
+        <div class="center"><div id="shieldSlot"></div><br><span class="num" id="qn">0</span><div class="eyebrow">waiting for you</div></div>
+        <div class="card tip" id="tip" role="dialog" aria-label="Claim preview"></div>
+      </div>
+      <div class="legend" aria-hidden="true">
+        <span><i style="width:12px;height:12px;background:var(--fail)"></i>Failed rules (bigger = more)</span>
+        <span><i style="width:12px;height:12px;border:3px solid var(--unable)"></i>Unable to assess only</span>
+        <span>Inner ring = most urgent</span>
+      </div>
+      <div class="filters" id="filters" role="group" aria-label="Highlight claims by rule"></div>
+    </div>
+
+    <!-- right: live feed + CTA -->
+    <div class="col">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h2>Live</h2><span class="chip t-pass">● streaming</span></div>
+        <ul class="feed" id="feed"></ul>
+      </div>
+      <button class="btn">Open review queue</button>
+    </div>
+  </section>
+
+  <!-- heatmap -->
+  <section class="card heatcard">
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px"><h2>Where failures cluster</h2><span class="eyebrow">rules × last 7 runs · click a rule</span></div>
+      <div class="heat" id="heat"></div>
+    </div>
+    <div class="insight" id="insight"></div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status"><span id="toastText"></span><button id="undo">Undo</button></div>
+<div class="sr" aria-live="polite" id="announce"></div>
+
+<script>
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $=s=>document.querySelector(s);
+const ICON={check:'<path d="M5 12l4 4 10-10"/>',flag:'<path d="M12 6v8M12 18v.5"/>',q:'<path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 18v.5"/>',run:'<path d="M5 12h14M13 6l6 6-6 6"/>',undo:'<path d="M9 14l-4-4 4-4M5 10h9a5 5 0 0 1 0 10h-3"/>'};
+const announce=t=>{$('#announce').textContent=t};
+
+/* ---------- data ---------- */
+const RULES=[{id:'R-12',name:'Duplicate service'},{id:'R-07',name:'ICD/CPT mismatch'},{id:'R-03',name:'Late submission'},{id:'R-21',name:'Unit limit'}];
+const PROV=['PRV-118','PRV-044','PRV-009','PRV-231','PRV-077'];
+let seq=400;
+function mkClaim(fail,unable,rule){seq+=7;return{id:'CLM-'+String(seq).padStart(4,'0'),prov:PROV[seq%5],date:`${(seq%9)+1} Oct 2026`,fail,unable,rule}}
+const seed=[[4,1,0],[3,0,0],[3,0,1],[2,1,0],[2,0,2],[2,0,1],[1,1,3],[1,0,0],[1,0,1],[1,0,2],[0,2,3],[0,1,0],[1,0,0],[0,1,2]];
+let claims=seed.map(([f,u,r])=>mkClaim(f,u,RULES[r].id));
+const heat=RULES.map((_,r)=>Array.from({length:7},(_,d)=>Math.max(0,Math.round((5-r)*1.6+Math.sin(d*1.3+r)*3+(d===6&&r===0?6:0)))));
+const ruleName=id=>(RULES.find(r=>r.id===id)||{}).name;
+const priority=c=>c.fail*100+c.unable;
+
+/* ---------- header ---------- */
+const now=new Date();
+$('#date').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+{const h=now.getHours();$('#greet').textContent=`Good ${h<12?'morning':h<18?'afternoon':'evening'}, Kmar.`}
+
+/* ---------- shield reacts to queue ---------- */
+// busy queue = red with "!", not ✕ (✕ would read as "failed")
+const SYM={review:'<path d="M45 58c4.5-7.5 25.5-7.5 30 0-4.5 7.5-25.5 7.5-30 0z"/><circle class="f" cx="60" cy="58" r="4"/>',pass:'<path d="M48.5 58.5l8 8 15-16"/>',busy:'<path d="M60 46v14"/><circle class="f" cx="60" cy="70" r="3"/>'};
+const ORB='M8 58 a52 13 0 1 0 104 0 a52 13 0 1 0 -104 0';
+let lastState='';
+function renderShield(){
+  const n=claims.length,st=n===0?'pass':n>12?'busy':'review';
+  const col={pass:'var(--pass)',busy:'var(--fail)',review:'var(--accent)'}[st];const q=.6+Math.min(n,20)/14*1.4;
+  if(st!==lastState){lastState=st;
+    $('#shieldSlot').innerHTML=`<svg class="shield" id="shield" width="104" height="104" viewBox="0 0 120 120" style="--sc:${col};--pd:${(2.4/q).toFixed(2)}s" aria-hidden="true">
+    <path class="body" d="M60 12c12 0 24 4 34 10v34c0 24-15 42-34 50-19-8-34-26-34-50V22c10-6 22-10 34-10z"/><circle class="core" cx="60" cy="58" r="21"/><path class="orbitp" d="${ORB}"/>
+    <g class="sym">${SYM[st]}</g>${reduce?'':`<circle class="sat" r="4"><animateMotion id="sm" dur="${(5/q).toFixed(2)}s" repeatCount="indefinite" path="${ORB}"/></circle>`}</svg>`}
+  else{const s=$('#shield');s.style.setProperty('--pd',(2.4/q).toFixed(2)+'s');const m=$('#sm');m&&m.setAttribute('dur',(5/q).toFixed(2)+'s')}
+  const qn=$('#qn');qn.textContent=n;qn.classList.remove('bump');void qn.offsetWidth;qn.classList.add('bump');
+  $('#unableN').textContent=claims.filter(c=>c.unable).length;
+}
+
+/* ---------- orbit ---------- */
+const box=$('#orbit');const RING=c=>c.fail>=3?22:c.fail>0?33:44;
+const SPEED={22:.16,33:-.11,44:.075};
+let dots=[],hoverPause=false,pinned=null,filter=null,visible=true;
+const paused=()=>hoverPause||!!pinned;
+function addDot(c,fly){
+  const el=document.createElement('button');el.className='dot'+(c.fail?'':' hollow');el.tabIndex=-1;
+  const s=12+c.fail*4;el.style.setProperty('--s',s+'px');el.style.setProperty('--c',c.fail?'var(--fail)':'var(--unable)');
+  el.innerHTML='<span class="in"></span>';
+  el.setAttribute('aria-label',`${c.id}: ${c.fail} failed, ${c.unable} unable to assess. Top issue ${ruleName(c.rule)}.`);
+  const d={c,el,ring:RING(c),s,a:Math.random()*Math.PI*2,r:fly?72:RING(c),scale:fly?.2:1,leaving:false};
+  el.onmouseenter=()=>{if(pinned)return;hoverPause=true;showTip(d,false)};
+  el.onmouseleave=()=>{if(pinned)return;hoverPause=false;hideTip()};
+  el.onfocus=()=>{if(!pinned){hoverPause=true;showTip(d,false)}};
+  el.onblur=()=>{if(!pinned){hoverPause=false;hideTip()}};
+  el.onpointerdown=()=>{hoverPause=true}; // stop the target moving under a finger
+  el.onclick=e=>{e.stopPropagation();pin(d)};
+  box.appendChild(el);dots.push(d);applyFilter();updateTabOrder();return d}
+
+/* keyboard: one tab stop, arrows move through claims in priority order */
+const ordered=()=>dots.filter(d=>!d.leaving).sort((a,b)=>priority(b.c)-priority(a.c));
+function updateTabOrder(){const o=ordered();if(!o.length)return;if(!o.some(d=>d.el.tabIndex===0))o[0].el.tabIndex=0}
+box.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&pinned){unpin(true);return}
+  if(!['ArrowRight','ArrowDown','ArrowLeft','ArrowUp','Home','End'].includes(e.key)||!e.target.classList.contains('dot'))return;
+  e.preventDefault();const o=ordered(),i=o.findIndex(d=>d.el===e.target);
+  const j=e.key==='Home'?0:e.key==='End'?o.length-1:(i+((e.key==='ArrowRight'||e.key==='ArrowDown')?1:-1)+o.length)%o.length;
+  o.forEach(d=>d.el.tabIndex=-1);o[j].el.tabIndex=0;o[j].el.focus()});
+
+let last=0;
+function tick(t){const dt=last?Math.min(.05,(t-last)/1000):0;last=t;
+  if(visible&&!document.hidden){const W=box.clientWidth;
+    for(const d of dots){
+      if(!paused()&&!reduce)d.a+=SPEED[d.ring]*dt*(d.leaving?4:1);
+      const target=d.leaving?0:d.ring;d.r+=(target-d.r)*Math.min(1,dt*(d.leaving?3.2:2.6));
+      d.scale+=((d.leaving?0:1)-d.scale)*Math.min(1,dt*(d.leaving?2.5:4));
+      const x=(50+d.r*Math.cos(d.a))/100*W-d.s/2,y=(50+d.r*Math.sin(d.a))/100*W-d.s/2;
+      d.el.style.transform=`translate(${x}px,${y}px) scale(${d.scale.toFixed(3)})`;
+      if(d.leaving&&d.r<6&&!d.gone){d.gone=true;d.el.remove();const s=$('#shield');if(s){s.classList.remove('gulp');void s.getBBox();s.classList.add('gulp')}}
+    }
+    dots=dots.filter(d=>!d.gone)}
+  requestAnimationFrame(tick)}
+new IntersectionObserver(e=>{visible=e[0].isIntersecting},{threshold:0}).observe(box);
+
+/* preview: hover = peek, click/tap = pinned card with actions */
+function tipHTML(c){return `<div style="display:flex;justify-content:space-between;align-items:baseline"><b class="mono">${c.id}</b><span class="hint">click for actions</span></div>
+  <div class="eyebrow">${c.prov} · ${c.date}</div>
+  <div style="margin:8px 0 6px;display:flex;gap:6px">${c.fail?`<span class="chip t-fail">${c.fail} failed</span>`:''}${c.unable?`<span class="chip t-unable">${c.unable} unable</span>`:''}</div>
+  <div style="font-size:13px"><span class="mono" style="color:var(--muted)">${c.rule}</span> ${ruleName(c.rule)}</div>
+  <div class="acts"><button class="btn sm" id="tReview">Open review</button><button class="btn sm ghost" id="tDone">Mark reviewed</button></div>`}
+function placeTip(d){const tip=$('#tip'),W=box.clientWidth;
+  const x=(50+d.r*Math.cos(d.a))/100*W,y=(50+d.r*Math.sin(d.a))/100*W;
+  let left=x+18,top=y+18;if(left>W-250)left=x-258;if(top>W-tip.offsetHeight-10)top=y-tip.offsetHeight-18;
+  tip.style.left=Math.max(0,left)+'px';tip.style.top=Math.max(0,top)+'px'}
+function showTip(d){const tip=$('#tip');tip.innerHTML=tipHTML(d.c);placeTip(d);tip.classList.add('show')}
+function hideTip(){$('#tip').classList.remove('show','pinned')}
+function pin(d){if(d.leaving)return;if(pinned)pinned.el.classList.remove('active');pinned=d;d.el.classList.add('active');
+  showTip(d);const tip=$('#tip');tip.classList.add('pinned');placeTip(d);
+  $('#tReview').onclick=()=>{unpin();announce(`Opening ${d.c.id}`);showToast(`Opening ${d.c.id} for review…`,null)};
+  $('#tDone').onclick=()=>{unpin();resolve(d,'You')};
+  $('#tReview').focus({preventScroll:true})}
+function unpin(refocus){if(!pinned)return;const d=pinned;pinned=null;hoverPause=false;d.el.classList.remove('active');hideTip();if(refocus)d.el.focus()}
+document.addEventListener('click',e=>{if(pinned&&!$('#tip').contains(e.target))unpin()});
+
+function resolve(d,who){if(d.leaving)return;d.leaving=true;d.el.tabIndex=-1;claims=claims.filter(c=>c!==d.c);renderShield();updateTabOrder();
+  feed('t-pass','check',`${who} reviewed <b class="mono">${d.c.id}</b>`,null);
+  if(who==='You'){announce(`${d.c.id} marked reviewed. ${claims.length} left.`);
+    showToast(`${d.c.id} marked reviewed`,()=>{claims.push(d.c);addDot(d.c,true);renderShield();feed('t-accent','undo',`You restored <b class="mono">${d.c.id}</b>`,d.c);announce(`${d.c.id} restored`)})}}
+
+/* undo toast */
+let toastT;
+function showToast(text,onUndo){const t=$('#toast');$('#toastText').textContent=text;const u=$('#undo');u.style.display=onUndo?'':'none';
+  u.onclick=()=>{onUndo&&onUndo();t.classList.remove('show')};t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),5000)}
+
+/* ---------- rule filter ---------- */
+$('#filters').innerHTML=RULES.map(r=>`<button class="fchip" data-r="${r.id}" aria-pressed="false"><span class="c">${r.id}</span>${r.name}</button>`).join('');
+$('#filters').querySelectorAll('.fchip').forEach(b=>b.onclick=()=>setFilter(filter===b.dataset.r?null:b.dataset.r));
+function setFilter(r){filter=r;document.querySelectorAll('.fchip,.heat .rl').forEach(b=>b.setAttribute('aria-pressed',b.dataset.r===r));
+  document.querySelectorAll('.heat .cell').forEach(c=>c.classList.toggle('row-dim',!!r&&c.dataset.r!==r));
+  applyFilter();insight();if(r)announce(`${claims.filter(c=>c.rule===r).length} claims tied to ${ruleName(r)} highlighted`)}
+function applyFilter(){for(const d of dots){d.el.classList.toggle('fade',!!filter&&d.c.rule!==filter);d.el.classList.toggle('glow',!!filter&&d.c.rule===filter)}}
+
+/* ---------- live feed (not aria-live: background events would be too chatty) ---------- */
+function feed(cls,ic,html,claim){const ul=$('#feed');const li=document.createElement('li');li.className='new';
+  li.innerHTML=`<span class="ic ${cls}" aria-hidden="true"><svg viewBox="0 0 24 24">${ICON[ic]}</svg></span><div>${html}<time data-t="${Date.now()}">just now</time></div>`;
+  if(claim){li.dataset.claim=claim.id;li.onclick=li.onmouseenter=()=>ping(claim)}
+  ul.prepend(li);while(ul.children.length>7)ul.lastElementChild.remove()}
+setInterval(()=>document.querySelectorAll('#feed time').forEach(t=>{const m=Math.round((Date.now()-t.dataset.t)/60000);t.textContent=m<1?'just now':`${m} min ago`}),15000);
+function ping(c){const d=dots.find(x=>x.c===c&&!x.leaving);if(!d)return;d.el.classList.remove('ping');void d.el.offsetWidth;d.el.classList.add('ping')}
+
+/* demo only: simulated arrivals and a teammate's approvals */
+function arrive(){const r=Math.floor(Math.random()*4),f=[0,1,1,2,3,4][Math.floor(Math.random()*6)],u=f?Math.random()<.3?1:0:1;
+  const c=mkClaim(f,u,RULES[r].id);claims.push(c);addDot(c,true);renderShield();
+  feed(f?'t-fail':'t-unable',f?'flag':'q',`<b class="mono">${c.id}</b> ${f?`flagged by ${c.rule}`:'is missing data'}`,c);
+  setTimeout(()=>ping(c),900)}
+function autoResolve(){const pool=dots.filter(d=>!d.leaving&&d!==pinned);if(pool.length<9)return;resolve(pool[Math.floor(Math.random()*pool.length)],'Lina')}
+
+/* ---------- heatmap ---------- */
+(function(){const h=$('#heat'),mx=Math.max(...heat.flat());
+  const days=[...Array(7)].map((_,i)=>new Date(now-(6-i)*864e5).toLocaleDateString('en-GB',{weekday:'short'}));
+  h.innerHTML='<span></span>'+days.map(d=>`<span class="dl">${d}</span>`).join('')+
+    RULES.map((r,ri)=>`<button class="rl" data-r="${r.id}" aria-pressed="false" title="${r.name}">${r.id}</button>`+heat[ri].map((n,d)=>{const o=.1+n/mx*.9;
+      return `<span class="cell${o>.55?' strong':''}" data-r="${r.id}" style="--o:${o.toFixed(2)};--dl:${(ri*7+d)*22}ms" title="${r.id} ${r.name}, ${days[d]}: ${n} failures"><b>${n||''}</b></span>`}).join('')).join('');
+  h.querySelectorAll('.rl').forEach(b=>b.onclick=()=>setFilter(filter===b.dataset.r?null:b.dataset.r));
+  new IntersectionObserver((e,o)=>{if(e[0].isIntersecting){h.classList.add('on');o.disconnect()}},{threshold:.3}).observe(h)})();
+function insight(){
+  const stats=RULES.map((_,i)=>{const row=heat[i];return{i,today:row[6],avg:row.slice(0,6).reduce((a,b)=>a+b,0)/6}});
+  const p=filter?stats[RULES.findIndex(r=>r.id===filter)]:stats.reduce((a,b)=>b.today-b.avg>a.today-a.avg?b:a);
+  const r=RULES[p.i],open=claims.filter(c=>c.rule===r.id).length,diff=p.today-p.avg;
+  // % only when the average is big enough to mean something
+  const pct=p.avg>=3?` (<b>${diff>=0?'+':''}${Math.round(diff/p.avg*100)}%</b>)`:'';
+  $('#insight').innerHTML=`<div class="eyebrow">${filter?'Selected rule':'Biggest mover'}</div><h2 style="margin:4px 0 8px"><span class="mono" style="color:var(--muted)">${r.id}</span> ${r.name}</h2>
+  <p>${p.today} failures in the latest run vs. ${p.avg.toFixed(1)} on average${pct}. ${open} of the claims orbiting now ${open===1?'is':'are'} tied to it.</p>`}
+
+/* ---------- misc ---------- */
+$('#theme').onclick=e=>{const d=document.documentElement,dark=d.dataset.theme!=='dark';d.dataset.theme=dark?'dark':'light';e.currentTarget.textContent=dark?'Light mode':'Dark mode'};
+function countUp(){document.querySelectorAll('[data-count]').forEach(el=>{if(reduce)return;const n=+el.dataset.count,t0=performance.now();
+  const f=t=>{const p=Math.min(1,(t-t0)/1000);el.textContent=Math.round(n*(1-Math.pow(1-p,4)));if(p<1)requestAnimationFrame(f)};requestAnimationFrame(f)})}
+
+/* boot: dots fly in staggered */
+renderShield();insight();countUp();
+const boot=claims;claims=[];
+boot.forEach((c,i)=>setTimeout(()=>{claims.push(c);addDot(c,!reduce);renderShield();insight()},reduce?0:120+i*90));
+feed('t-fail','flag','<b class="mono">CLM-0407</b> flagged by R-12',null);
+feed('t-pass','check','You approved <b class="mono">CLM-0042</b>',null);
+feed('t-accent','run','Run <b class="mono">#482</b> finished · 498 accepted',null);
+requestAnimationFrame(tick);
+if(!reduce){setInterval(arrive,7000);setInterval(autoResolve,11000)}
+</script>
+</body>
+</html>

@@ -1,7 +1,8 @@
-﻿import React, { useState, useEffect, useCallback } from "react";
+﻿import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { adminHeaders, getAdminActor, getAdminToken, setAdminActor, setAdminToken } from "../api/admin";
 import { apiFetch } from "../api/client";
 import RuleManager from "../components/RuleManager";
+import "../styles/admin.css";
 
 const ICON_PATHS: Record<string, React.ReactNode> = {
   "rules.json": (
@@ -39,61 +40,28 @@ const ICON_PATHS: Record<string, React.ReactNode> = {
 };
 
 const FILES = [
-  { id: "rules.json", label: "Validation Rules" },
+  { id: "rules.json", label: "Rules" },
   { id: "policies.json", label: "Policies" },
-  { id: "diagnoses.json", label: "Diagnoses Codes" },
+  { id: "diagnoses.json", label: "Diagnosis codes" },
   { id: "providers.json", label: "Providers" },
   { id: "services.json", label: "Services" },
 ];
 
 const API = "/api/v1/config";
 
-const INPUT_STYLE: React.CSSProperties = {
-  width: "100%",
-  padding: "9px 13px",
-  borderRadius: 8,
-  border: "1px solid var(--card-border)",
-  background: "var(--canvas-bg)",
-  color: "var(--text-primary)",
-  fontSize: "0.875rem",
-  fontFamily: "inherit",
-  boxSizing: "border-box",
-};
-const LABEL_STYLE: React.CSSProperties = {
-  display: "block",
-  fontSize: "0.72rem",
-  fontWeight: 600,
-  color: "var(--text-secondary)",
-  marginBottom: 5,
-  textTransform: "uppercase",
-  letterSpacing: "0.055em",
-};
-const FIELD_WRAP: React.CSSProperties = { marginBottom: 14 };
-const SECTION_HDR: React.CSSProperties = {
-  fontSize: "0.75rem",
-  fontWeight: 700,
-  color: "var(--text-tertiary)",
-  textTransform: "uppercase",
-  letterSpacing: "0.07em",
-  marginTop: 22,
-  marginBottom: 10,
-  paddingBottom: 6,
-  borderBottom: "1px solid var(--card-border)",
-};
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={FIELD_WRAP}>
-      <label style={LABEL_STYLE}>{label}</label>
+    <label className="ad-field">
+      <span>{label}</span>
       {children}
-    </div>
+    </label>
   );
 }
 
 function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <Field label={label}>
-      <input style={INPUT_STYLE} value={value ?? ""} onChange={e => onChange(e.target.value)} />
+      <input value={value ?? ""} onChange={e => onChange(e.target.value)} />
     </Field>
   );
 }
@@ -101,7 +69,7 @@ function TextInput({ label, value, onChange }: { label: string; value: string; o
 function Textarea({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (v: string) => void; rows?: number }) {
   return (
     <Field label={label}>
-      <textarea style={{ ...INPUT_STYLE, minHeight: rows * 22, resize: "vertical" }} value={value ?? ""} onChange={e => onChange(e.target.value)} />
+      <textarea rows={rows} value={value ?? ""} onChange={e => onChange(e.target.value)} />
     </Field>
   );
 }
@@ -158,7 +126,8 @@ function NumericValueInput({ value, onChange, placeholder }: { value: number; on
     <input
       type="text"
       inputMode="decimal"
-      style={{ ...INPUT_STYLE, fontSize: "0.8125rem", fontVariantNumeric: "tabular-nums" }}
+      className="ad-num"
+      aria-label={placeholder ?? "Value"}
       value={shown}
       placeholder={placeholder ?? "0"}
       onChange={e => {
@@ -201,7 +170,7 @@ function NumberInput({
         inputMode="decimal"
         // Hint to the spinner/number-pad without the browser rejecting input.
         data-step={step ?? 1}
-        style={{ ...INPUT_STYLE, fontVariantNumeric: "tabular-nums" }}
+        className="ad-num"
         value={shown}
         placeholder="0"
         onChange={e => commit(e.target.value)}
@@ -246,7 +215,6 @@ function ListInput({
   return (
     <Field label={label + " (comma-separated)"}>
       <input
-        style={INPUT_STYLE}
         value={shown}
         placeholder={hint ?? "EDU-PROV-01, EDU-PROV-02"}
         onChange={e => handleChange(e.target.value)}
@@ -258,13 +226,24 @@ function ListInput({
   );
 }
 
-function KVMapInput({ label, value, onChange, valueType = "text" }: {
+function KVMapInput({ label, value, onChange, valueType = "text", keyHint = "SVC-LAB", valueHint }: {
   label: string;
   value: Record<string, any>;
   onChange: (v: Record<string, any>) => void;
   valueType?: "text" | "number";
+  keyHint?: string;
+  valueHint?: string;
 }) {
   const entries = Object.entries(value ?? {});
+  const listRef = useRef<HTMLDivElement>(null);
+  const [focusLast, setFocusLast] = useState(false);
+  useEffect(() => {
+    if (!focusLast) return;
+    setFocusLast(false);
+    const inputs = listRef.current?.querySelectorAll<HTMLInputElement>(".ad-kv-key");
+    inputs?.[inputs.length - 1]?.focus();
+  }, [focusLast, entries.length]);
+
   const update = (idx: number, newKey: string, newVal: any) => {
     const next: Record<string, any> = {};
     entries.forEach(([k, v], i) => {
@@ -274,32 +253,35 @@ function KVMapInput({ label, value, onChange, valueType = "text" }: {
     });
     onChange(next);
   };
-  const add = () => onChange({ ...value, "": valueType === "number" ? 0 : "" });
+  const add = () => {
+    onChange({ ...value, "": valueType === "number" ? 0 : "" });
+    setFocusLast(true);
+  };
   const remove = (idx: number) => {
     const next: Record<string, any> = {};
     entries.forEach(([k, v], i) => { if (i !== idx) next[k] = v; });
     onChange(next);
   };
   return (
-    <div style={FIELD_WRAP}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        {label && <label style={LABEL_STYLE}>{label}</label>}
-        <button onClick={add} style={{ background: "transparent", border: "1px solid var(--card-border)", borderRadius: 5, padding: "2px 8px", fontSize: "0.72rem", fontWeight: 700, color: "var(--text-primary)", cursor: "pointer" }}>+ Row</button>
+    <fieldset className="ad-kv">
+      <legend>{label}</legend>
+      <div ref={listRef}>
+        {entries.length === 0 && <p className="ad-muted">No entries yet.</p>}
+        {entries.map(([k, v], idx) => (
+          <div key={idx} className="ad-kv-row">
+            <input className="ad-kv-key" aria-label={`${label}: key ${idx + 1}`} placeholder={keyHint} value={k} spellCheck={false} onChange={e => update(idx, e.target.value, v)} />
+            {valueType === "number" ? (
+              // Same comma-tolerant numeric field as the standalone prices.
+              <NumericValueInput value={typeof v === "number" ? v : Number(v)} onChange={n => update(idx, k, n)} placeholder={valueHint} />
+            ) : (
+              <input aria-label={`${label}: value ${idx + 1}`} placeholder={valueHint ?? "Value"} value={v ?? ""} onChange={e => update(idx, k, e.target.value)} />
+            )}
+            <button type="button" className="ad-btn is-icon" onClick={() => remove(idx)} aria-label={`Remove ${k || "row"}`} title="Remove">×</button>
+          </div>
+        ))}
       </div>
-      {entries.length === 0 && <div style={{ fontSize: "0.8rem", color: "var(--text-tertiary)", fontStyle: "italic" }}>No entries. Click + Row to add.</div>}
-      {entries.map(([k, v], idx) => (
-        <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginBottom: 6, alignItems: "start" }}>
-          <input placeholder="Key (e.g. SVC-LAB)" style={{ ...INPUT_STYLE, fontSize: "0.8125rem" }} value={k} spellCheck={false} onChange={e => update(idx, e.target.value, v)} />
-          {valueType === "number" ? (
-            // Same comma-tolerant numeric field as the standalone prices.
-            <NumericValueInput value={typeof v === "number" ? v : Number(v)} onChange={n => update(idx, k, n)} />
-          ) : (
-            <input placeholder="Value" style={{ ...INPUT_STYLE, fontSize: "0.8125rem" }} value={v ?? ""} onChange={e => update(idx, k, e.target.value)} />
-          )}
-          <button onClick={() => remove(idx)} title="Remove row" style={{ background: "var(--status-fail-bg)", border: "1px solid var(--status-fail-border)", borderRadius: 6, width: 30, height: 36, cursor: "pointer", color: "var(--status-fail-ink)", fontSize: "1rem", fontWeight: 700 }}>x</button>
-        </div>
-      ))}
-    </div>
+      <button type="button" className="ad-link" onClick={add}>Add a row</button>
+    </fieldset>
   );
 }
 
@@ -310,42 +292,47 @@ function KVMapInput({ label, value, onChange, valueType = "text" }: {
 function AdminAccessBar() {
   const [token, setToken] = useState(getAdminToken());
   const [actor, setActor] = useState(getAdminActor());
+  const [editing, setEditing] = useState(!getAdminToken());
+  if (!editing) {
+    return (
+      <div className="ad-access is-set">
+        <span>Admin access set for this tab{actor ? <> as <strong>{actor}</strong></> : ""}.</span>
+        <button type="button" className="ad-link" onClick={() => setEditing(true)}>Change</button>
+      </div>
+    );
+  }
   return (
-    <div style={{ display: "flex", gap: 12, alignItems: "flex-end", padding: "10px 14px", borderRadius: 10, border: "1px solid var(--card-border)", background: "var(--card-bg)" }}>
-      <div style={{ flex: 2 }}>
-        <label style={LABEL_STYLE} htmlFor="admin-token">Admin token</label>
-        <input id="admin-token" type="password" style={INPUT_STYLE} value={token} autoComplete="off"
+    <form className="ad-access" onSubmit={e => { e.preventDefault(); if (token) setEditing(false); }}>
+      <label className="ad-field">
+        <span>Admin token</span>
+        <input id="admin-token" type="password" value={token} autoComplete="off"
           onChange={e => { setToken(e.target.value); setAdminToken(e.target.value); }} />
-      </div>
-      <div style={{ flex: 1 }}>
-        <label style={LABEL_STYLE} htmlFor="admin-actor">Your name (audit log)</label>
-        <input id="admin-actor" style={INPUT_STYLE} value={actor} onChange={e => { setActor(e.target.value); setAdminActor(e.target.value); }} />
-      </div>
-      <div style={{ flex: 2, fontSize: "0.76rem", color: "var(--text-tertiary)", paddingBottom: 6 }}>
-        Kept for this tab only. Required to save changes and to draft, confirm or deactivate rules.
-      </div>
-    </div>
+      </label>
+      <label className="ad-field">
+        <span>Your name, for the audit log</span>
+        <input id="admin-actor" value={actor} onChange={e => { setActor(e.target.value); setAdminActor(e.target.value); }} />
+      </label>
+      <button type="submit" className="ad-btn" disabled={!token}>Done</button>
+      <p className="ad-muted">Kept for this tab only. Needed to save changes and to draft, confirm or deactivate rules.</p>
+    </form>
   );
 }
 
 function PolicyForm({ item, onChange }: { item: any; onChange: (f: string, v: any) => void }) {
   return (
     <>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div className="ad-form-grid">
         <TextInput label="Policy ID" value={item.policy_id} onChange={v => onChange("policy_id", v)} />
         <TextInput label="Payer ID" value={item.payer_id} onChange={v => onChange("payer_id", v)} />
         <TextInput label="Currency" value={item.currency} onChange={v => onChange("currency", v)} />
         <TextInput label="Version" value={item.version} onChange={v => onChange("version", v)} />
       </div>
-      <NumberInput label="Submission Window (Days)" value={item.submission_window_days} onChange={v => onChange("submission_window_days", v)} />
-      <ListInput label="Allowed Providers" value={item.allowed_providers ?? []} onChange={v => onChange("allowed_providers", v)} />
-      <ListInput label="Auth-Required Services" value={item.auth_required_services ?? []} onChange={v => onChange("auth_required_services", v)} />
-      <div style={SECTION_HDR}>Required Documents (service code to document type)</div>
-      <KVMapInput label="" value={item.required_documents ?? {}} onChange={v => onChange("required_documents", v)} valueType="text" />
-      <div style={SECTION_HDR}>Max Unit Price (service code to SAR)</div>
-      <KVMapInput label="" value={item.max_unit_price ?? {}} onChange={v => onChange("max_unit_price", v)} valueType="number" />
-      <div style={SECTION_HDR}>Max Quantity Per Line (service code to qty)</div>
-      <KVMapInput label="" value={item.max_quantity_per_line ?? {}} onChange={v => onChange("max_quantity_per_line", v)} valueType="number" />
+      <NumberInput label="Submission window (days)" value={item.submission_window_days} onChange={v => onChange("submission_window_days", v)} />
+      <ListInput label="Allowed providers" value={item.allowed_providers ?? []} onChange={v => onChange("allowed_providers", v)} />
+      <ListInput label="Services that need authorization" value={item.auth_required_services ?? []} onChange={v => onChange("auth_required_services", v)} hint="SVC-IMAGE, SVC-SURGERY" />
+      <KVMapInput label="Required documents (service code → document type)" value={item.required_documents ?? {}} onChange={v => onChange("required_documents", v)} valueType="text" valueHint="Document type" />
+      <KVMapInput label="Max unit price (service code → SAR)" value={item.max_unit_price ?? {}} onChange={v => onChange("max_unit_price", v)} valueType="number" valueHint="SAR" />
+      <KVMapInput label="Max quantity per line (service code → quantity)" value={item.max_quantity_per_line ?? {}} onChange={v => onChange("max_quantity_per_line", v)} valueType="number" valueHint="Quantity" />
     </>
   );
 }
@@ -353,8 +340,8 @@ function PolicyForm({ item, onChange }: { item: any; onChange: (f: string, v: an
 function DiagnosisForm({ item, onChange }: { item: any; onChange: (f: string, v: any) => void }) {
   return (
     <>
-      <TextInput label="Diagnosis Code" value={item.code} onChange={v => onChange("code", v)} />
-      <Textarea label="Display Description" value={item.display} onChange={v => onChange("display", v)} rows={3} />
+      <TextInput label="Diagnosis code" value={item.code} onChange={v => onChange("code", v)} />
+      <Textarea label="Description" value={item.display} onChange={v => onChange("display", v)} rows={3} />
     </>
   );
 }
@@ -363,7 +350,7 @@ function ProviderForm({ item, onChange }: { item: any; onChange: (f: string, v: 
   return (
     <>
       <TextInput label="Provider ID / NPI" value={item.provider_id} onChange={v => onChange("provider_id", v)} />
-      <TextInput label="Display Name" value={item.display} onChange={v => onChange("display", v)} />
+      <TextInput label="Display name" value={item.display} onChange={v => onChange("display", v)} />
     </>
   );
 }
@@ -371,12 +358,12 @@ function ProviderForm({ item, onChange }: { item: any; onChange: (f: string, v: 
 function ServiceForm({ item, onChange }: { item: any; onChange: (f: string, v: any) => void }) {
   return (
     <>
-      <TextInput label="Service Code (Key)" value={item._key} onChange={v => onChange("_key", v)} />
+      <TextInput label="Service code" value={item._key} onChange={v => onChange("_key", v)} />
       <TextInput label="Description" value={item.description} onChange={v => onChange("description", v)} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-        <NumberInput label="Base Price (SAR)" value={item.base_price} onChange={v => onChange("base_price", v)} step={0.01} />
-        <NumberInput label="Max Price (SAR)" value={item.max_price} onChange={v => onChange("max_price", v)} step={0.01} />
-        <NumberInput label="Max Quantity" value={item.max_quantity} onChange={v => onChange("max_quantity", v)} />
+      <div className="ad-form-grid is-3">
+        <NumberInput label="Base price (SAR)" value={item.base_price} onChange={v => onChange("base_price", v)} step={0.01} />
+        <NumberInput label="Max price (SAR)" value={item.max_price} onChange={v => onChange("max_price", v)} step={0.01} />
+        <NumberInput label="Max quantity" value={item.max_quantity} onChange={v => onChange("max_quantity", v)} />
       </div>
     </>
   );
@@ -394,11 +381,15 @@ function blankItem(file: string): any {
 
 export default function AdminPanel() {
   const [activeFile, setActiveFile] = useState("rules.json");
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<any[] | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [query, setQuery] = useState("");
+  const listRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [revealSelected, setRevealSelected] = useState(false);
 
   const showToast = (type: "success" | "error", msg: string) => {
     setToast({ type, msg });
@@ -409,6 +400,7 @@ export default function AdminPanel() {
 
   const loadData = useCallback(() => {
     if (activeFile === "rules.json") return; // rules have their own manager
+    setData(null);
     apiFetch<any>(`${API}/${activeFile}`)
       .then(json => {
         let arr: any[] = [];
@@ -421,23 +413,42 @@ export default function AdminPanel() {
         setSelectedIndex(arr.length > 0 ? 0 : null);
         setDirty(false);
       })
-      .catch(e => showToast("error", e.message));
+      .catch(e => { setData([]); showToast("error", e.message); });
   }, [activeFile]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadData(); setQuery(""); }, [loadData]);
+
+  // Leaving with unsaved edits asks first.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  // After adding (or picking) an entry, bring it into view in the list and put the cursor in its first field.
+  useEffect(() => {
+    if (!revealSelected) return;
+    setRevealSelected(false);
+    listRef.current?.querySelector<HTMLElement>("[aria-current='true']")?.scrollIntoView({ block: "nearest" });
+    editorRef.current?.scrollTo({ top: 0 });
+    editorRef.current?.querySelector<HTMLInputElement>("input, textarea")?.focus({ preventScroll: true });
+  }, [revealSelected]);
+
+  const items = data ?? [];
 
   const buildPayload = () => {
     if (activeFile === "services.json") {
       const obj: Record<string, any> = {};
-      data.forEach(({ _key, ...rest }) => { if (_key) obj[_key] = rest; });
+      items.forEach(({ _key, ...rest }) => { if (_key) obj[_key] = rest; });
       return obj;
     }
     if (activeFile === "policies.json") {
       const obj: Record<string, any> = {};
-      data.forEach(item => { if (item.policy_id) obj[item.policy_id] = item; });
+      items.forEach(item => { if (item.policy_id) obj[item.policy_id] = item; });
       return obj;
     }
-    return data;
+    return items;
   };
 
   const handleSave = () => {
@@ -447,7 +458,7 @@ export default function AdminPanel() {
       headers: { "Content-Type": "application/json", ...adminHeaders() },
       body: JSON.stringify(buildPayload()),
     })
-      .then(response => { showToast("success", response.message || "Saved successfully"); setDirty(false); })
+      .then(response => { showToast("success", response.message || "Saved"); setDirty(false); })
       .catch(e => showToast("error", e.message))
       .finally(() => setSaving(false));
   };
@@ -459,34 +470,43 @@ export default function AdminPanel() {
 
   const updateField = (field: string, value: any) => {
     if (selectedIndex === null) return;
-    const next = [...data];
+    const next = [...items];
     next[selectedIndex] = { ...next[selectedIndex], [field]: value };
     setData(next);
     setDirty(true);
   };
 
   const addItem = () => {
-    const item = blankItem(activeFile);
-    const next = [...data, item];
+    const next = [...items, blankItem(activeFile)];
     setData(next);
+    setQuery("");
     setSelectedIndex(next.length - 1);
     setDirty(true);
+    setRevealSelected(true);
   };
 
   const removeItem = () => {
     if (selectedIndex === null) return;
-    if (!window.confirm("Delete this entry?")) return;
-    const next = data.filter((_, i) => i !== selectedIndex);
+    if (!window.confirm(`Delete ${labelOf(items[selectedIndex])}? It is removed when you save.`)) return;
+    const next = items.filter((_, i) => i !== selectedIndex);
     setData(next);
     setSelectedIndex(next.length > 0 ? Math.min(selectedIndex, next.length - 1) : null);
     setDirty(true);
-    showToast("success", "Entry removed locally. Click Save to Backend to persist the deletion.");
   };
 
   const labelOf = (item: any) =>
     item.rule_id || item.policy_id || item.code || item.provider_id || item._key || "Untitled";
+  const subOf = (item: any) => item.display || item.description || item.payer_id || "";
 
-  const selectedItem = selectedIndex !== null ? data[selectedIndex] : null;
+  const shown = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => !needle || `${labelOf(item)} ${subOf(item)}`.toLowerCase().includes(needle));
+  }, [items, query]);
+
+  const selectedItem = selectedIndex !== null ? items[selectedIndex] : null;
+  const fileLabel = FILES.find(f => f.id === activeFile)?.label ?? activeFile;
 
   const renderForm = () => {
     if (!selectedItem) return null;
@@ -500,139 +520,101 @@ export default function AdminPanel() {
   };
 
   return (
-    <div className="page-shell" style={{ display: "flex", flexDirection: "column", height: "100%", gap: 20 }}>
-
+    <div className="page-shell ad-page">
       {toast && (
-        <div style={{
-          position: "fixed", bottom: 28, right: 28, zIndex: 9999,
-          padding: "12px 20px", borderRadius: 10,
-          background: toast.type === "success" ? "var(--status-pass-bg)" : "var(--status-fail-bg)",
-          border: `1px solid ${toast.type === "success" ? "var(--status-pass-border)" : "var(--status-fail-border)"}`,
-          color: toast.type === "success" ? "var(--status-pass-ink)" : "var(--status-fail-ink)",
-          fontSize: "0.875rem", fontWeight: 600,
-          boxShadow: "0 6px 24px rgba(0,0,0,0.15)",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          {toast.type === "success"
-            ? <svg width="15" height="15" viewBox="0 0 14 14" fill="none"><path d="M2.5 7l3 3 6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            : <svg width="15" height="15" viewBox="0 0 14 14" fill="none"><path d="M7 1v6M7 10v1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>}
-          {toast.msg}
-        </div>
+        <div className={`ad-toast is-${toast.type}`} role={toast.type === "error" ? "alert" : "status"}>{toast.msg}</div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <header className="ad-head">
         <div>
-          <span className="sc-eyebrow">Configuration</span>
-          <h1 style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.03em", color: "var(--text-primary)", margin: "10px 0 4px" }}>
-            System Rules Admin
-          </h1>
-          <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
-            Manage core configurations. Rules are written in plain English and checked before they run.
-          </p>
+          <h1>Admin</h1>
+          <p>Rules are written in plain English and checked before they run. Reference data is used by the rules.</p>
         </div>
-        {dirty && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 8, background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)", fontSize: "0.8125rem", fontWeight: 600, color: "var(--accent)" }}>
-            Unsaved changes
-          </div>
-        )}
-      </div>
+      </header>
 
       <AdminAccessBar />
 
-      <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0 }}>
-        <div style={{ width: 230, display: "flex", flexDirection: "column", gap: 6 }}>
-          {FILES.map(f => {
-            const active = activeFile === f.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => {
-                  if (dirty && !window.confirm("Switch file? Unsaved changes will be lost.")) return;
-                  setActiveFile(f.id);
-                }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 11, padding: "13px 15px",
-                  background: active ? "var(--accent)" : "var(--card-bg)",
-                  border: `1px solid ${active ? "var(--accent)" : "var(--card-border)"}`,
-                  borderRadius: 11, cursor: "pointer", textAlign: "left",
-                  color: active ? "#fff" : "var(--text-primary)",
-                  fontWeight: active ? 600 : 500,
-                  boxShadow: active ? "0 4px 12px rgba(15,122,130,0.25)" : "var(--card-shadow)",
-                  transition: "all 0.18s ease",
-                }}
-              >
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, opacity: active ? 1 : 0.65 }}>
-                  {ICON_PATHS[f.id]}
-                </svg>
-                <div>
-                  <div style={{ fontSize: "0.9rem" }}>{f.label}</div>
-                  <div style={{ fontSize: "0.72rem", color: active ? "rgba(255,255,255,0.85)" : "var(--text-tertiary)", marginTop: 1, fontWeight: 400 }}>{f.id}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+      <nav className="ad-tabs" aria-label="What to manage">
+        {FILES.map(f => (
+          <button
+            key={f.id}
+            type="button"
+            className="ad-tab"
+            aria-pressed={activeFile === f.id}
+            onClick={() => {
+              if (f.id === activeFile) return;
+              if (dirty && !window.confirm("Switch? Unsaved changes will be lost.")) return;
+              setActiveFile(f.id);
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              {ICON_PATHS[f.id]}
+            </svg>
+            {f.label}
+          </button>
+        ))}
+      </nav>
 
-        {managesRules ? <RuleManager /> : (
-        <div style={{ flex: 1, display: "flex", gap: 0, background: "var(--card-bg)", border: "1px solid var(--card-border)", borderRadius: 12, boxShadow: "var(--card-shadow)", overflow: "hidden" }}>
-          <div style={{ width: 240, borderRight: "1px solid var(--card-border)", display: "flex", flexDirection: "column", background: "var(--canvas-bg)" }}>
-            <div style={{ padding: "13px 15px", borderBottom: "1px solid var(--card-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>Entries ({data.length})</span>
-              <button onClick={addItem} style={{ background: "var(--accent)", border: "none", borderRadius: 6, padding: "4px 11px", fontSize: "0.75rem", fontWeight: 700, color: "#fff", cursor: "pointer" }}>+ Add</button>
+      {managesRules ? <RuleManager /> : (
+        <div className="ad-workspace">
+          <aside className="ad-list" aria-label={fileLabel}>
+            <div className="ad-list-head">
+              <span>{fileLabel} {data ? `(${items.length})` : ""}</span>
+              <button type="button" className="ad-btn is-primary is-small" onClick={addItem} disabled={!data}>Add</button>
             </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
-              {data.map((item, i) => {
-                const active = selectedIndex === i;
-                return (
-                  <button key={i} onClick={() => setSelectedIndex(i)} style={{
-                    width: "100%", padding: "9px 11px", textAlign: "left", borderRadius: 7,
-                    background: active ? "var(--accent-subtle)" : "transparent",
-                    border: `1px solid ${active ? "color-mix(in srgb, var(--accent) 30%, transparent)" : "transparent"}`,
-                    color: active ? "var(--accent)" : "var(--text-primary)",
-                    fontWeight: active ? 600 : 500, fontSize: "0.85rem",
-                    marginBottom: 3, cursor: "pointer", fontFamily: "inherit",
-                  }}>
-                    {labelOf(item)}
-                  </button>
-                );
-              })}
-              {data.length === 0 && <div style={{ padding: "20px 10px", color: "var(--text-tertiary)", fontSize: "0.8125rem", textAlign: "center" }}>No entries. Click + Add.</div>}
+            <label className="ad-search">
+              <span className="visually-hidden">Find an entry</span>
+              <input type="search" placeholder="Find by code or name" value={query} onChange={e => setQuery(e.target.value)} />
+            </label>
+            <div className="ad-list-body" ref={listRef}>
+              {!data ? (
+                <p className="ad-muted">Loading…</p>
+              ) : shown.length === 0 ? (
+                <p className="ad-muted">{query ? "Nothing matches." : "No entries yet."}</p>
+              ) : shown.map(({ item, index }) => (
+                <button
+                  key={index}
+                  type="button"
+                  className="ad-item"
+                  aria-current={selectedIndex === index || undefined}
+                  onClick={() => setSelectedIndex(index)}
+                >
+                  <span className="ad-mono">{labelOf(item)}</span>
+                  {subOf(item) && <span className="ad-item-sub">{subOf(item)}</span>}
+                </button>
+              ))}
             </div>
-          </div>
+          </aside>
 
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <div className="ad-editor is-form">
             {selectedItem ? (
               <>
-                <div style={{ padding: "14px 22px", borderBottom: "1px solid var(--card-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <header className="ad-editor-head is-pinned">
                   <div>
-                    <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)" }}>{labelOf(selectedItem)}</div>
-                    <div style={{ fontSize: "0.76rem", color: "var(--text-tertiary)", marginTop: 2 }}>Entry {(selectedIndex ?? 0) + 1} of {data.length}</div>
+                    <h2 className="ad-mono">{labelOf(selectedItem)}</h2>
+                    <p className="ad-meta">{fileLabel} · entry {(selectedIndex ?? 0) + 1} of {items.length}</p>
                   </div>
-                  <button type="button" onClick={removeItem} style={{ background: "var(--status-fail-bg)", color: "var(--status-fail-ink)", border: "1px solid var(--status-fail-border)", padding: "6px 13px", borderRadius: 7, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer" }}>
-                    Delete Entry
-                  </button>
-                </div>
-                <div style={{ flex: 1, overflowY: "auto", padding: "22px 26px" }}>
+                  <button type="button" className="ad-btn is-danger" onClick={removeItem}>Delete</button>
+                </header>
+                <div className="ad-editor-body" ref={editorRef}>
                   {renderForm()}
                 </div>
               </>
             ) : (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-tertiary)", fontSize: "0.9375rem" }}>
-                Select an entry to edit, or add a new one.
+              <div className="ad-blank" ref={editorRef}>
+                <p>{data ? "Select an entry to edit, or add a new one." : "Loading…"}</p>
               </div>
             )}
-            <div style={{ padding: "14px 22px", borderTop: "1px solid var(--card-border)", background: "var(--canvas-bg)", display: "flex", justifyContent: "flex-end", gap: 10, alignItems: "center" }}>
-              <button onClick={handleDiscard} style={{ background: "transparent", border: "1px solid var(--card-border)", borderRadius: 8, padding: "8px 16px", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)", cursor: "pointer" }}>
-                Discard Changes
+            <footer className="ad-bar is-footer">
+              <span className={dirty ? "ad-text-review" : "ad-muted"}>{dirty ? "Unsaved changes" : "All changes saved"}</span>
+              <button type="button" className="ad-btn" onClick={handleDiscard} disabled={!dirty}>Discard</button>
+              <button type="button" className="ad-btn is-primary" onClick={handleSave} disabled={saving || !dirty}>
+                {saving ? "Saving…" : "Save"}
               </button>
-              <button onClick={handleSave} disabled={saving} className="btn btn-primary" style={{ padding: "8px 22px", opacity: saving ? 0.7 : 1 }}>
-                {saving ? "Saving..." : "Save to Backend"}
-              </button>
-            </div>
+            </footer>
           </div>
         </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

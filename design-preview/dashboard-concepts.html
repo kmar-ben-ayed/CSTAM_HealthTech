@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --font:'Manrope',system-ui,sans-serif;--mono:'JetBrains Mono',ui-monospace,monospace;
+  --canvas:#f3f5f8;--surface:rgba(255,255,255,.75);--solid:#fff;--ink:#1b2130;--muted:#6b7385;--line:rgba(27,33,48,.08);
+  --accent:#0e7490;--accent-soft:#e2f2f5;--pass:#16a34a;--pass-soft:#e5f5eb;--fail:#dc2626;--fail-soft:#fdeceb;--unable:#d97706;--unable-soft:#fdf1df;--na:#94a3b8;
+  --shadow:0 1px 2px rgba(27,33,48,.04),0 10px 30px -10px rgba(27,33,48,.14);--r:24px;
+  --spd:1}
+:root[data-theme=dark]{
+  --canvas:#0d1015;--surface:rgba(27,32,41,.75);--solid:#181d25;--ink:#eef1f5;--muted:#9aa3b2;--line:rgba(255,255,255,.08);
+  --accent:#22d3ee;--accent-soft:rgba(34,211,238,.12);--pass:#4ade80;--pass-soft:rgba(74,222,128,.12);--fail:#f87171;--fail-soft:rgba(248,113,113,.13);--unable:#fbbf24;--unable-soft:rgba(251,191,36,.13);
+  --shadow:0 10px 30px -10px rgba(0,0,0,.6)}
+:root[data-mood=playful]{--spd:2.2}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font:15px/1.55 var(--font);color:var(--ink);background:var(--canvas);-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(800px 500px at 90% -10%,var(--accent-soft),transparent 60%),radial-gradient(600px 400px at -5% 40%,var(--pass-soft),transparent 60%);background-attachment:fixed}
+button{font:inherit;color:inherit}
+/* top bar */
+.bar{position:sticky;top:0;z-index:20;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px 16px;
+  background:color-mix(in srgb,var(--canvas) 70%,transparent);backdrop-filter:blur(16px)}
+.seg{display:flex;padding:4px;border-radius:999px;background:var(--solid);box-shadow:var(--shadow);position:relative}
+.seg button{border:0;background:none;padding:8px 16px;border-radius:999px;font-weight:600;font-size:13.5px;cursor:pointer;position:relative;z-index:1;color:var(--muted);transition:color .2s}
+.seg button[aria-pressed=true]{color:var(--canvas)}
+.seg .pill{position:absolute;top:4px;bottom:4px;border-radius:999px;background:var(--ink);transition:left .45s cubic-bezier(.3,1.3,.5,1),width .45s cubic-bezier(.3,1.3,.5,1)}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 16px 80px}
+.view{display:none}.view.on{display:block;animation:in .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes in{from{opacity:0;transform:translateY(12px) scale(.99)}}
+.card{background:var(--surface);backdrop-filter:blur(20px) saturate(160%);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:22px}
+h1{font-weight:800;font-size:clamp(28px,4vw,42px);line-height:1.08;letter-spacing:-.03em}
+h1 em{font-style:normal;color:var(--accent)}
+h2{font-weight:700;font-size:17px;letter-spacing:-.01em}
+.muted{color:var(--muted)}.mono{font-family:var(--mono);font-size:.9em}
+.eyebrow{font-weight:600;font-size:12.5px;color:var(--muted)}
+.btn{border:0;border-radius:999px;padding:12px 22px;min-height:44px;font-weight:700;font-size:14px;cursor:pointer;background:var(--ink);color:var(--canvas);transition:transform .12s ease-out}
+.btn.ghost{background:var(--solid);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.btn:active{transform:scale(.96)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.chip{display:inline-block;padding:3px 10px;border-radius:999px;font-weight:700;font-size:12px}
+.t-fail{background:var(--fail-soft);color:var(--fail)}.t-unable{background:var(--unable-soft);color:var(--unable)}.t-pass{background:var(--pass-soft);color:var(--pass)}.t-accent{background:var(--accent-soft);color:var(--accent)}
+/* shield */
+.shield .body{fill:var(--solid);stroke:var(--sc);stroke-width:4;transition:stroke .5s}
+.shield .core{fill:color-mix(in srgb,var(--sc) 14%,transparent);transform-origin:60px 58px;animation:pulse calc(2.4s / var(--spd) / var(--q,1)) ease-in-out infinite}
+.shield .orbit{stroke:var(--sc);stroke-opacity:.3;stroke-width:1.5;fill:none}
+.shield .sym{stroke:var(--sc);stroke-width:5;stroke-linecap:round;fill:none}
+.shield .sym .f{fill:var(--sc);stroke:none}
+.shield .sat{fill:var(--sc)}
+@keyframes pulse{50%{transform:scale(1.12);opacity:.7}}
+.burst{position:absolute;inset:0;pointer-events:none}
+.burst i{position:absolute;left:50%;top:50%;width:8px;height:8px;border-radius:50%;animation:fly .9s cubic-bezier(.2,.8,.2,1) forwards}
+@keyframes fly{to{transform:translate(var(--x),var(--y)) scale(.3);opacity:0}}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,120px);background:var(--ink);color:var(--canvas);padding:12px 20px;border-radius:999px;font-weight:600;font-size:14px;transition:transform .5s cubic-bezier(.3,1.3,.5,1);z-index:50}
+.toast.show{transform:translate(-50%,0)}
+
+/* ===== ORBIT ===== */
+.orbit-stage{display:grid;grid-template-columns:260px 1fr 260px;gap:20px;align-items:center}
+.orbit-box{position:relative;aspect-ratio:1;max-width:600px;width:100%;margin:0 auto}
+.orbit-box svg.rings{position:absolute;inset:0;width:100%;height:100%}
+.rings circle{fill:none;stroke:var(--line);stroke-width:1.5}
+.ring{position:absolute;inset:0;animation:spin calc(var(--t) / var(--spd)) linear infinite}
+.orbit-box:hover .ring{animation-play-state:paused}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dot{position:absolute;width:var(--s);height:var(--s);margin:calc(var(--s) / -2);border-radius:50%;border:0;cursor:pointer;background:var(--c);
+  box-shadow:0 0 0 6px color-mix(in srgb,var(--c) 18%,transparent);transition:transform .3s cubic-bezier(.3,1.4,.5,1)}
+.dot:hover,.dot:focus-visible{transform:scale(1.5)}
+.center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;width:42%}
+.center .num{font-weight:800;font-size:clamp(28px,4vw,44px);letter-spacing:-.03em;line-height:1}
+.tip{position:absolute;z-index:5;pointer-events:none;width:220px;opacity:0;transform:translateY(6px) scale(.97);transition:opacity .18s,transform .25s cubic-bezier(.2,.8,.2,1)}
+.tip.show{opacity:1;transform:none}
+.side-stats{display:grid;gap:14px}
+.side-stats .card{padding:18px}
+.big{font-weight:800;font-size:34px;letter-spacing:-.03em;line-height:1.05}
+.legend{display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:13px;color:var(--muted)}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+
+/* ===== RIVER ===== */
+.river svg{width:100%;height:auto;display:block}
+.river .flow{fill:none;stroke-linecap:round;opacity:.85;cursor:pointer;transition:opacity .25s,stroke-width .3s}
+.river .flow.dim{opacity:.18}
+.river .sparkle{fill:none;stroke:#fff;stroke-opacity:.55;stroke-linecap:round;stroke-dasharray:2 26;animation:flow calc(2.8s / var(--spd)) linear infinite;pointer-events:none}
+@keyframes flow{to{stroke-dashoffset:-56}}
+.river text{font-family:var(--font);fill:var(--ink)}
+.river .lbl{font-weight:700;font-size:15px}.river .cnt{font-weight:800;font-size:26px;letter-spacing:-.02em}
+.list{display:grid;gap:8px;margin-top:16px}
+.row{display:grid;grid-template-columns:auto 1fr auto auto;gap:14px;align-items:center;padding:12px 14px;border-radius:16px;background:var(--solid);box-shadow:inset 0 0 0 1px var(--line);animation:in .4s cubic-bezier(.2,.8,.2,1) both}
+
+/* ===== FOCUS ===== */
+.focus{display:grid;justify-items:center;gap:22px;text-align:center;padding-top:10px}
+.ringwrap{position:relative;width:150px;height:150px}
+.ringwrap svg.prog{position:absolute;inset:0;transform:rotate(-90deg)}
+.prog circle{fill:none;stroke-width:8;stroke-linecap:round}
+.prog .bg{stroke:var(--line)}.prog .fg{stroke:var(--accent);transition:stroke-dashoffset .8s cubic-bezier(.3,1.2,.5,1)}
+.ringwrap .shield{position:absolute;inset:22px}
+.stack{position:relative;width:min(440px,100%);height:270px;touch-action:pan-y}
+.sc{position:absolute;inset:0;text-align:left;cursor:grab;user-select:none;display:flex;flex-direction:column;gap:10px;will-change:transform}
+.sc:active{cursor:grabbing}
+.sc .stamp{position:absolute;top:22px;font-weight:800;font-size:14px;padding:6px 12px;border-radius:12px;opacity:0}
+.sc .stamp.r{right:22px;background:var(--accent-soft);color:var(--accent)}
+.sc .stamp.l{left:22px;background:var(--unable-soft);color:var(--unable)}
+.hint{font-size:13px;color:var(--muted)}
+.sheet{width:min(720px,100%);text-align:left}
+.sheet summary{list-style:none;cursor:pointer;text-align:center;font-weight:700;color:var(--muted);padding:8px}
+.sheet summary::-webkit-details-marker{display:none}
+.sheet[open] .card{animation:in .45s cubic-bezier(.2,.8,.2,1)}
+
+/* ===== BENTO ===== */
+.bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:150px;gap:16px}
+.bento .card{overflow:hidden;position:relative;transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s}
+@media (hover:hover){.bento .card:hover{transform:translateY(-3px)}}
+.b-hero{grid-column:span 2;grid-row:span 2;display:flex;flex-direction:column;justify-content:space-between}
+.b-heat{grid-column:span 2;grid-row:span 2}
+.b-next{grid-column:span 2;grid-row:span 2}
+.b-live{grid-column:span 2;grid-row:span 2}
+.heat{display:grid;grid-template-columns:auto repeat(7,1fr);gap:5px;margin-top:12px;font-size:12px}
+.heat .cell{aspect-ratio:1.6;border-radius:8px;background:var(--fail);opacity:var(--o);transition:transform .2s cubic-bezier(.3,1.4,.5,1)}
+.heat .cell:hover{transform:scale(1.15)}
+.heat .rl{font-family:var(--mono);color:var(--muted);padding-right:8px;align-self:center}
+.heat .dl{text-align:center;color:var(--muted)}
+.live{list-style:none;padding:0;display:grid;gap:8px;margin-top:10px}
+.live li{display:flex;gap:10px;align-items:center;font-size:14px;animation:in .5s cubic-bezier(.2,.8,.2,1) both}
+.live time{margin-left:auto;font-size:12px;color:var(--muted)}
+.mini{font-weight:800;font-size:40px;letter-spacing:-.03em;line-height:1}
+
+@media (max-width:900px){.orbit-stage{grid-template-columns:1fr}.bento{grid-template-columns:1fr 1fr}.b-hero,.b-heat,.b-next,.b-live{grid-column:span 2}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="seg" id="tabs" role="group" aria-label="Concept">
+    <span class="pill"></span>
+    <button data-v="orbit" aria-pressed="true">1 · Shield Orbit</button>
+    <button data-v="river" aria-pressed="false">2 · Claim River</button>
+    <button data-v="focus" aria-pressed="false">3 · Focus Mode</button>
+    <button data-v="bento" aria-pressed="false">4 · Bento Mosaic</button>
+  </div>
+  <div class="seg" id="mood" role="group" aria-label="Boldness">
+    <span class="pill"></span>
+    <button data-m="calm" aria-pressed="true">Calm</button>
+    <button data-m="playful" aria-pressed="false">Playful</button>
+  </div>
+  <button class="btn ghost" id="theme" style="padding:8px 16px;min-height:0">Theme</button>
+</div>
+
+<main class="wrap">
+  <!-- 1 ORBIT -->
+  <section class="view on" id="v-orbit">
+    <div class="orbit-stage">
+      <div class="side-stats">
+        <div><div class="eyebrow">Thursday, 15 October</div><h1 style="font-size:30px">Good morning,<br>Kmar.</h1></div>
+        <div class="card"><div class="eyebrow">Claims processed</div><div class="big" data-count="500">500</div></div>
+        <div class="card"><div class="eyebrow">Issues detected</div><div class="big" data-count="41">41</div></div>
+      </div>
+      <div>
+        <div class="orbit-box" id="orbitBox">
+          <svg class="rings" viewBox="0 0 100 100"><circle cx="50" cy="50" r="22"/><circle cx="50" cy="50" r="33"/><circle cx="50" cy="50" r="45"/></svg>
+          <div class="center"><div class="shieldSlot" data-size="96"></div><div class="num qcount">14</div><div class="eyebrow">waiting for you</div></div>
+          <div class="card tip" id="tip"></div>
+        </div>
+        <div class="legend"><span><b style="background:var(--fail)"></b>Inner ring: most failures</span><span><b style="background:var(--unable)"></b>Unable to assess</span></div>
+      </div>
+      <div class="side-stats">
+        <div class="card"><div class="eyebrow">Unable to assess</div><div class="big" style="color:var(--unable)" data-count="3">3</div></div>
+        <div class="card"><div class="eyebrow">Latest run #482</div><div class="big" style="color:var(--pass)">82%</div><div class="muted" style="font-size:13px">passed · 498 accepted</div></div>
+        <button class="btn">Open review queue</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 RIVER -->
+  <section class="view" id="v-river">
+    <div style="display:flex;justify-content:space-between;align-items:end;gap:20px;flex-wrap:wrap;margin-bottom:18px">
+      <div style="display:flex;gap:18px;align-items:center"><div class="shieldSlot" data-size="72"></div>
+        <div><div class="eyebrow">Run #482 · CSV upload · today 09:58</div><h1>500 claims came in.<br><em class="qcount-sent">14 need you.</em></h1></div></div>
+      <button class="btn ghost">Ingest data</button>
+    </div>
+    <div class="card river"><svg id="riverSvg" viewBox="0 0 1000 420" role="img" aria-label="Flow of 500 claims into outcomes"></svg>
+      <p class="hint" style="text-align:center">Click a stream to see its claims</p></div>
+    <div class="list" id="riverList"></div>
+  </section>
+
+  <!-- 3 FOCUS -->
+  <section class="view" id="v-focus">
+    <div class="focus">
+      <div class="ringwrap"><svg class="prog" viewBox="0 0 150 150"><circle class="bg" cx="75" cy="75" r="68"/><circle class="fg" id="progFg" cx="75" cy="75" r="68"/></svg><div class="shieldSlot" data-size="106"></div></div>
+      <div><h1 id="focusTitle">One thing at a time, Kmar.</h1><p class="muted" id="focusSub"><span class="qcount">14</span> claims left today</p></div>
+      <div class="stack" id="stack"></div>
+      <p class="hint">Drag right to review · drag left to snooze · or use ← →</p>
+      <details class="sheet"><summary>⌄ More insights</summary>
+        <div class="card" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center">
+          <div><div class="mini">500</div><div class="eyebrow">processed</div></div>
+          <div><div class="mini" style="color:var(--unable)">3</div><div class="eyebrow">unable</div></div>
+          <div><div class="mini" style="color:var(--fail)">41</div><div class="eyebrow">issues</div></div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- 4 BENTO -->
+  <section class="view" id="v-bento">
+    <div class="bento">
+      <div class="card b-hero">
+        <div style="display:flex;gap:16px;align-items:center"><div class="shieldSlot" data-size="80"></div><div><div class="eyebrow">Thursday, 15 October</div><h1 style="font-size:32px">Hello, Kmar.</h1></div></div>
+        <div style="display:flex;gap:28px;align-items:end">
+          <div><div class="mini qcount" style="color:var(--fail)">14</div><div class="eyebrow">need a decision</div></div>
+          <div><div class="mini" style="color:var(--unable)">3</div><div class="eyebrow">unable</div></div>
+          <div><div class="mini">500</div><div class="eyebrow">processed</div></div>
+          <button class="btn" style="margin-left:auto">Review queue</button>
+        </div>
+      </div>
+      <div class="card b-heat"><div style="display:flex;justify-content:space-between"><h2>Where failures cluster</h2><span class="eyebrow">rules × last 7 runs</span></div><div class="heat" id="heat"></div></div>
+      <div class="card b-next"><div style="display:flex;justify-content:space-between"><h2>Claim of the moment</h2><span class="eyebrow">swipe it →</span></div><div class="stack" id="stack2" style="height:220px;margin-top:10px;width:100%"></div></div>
+      <div class="card b-live"><div style="display:flex;justify-content:space-between"><h2>Live</h2><span class="chip t-pass">● streaming</span></div><ul class="live" id="live"></ul></div>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* ---------- sample data ---------- */
+const providers=['PRV-118','PRV-044','PRV-009','PRV-231','PRV-077'];
+let queue=Array.from({length:14},(_,i)=>{const fail=[4,3,3,2,2,2,1,1,1,1,0,0,1,0][i],unable=[1,0,0,1,0,0,1,0,0,0,2,1,0,1][i];
+  return {id:'CLM-'+String([31,108,77,412,9,256,88,301,145,19,214,333,61,270][i]).padStart(4,'0'),prov:providers[i%5],date:`${(i%9)+1} Oct 2026`,fail,unable,
+  rule:['Duplicate service','ICD/CPT mismatch','Late submission','Unit limit'][i%4]}});
+const TOTAL=14;
+const rules=['R-12','R-07','R-03','R-21','R-15','R-02'];
+const heat=rules.map((_,r)=>Array.from({length:7},(_,d)=>Math.max(0,Math.round((6-r)*1.2+Math.sin(d*1.3+r)*3+(d===6&&r<2?5:0)))));
+
+/* ---------- shield (reacts to queue) ---------- */
+const SYM={review:'<path d="M45 58c4.5-7.5 25.5-7.5 30 0-4.5 7.5-25.5 7.5-30 0z"/><circle class="f" cx="60" cy="58" r="4"/>',
+  pass:'<path d="M48.5 58.5l8 8 15-16"/>',fail:'<path d="M51 49l18 18M69 49L51 67"/>'};
+const ORB='M8 58 a52 13 0 1 0 104 0 a52 13 0 1 0 -104 0';
+function shieldSVG(size){
+  const n=queue.length, st=n===0?'pass':n>10?'fail':'review';
+  const col={pass:'var(--pass)',fail:'var(--fail)',review:'var(--accent)'}[st];
+  const q=(0.6+n/TOTAL*1.4).toFixed(2); // more claims -> faster
+  const dur=(5/q).toFixed(2);
+  return `<svg class="shield" width="${size}" height="${size}" viewBox="0 0 120 120" style="--sc:${col};--q:${q}" role="img" aria-label="${n} claims waiting">
+    <path class="body" d="M60 12c12 0 24 4 34 10v34c0 24-15 42-34 50-19-8-34-26-34-50V22c10-6 22-10 34-10z"/>
+    <circle class="core" cx="60" cy="58" r="21"/><path class="orbit" d="${ORB}"/><g class="sym">${SYM[st]}</g>
+    ${reduce?'':`<circle class="sat" r="4"><animateMotion dur="${dur}s" repeatCount="indefinite" path="${ORB}"/></circle>`}</svg>`;
+}
+function renderShields(){document.querySelectorAll('.shieldSlot').forEach(s=>{s.innerHTML=shieldSVG(+s.dataset.size);s.style.position='relative'});
+  document.querySelectorAll('.qcount').forEach(e=>e.textContent=queue.length);
+  const sent=document.querySelector('.qcount-sent');if(sent)sent.textContent=queue.length?`${queue.length} need you.`:'All clear.';
+  const fg=document.getElementById('progFg'),C=2*Math.PI*68;fg.style.strokeDasharray=C;fg.style.strokeDashoffset=C*(queue.length/TOTAL);
+  document.getElementById('focusSub').innerHTML=queue.length?`<span class="qcount">${queue.length}</span> claims left today`:'Queue cleared — nice work.';
+}
+function burst(slot){if(reduce)return;const b=document.createElement('div');b.className='burst';
+  for(let i=0;i<18;i++){const a=i/18*Math.PI*2,d=60+Math.random()*50,c=['var(--pass)','var(--accent)','var(--unable)'][i%3];
+    b.insertAdjacentHTML('beforeend',`<i style="background:${c};--x:${Math.cos(a)*d}px;--y:${Math.sin(a)*d}px"></i>`)}
+  slot.appendChild(b);setTimeout(()=>b.remove(),1000)}
+function toast(t){const e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),1800)}
+
+/* ---------- segmented controls ---------- */
+function seg(id,attr,cb){const s=document.getElementById(id),pill=s.querySelector('.pill');
+  const move=b=>{pill.style.left=b.offsetLeft+'px';pill.style.width=b.offsetWidth+'px'};
+  s.querySelectorAll('button').forEach(b=>b.onclick=()=>{s.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));move(b);cb(b.dataset[attr])});
+  requestAnimationFrame(()=>move(s.querySelector('[aria-pressed=true]')))}
+seg('tabs','v',v=>{document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id==='v-'+v));countUp();if(v==='river')drawRiver()});
+seg('mood','m',m=>{document.documentElement.dataset.mood=m;buildOrbit()});
+document.getElementById('theme').onclick=()=>{const d=document.documentElement;d.dataset.theme=d.dataset.theme==='dark'?'light':'dark'};
+
+function countUp(){if(reduce)return;document.querySelectorAll('.view.on [data-count]').forEach(el=>{const n=+el.dataset.count,t0=performance.now();
+  const f=t=>{const p=Math.min(1,(t-t0)/900);el.textContent=Math.round(n*(1-Math.pow(1-p,4)));if(p<1)requestAnimationFrame(f)};requestAnimationFrame(f)})}
+
+/* ---------- 1 ORBIT ---------- */
+function buildOrbit(){
+  const box=document.getElementById('orbitBox');box.querySelectorAll('.ring').forEach(r=>r.remove());
+  const tiers=[{r:22,t:'60s',f:c=>c.fail>=3},{r:33,t:'90s',f:c=>c.fail>0&&c.fail<3},{r:45,t:'130s',f:c=>c.fail===0}];
+  tiers.forEach((tier,ti)=>{const ring=document.createElement('div');ring.className='ring';ring.style.setProperty('--t',tier.t);if(ti===1)ring.style.animationDirection='reverse';
+    const items=queue.filter(tier.f);
+    items.forEach((c,i)=>{const a=(i/items.length)*Math.PI*2+ti;const d=document.createElement('button');d.className='dot';
+      d.style.left=(50+tier.r*Math.cos(a))+'%';d.style.top=(50+tier.r*Math.sin(a))+'%';
+      d.style.setProperty('--s',(12+c.fail*4)+'px');d.style.setProperty('--c',c.fail?'var(--fail)':'var(--unable)');
+      d.setAttribute('aria-label',`${c.id}, ${c.fail} failed, ${c.unable} unable`);
+      d.onmouseenter=d.onfocus=()=>showTip(c,d);d.onmouseleave=d.onblur=hideTip;d.onclick=()=>toast('Opening '+c.id+' …');
+      ring.appendChild(d)});
+    box.insertBefore(ring,box.querySelector('.center'))});
+}
+function showTip(c,d){const tip=document.getElementById('tip'),box=document.getElementById('orbitBox').getBoundingClientRect(),r=d.getBoundingClientRect();
+  tip.innerHTML=`<div class="mono" style="font-weight:600">${c.id}</div><div class="muted" style="font-size:13px">${c.prov} · ${c.date}</div><div style="margin-top:8px;display:flex;gap:6px">${c.fail?`<span class="chip t-fail">${c.fail} fail</span>`:''}${c.unable?`<span class="chip t-unable">${c.unable} unable</span>`:''}</div><div style="font-size:13px;margin-top:6px">Top issue: ${c.rule}</div>`;
+  let x=r.left-box.left+20,y=r.top-box.top+20;if(x>box.width-230)x-=250;tip.style.left=x+'px';tip.style.top=y+'px';tip.classList.add('show')}
+function hideTip(){document.getElementById('tip').classList.remove('show')}
+
+/* ---------- 2 RIVER ---------- */
+function drawRiver(){
+  const svg=document.getElementById('riverSvg');const outs=[{k:'Passed',n:412,c:'var(--pass)'},{k:'Needs decision',n:queue.length?63:0,c:'var(--fail)',claims:'fail'},{k:'Unable to assess',n:14,c:'var(--unable)',claims:'unable'},{k:'Not applicable',n:9,c:'var(--na)'},{k:'Rejected at ingest',n:2,c:'var(--muted)'}];
+  const sum=500,H=340,sx=210,ex=720;let y0=210-H/2,out='';let oy=30;
+  outs.forEach((o,i)=>{const w=Math.max(4,o.n/sum*H);const sy=y0+w/2;y0+=w;const ty=oy+Math.max(w,24)/2+6;oy+=Math.max(w,24)+40;
+    const d=`M${sx} ${sy} C ${sx+260} ${sy}, ${ex-260} ${ty}, ${ex} ${ty}`;
+    out+=`<path class="flow" data-i="${i}" d="${d}" stroke="${o.c}" stroke-width="${w}"/><path class="sparkle" d="${d}" stroke-width="${Math.max(2,w*.35)}"/>
+      <text class="lbl" x="${ex+20}" y="${ty-4}">${o.k}</text><text class="cnt" x="${ex+20}" y="${ty+24}" fill="${o.c}" style="fill:${o.c}">${o.n}</text>`});
+  out=`<rect x="40" y="${210-H/2}" width="170" height="${H}" rx="22" fill="var(--accent-soft)"/><text class="cnt" x="62" y="200">500</text><text class="lbl" x="62" y="226" style="fill:var(--muted)">ingested</text>`+out;
+  svg.innerHTML=out;
+  svg.querySelectorAll('.flow').forEach(p=>p.onclick=()=>{const i=+p.dataset.i;svg.querySelectorAll('.flow').forEach(q=>q.classList.toggle('dim',q!==p));
+    const o=outs[i],list=document.getElementById('riverList');
+    const cl=o.claims==='fail'?queue.filter(c=>c.fail):o.claims==='unable'?queue.filter(c=>c.unable):[];
+    list.innerHTML=cl.length?cl.map((c,j)=>row(c,j)).join(''):`<div class="card muted" style="text-align:center">${o.n} claims · ${o.k.toLowerCase()} — nothing to do here.</div>`});
+}
+const mini=(c,s=26)=>`<svg width="${s}" height="${s}" viewBox="0 0 120 120"><path d="M60 12c12 0 24 4 34 10v34c0 24-15 42-34 50-19-8-34-26-34-50V22c10-6 22-10 34-10z" fill="${c.fail?'var(--fail-soft)':'var(--unable-soft)'}" stroke="${c.fail?'var(--fail)':'var(--unable)'}" stroke-width="7"/></svg>`;
+const row=(c,j)=>`<div class="row" style="animation-delay:${j*40}ms">${mini(c)}<div><b class="mono">${c.id}</b><div class="muted" style="font-size:13px">${c.prov} · ${c.date}</div></div><div>${c.fail?`<span class="chip t-fail">${c.fail} fail</span> `:''}${c.unable?`<span class="chip t-unable">${c.unable} unable</span>`:''}</div><button class="btn ghost" style="padding:8px 14px;min-height:0">Review</button></div>`;
+
+/* ---------- 3 + 4 swipe stack (spring physics) ---------- */
+function spring(el,from,to,v,onDone){ // critically-damped-ish spring on translateX
+  let x=from,vel=v,last=performance.now();const k=170,c=26;
+  function step(t){const dt=Math.min(.032,(t-last)/1000);last=t;const f=-k*(x-to)-c*vel;vel+=f*dt;x+=vel*dt;apply(el,x);
+    if(Math.abs(x-to)<.5&&Math.abs(vel)<5){apply(el,to);onDone&&onDone();return}requestAnimationFrame(step)}
+  requestAnimationFrame(step)}
+function apply(el,x){el.style.transform=`translateX(${x}px) rotate(${x/22}deg)`;
+  el.querySelector('.stamp.r').style.opacity=Math.max(0,x/120);el.querySelector('.stamp.l').style.opacity=Math.max(0,-x/120)}
+function cardHTML(c){return `<div class="card sc"><span class="stamp r">REVIEW</span><span class="stamp l">SNOOZE</span>
+  <div style="display:flex;gap:12px;align-items:center">${mini(c,40)}<div><div class="mono" style="font-weight:600;font-size:17px">${c.id}</div><div class="muted" style="font-size:13px">${c.prov} · ${c.date}</div></div></div>
+  <div style="display:flex;gap:6px">${c.fail?`<span class="chip t-fail">${c.fail} rules failed</span>`:''}${c.unable?`<span class="chip t-unable">${c.unable} unable</span>`:''}</div>
+  <div style="font-size:14px">Top issue: <b>${c.rule}</b></div><div class="muted" style="font-size:13px;margin-top:auto">Patient P-${2000+c.id.slice(-3)*1} · Claim amount hidden until review</div></div>`}
+function buildStack(id){
+  const st=document.getElementById(id);st.innerHTML='';
+  if(!queue.length){st.innerHTML='<div class="card" style="position:absolute;inset:0;display:grid;place-items:center;text-align:center"><div><div class="mini" style="color:var(--pass)">All clear</div><div class="muted">Nothing left to decide today.</div></div></div>';return}
+  queue.slice(0,3).reverse().forEach((c,i,arr)=>{st.insertAdjacentHTML('beforeend',cardHTML(c));const el=st.lastElementChild;const depth=arr.length-1-i;
+    el.style.transform=`translateY(${depth*10}px) scale(${1-depth*.04})`;el.style.opacity=depth?1-depth*.25:1;el.style.transition='transform .4s cubic-bezier(.2,.8,.2,1)';
+    if(!depth)drag(el,c)});
+}
+function drag(el,c){let sx=0,x=0,hist=[];
+  el.onpointerdown=e=>{el.setPointerCapture(e.pointerId);el.style.transition='none';sx=e.clientX-x;hist=[[e.clientX,e.timeStamp]]};
+  el.onpointermove=e=>{if(!el.hasPointerCapture(e.pointerId))return;x=e.clientX-sx;apply(el,x);hist.push([e.clientX,e.timeStamp]);if(hist.length>5)hist.shift()};
+  el.onpointerup=e=>{const [a,b]=[hist[0],hist[hist.length-1]];const v=(b[0]-a[0])/Math.max(1,(b[1]-a[1]))*1000;
+    const proj=x+(v/1000)*.99/(1-.99); // momentum projection
+    if(Math.abs(proj)>160)fling(el,c,proj>0?1:-1,v);else spring(el,x,0,v,()=>x=0)};
+  el.onkeydown=null}
+function fling(el,c,dir,v=0){spring(el,parseFloat((el.style.transform.match(/-?[\d.]+/)||[0])[0]),dir*700,v||dir*1500,()=>decide(c,dir))}
+function decide(c,dir){const i=queue.indexOf(c);queue.splice(i,1);if(dir<0)queue.push(c);
+  toast(dir>0?`Opening ${c.id} for review`:`${c.id} snoozed to the end`);
+  if(dir>0&&queue.length===0)setTimeout(()=>document.querySelectorAll('.view.on .shieldSlot').forEach(burst),50);
+  refresh()}
+function refresh(){renderShields();buildStack('stack');buildStack('stack2');buildOrbit();if(document.getElementById('v-river').classList.contains('on'))drawRiver()}
+document.addEventListener('keydown',e=>{if(!document.getElementById('v-focus').classList.contains('on')||!queue.length)return;
+  const el=document.querySelector('#stack .sc:last-child');if(e.key==='ArrowRight')fling(el,queue[0],1);if(e.key==='ArrowLeft')fling(el,queue[0],-1)});
+
+/* ---------- 4 heatmap + live ---------- */
+const heatEl=document.getElementById('heat');const mx=Math.max(...heat.flat());
+heatEl.innerHTML='<span></span>'+['Fri','Sat','Sun','Mon','Tue','Wed','Thu'].map(d=>`<span class="dl">${d}</span>`).join('')+
+  rules.map((r,ri)=>`<span class="rl">${r}</span>`+heat[ri].map((n,d)=>`<span class="cell" style="--o:${(.08+n/mx*.92).toFixed(2)}" title="${r}: ${n} failures"></span>`).join('')).join('');
+const events=[['t-pass','✓','You approved CLM-0042'],['t-fail','!','R-12 flagged CLM-0031'],['t-accent','→','Run #482 finished'],['t-unable','?','CLM-0214 missing data'],['t-pass','✓','You approved CLM-0019'],['t-fail','!','R-07 flagged CLM-0256']];
+let ev=0;const live=document.getElementById('live');
+function pushLive(){const [cls,ic,txt]=events[ev++%events.length];live.insertAdjacentHTML('afterbegin',`<li><span class="chip ${cls}" style="width:26px;text-align:center;padding:3px 0">${ic}</span>${txt}<time>just now</time></li>`);
+  [...live.children].slice(1).forEach((li,i)=>li.querySelector('time').textContent=`${(i+1)*3} min ago`);while(live.children.length>5)live.lastElementChild.remove()}
+for(let i=0;i<4;i++)pushLive();if(!reduce)setInterval(pushLive,4000);
+
+refresh();countUp();
+</script>
+</body>
+</html>

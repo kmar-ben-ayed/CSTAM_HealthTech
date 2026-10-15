@@ -77,6 +77,15 @@
 .dock-item.is-active {
   background: var(--dock-active-bg);
   color: var(--dock-active-icon);
+  transition: transform 160ms var(--ease-out), color 150ms ease, background-color 150ms ease;
+}
+/* Hovering the selected item grows the icon alone: its tile steps aside so the
+   enlarged tile doesn't read as a second highlight. The bar on the left still
+   marks the current page. Mouse only, so a tap never leaves it hidden. */
+@media (hover: hover) and (pointer: fine) {
+  .dock-item.is-active:hover {
+    background: transparent;
+  }
 }
 .dock-item.is-active::before {
   content: '';

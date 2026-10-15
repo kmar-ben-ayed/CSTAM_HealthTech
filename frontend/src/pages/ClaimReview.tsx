@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import HoldButton from '../components/HoldButton';
 import ShieldLoader from '../components/ShieldLoader';
 import StatusShield, { SHIELD_FOR_STATUS } from '../components/StatusShield';
@@ -7,10 +7,12 @@ import FindingInspector, { ACTIONS, RESULT_LABEL, type ActionKey, type Finding, 
 import { ApiError } from '../api/client';
 import { getAuditEvents } from '../api/audit';
 import { listRules } from '../api/rules';
+import { loadReviewQueue, onlyActive } from '../api/reviewQueue';
 import {
   exportFhirPayload,
   getDataset,
   getIngestedClaim,
+  postClaimDecision,
   postReview,
   reevaluateClaim,
   type BackendClaim,
@@ -42,6 +44,9 @@ const STATUS_WORD: Record<ClaimStatus, string> = {
 };
 
 type ClaimDecision = 'approved' | 'rejected';
+const DECISION_API = { approved: 'approve', rejected: 'reject' } as const;
+// Review actions that settle a failed rule, so it no longer blocks approval.
+const SETTLING: ActionKey[] = ['dismiss', 'corrected'];
 
 // When a claim opens, the shield scans for one orbit (1.6s) before showing the
 // claim's state. It never holds up the page, only the shield.
@@ -54,6 +59,10 @@ interface Loaded {
   ruleTitles: Map<string, string>;
   /** Latest recorded review action per rule, from the audit trail. */
   recorded: Map<string, string>;
+  /** Active rule IDs; results from other rules are left out. */
+  active: Set<string>;
+  /** The claim's recorded decision, from the audit trail (a reopen clears it). */
+  decision: ClaimDecision | null;
 }
 
 async function loadReview(claimId: string, signal: AbortSignal): Promise<Loaded> {
@@ -72,9 +81,20 @@ async function loadReview(claimId: string, signal: AbortSignal): Promise<Loaded>
   ]);
   if (!claim) throw new Error('not-found');
 
+  const active = new Set(rules.filter((rule) => rule.status === 'active').map((rule) => rule.rule_id));
   const recorded = new Map<string, string>();
   const latest = new Map<string, number>();
+  let decision: ClaimDecision | null = null;
+  let decidedAt = 0;
   for (const event of audit.events) {
+    if (event.claim_id === claimId && event.event_type === 'claim_decision') {
+      const at = new Date(event.timestamp).getTime();
+      if (at >= decidedAt) {
+        decidedAt = at;
+        decision = event.payload.decision === 'approve' ? 'approved' : event.payload.decision === 'reject' ? 'rejected' : null;
+      }
+      continue;
+    }
     if (event.claim_id !== claimId || event.event_type !== 'human_decision') continue;
     const ruleId = typeof event.payload.rule_id === 'string' ? event.payload.rule_id : '';
     const action = ACTIONS.find((item) => item.api === event.payload.action);
@@ -84,7 +104,15 @@ async function loadReview(claimId: string, signal: AbortSignal): Promise<Loaded>
     recorded.set(ruleId, action.recorded);
   }
 
-  return { claim, results, context, ruleTitles: new Map(rules.map((rule) => [rule.rule_id, rule.title])), recorded };
+  return {
+    claim,
+    results: onlyActive(results, active),
+    context,
+    ruleTitles: new Map(rules.map((rule) => [rule.rule_id, rule.title])),
+    recorded,
+    active,
+    decision,
+  };
 }
 
 function toFinding(result: RuleResult, titles: Map<string, string>): Finding {
@@ -125,6 +153,13 @@ function money(amount: unknown, currency: unknown): string {
 }
 
 export default function ClaimReview({ claimId }: ClaimReviewProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const inspectorRef = useRef<HTMLElement>(null);
+  const [queue, setQueue] = useState<string[] | null>(null);
+  const [decisionState, setDecisionState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [fhirStatus, setFhirStatus] = useState('');
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -152,6 +187,9 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
     loadReview(claimId, controller.signal)
       .then((review) => {
         setLoaded(review);
+        setDecision(review.decision);
+        setDecisionState(review.decision ? 'saved' : 'idle');
+        setDecisionError(null);
         timer = window.setTimeout(() => setScanning(false), Math.max(0, scanFor - (performance.now() - openedAt)));
       })
       .catch((cause: unknown) => {
@@ -167,15 +205,26 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
     };
   }, [claimId]);
 
+  // The review queue, for previous / next.
+  useEffect(() => {
+    const controller = new AbortController();
+    loadReviewQueue(controller.signal).then(setQueue).catch(() => setQueue(null));
+    return () => controller.abort();
+  }, [claimId]);
+
   useEffect(() => {
     if (!fhirOpen || !loaded) return;
     const controller = new AbortController();
     setFhir({ state: 'loading' });
     exportFhirPayload(loaded.claim, controller.signal)
-      .then((payload) => setFhir({ state: 'ready', payload }))
+      .then((payload) => {
+        setFhir({ state: 'ready', payload });
+        setFhirStatus('FHIR payload ready.');
+      })
       .catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setFhir({ state: 'error' });
+        setFhirStatus('The FHIR payload could not be built.');
       });
     return () => controller.abort();
   }, [fhirOpen, loaded]);
@@ -189,10 +238,26 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
     ?? findings.find((finding) => finding.result !== 'PASS' && finding.result !== 'NA')
     ?? findings[0];
 
+  // Narrow screens stack the inspector under the sheet: once the newly selected
+  // finding's inspector has rendered, bring it into view and move focus to it.
+  const revealInspector = useRef(false);
+  useEffect(() => {
+    if (!revealInspector.current) return;
+    revealInspector.current = false;
+    const inspector = inspectorRef.current;
+    if (!inspector || inspector.getBoundingClientRect().top < window.innerHeight * 0.6) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    inspector.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    inspector.focus({ preventScroll: true });
+  }, [selectedId]);
+
+  // Back to wherever the reviewer came from; direct links fall back to the claims list.
+  const goBack = () => (location.key !== 'default' ? navigate(-1) : navigate('/app/claims'));
+
   if (loadError) {
     return (
       <div className="review-page">
-        <Link to="/app/claims" className="text-link">Back to claims</Link>
+        <button type="button" className="text-link" onClick={goBack}>Back</button>
         <p className="review-message" role="alert">{loadError}</p>
       </div>
     );
@@ -213,7 +278,49 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
   const unableCount = loaded.results.filter((result) => result.status === 'UNABLE_TO_ASSESS').length;
   const actionable = findings.filter((finding) => finding.result !== 'PASS' && finding.result !== 'NA');
   const reviewedCount = actionable.filter((finding) => choices[finding.ruleId]?.state === 'saved' || (!choices[finding.ruleId] && loaded.recorded.has(finding.ruleId))).length;
-  const approveBlocked = failedCount > 0;
+  // A failed rule blocks approval until it is dismissed or marked corrected.
+  const settled = (finding: Finding) => {
+    const choice = choices[finding.ruleId];
+    if (choice) return choice.state === 'saved' && SETTLING.includes(choice.action);
+    const label = loaded.recorded.get(finding.ruleId);
+    return ACTIONS.some((action) => SETTLING.includes(action.key) && action.recorded === label);
+  };
+  const openFailures = findings.filter((finding) => finding.result === 'FAIL' && !settled(finding)).length;
+  const approveBlocked = openFailures > 0;
+
+  const position = queue ? queue.indexOf(claim.claim_id) : -1;
+  const previousId = queue && position > 0 ? queue[position - 1] : null;
+  const nextId = queue ? ((position >= 0 ? queue[position + 1] : queue.find((id) => id !== claim.claim_id)) ?? null) : null;
+  const openClaim = (id: string) => navigate(`/app/claims/${encodeURIComponent(id)}`);
+
+  const selectFinding = (ruleId: string) => {
+    revealInspector.current = true;
+    setSelectedId(ruleId);
+    setActionError(null);
+  };
+  const backToFindings = () => {
+    const row = document.querySelector<HTMLElement>('.finding-row.is-selected');
+    row?.scrollIntoView({ block: 'start' });
+    row?.focus({ preventScroll: true });
+  };
+
+  const decide = async (value: ClaimDecision) => {
+    setDecision(value);
+    setDecisionState('saving');
+    setDecisionError(null);
+    const reason = value === 'approved'
+      ? `Approved after review; ${actionable.length} finding${actionable.length === 1 ? '' : 's'} on the claim.`
+      : `Rejected with ${openFailures} open failed rule${openFailures === 1 ? '' : 's'}.`;
+    try {
+      await postClaimDecision(claim.claim_id, DECISION_API[value], reason);
+      setDecisionState('saved');
+    } catch {
+      setDecision(null);
+      setDecisionState('idle');
+      setDecisionRound((round) => round + 1);
+      setDecisionError('The decision could not be recorded. Nothing was written to the audit trail.');
+    }
+  };
 
   const recordAction = async (finding: Finding, action: ActionKey, reason: string) => {
     const api = ACTIONS.find((item) => item.key === action)!.api;
@@ -239,7 +346,7 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
     setRerunError(null);
     try {
       const results = await reevaluateClaim(claim);
-      setLoaded({ ...loaded, results });
+      setLoaded({ ...loaded, results: onlyActive(results, loaded.active) });
     } catch {
       setRerunError('The rules could not be re-run.');
     } finally {
@@ -257,15 +364,40 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
-  const undoDecision = () => {
-    setDecision(null);
-    setDecisionRound((round) => round + 1); // remounts both hold buttons
+  // Reopening is recorded too: the audit trail keeps the earlier decision.
+  const reopen = async () => {
+    setDecisionState('saving');
+    setDecisionError(null);
+    try {
+      await postClaimDecision(claim.claim_id, 'reopen', 'Decision withdrawn by the reviewer.');
+      setDecision(null);
+      setDecisionState('idle');
+      setDecisionRound((round) => round + 1); // remounts both hold buttons
+    } catch {
+      setDecisionState('saved');
+      setDecisionError('The claim could not be reopened.');
+    }
   };
 
   return (
     <div className="review-page">
       <div className="review-bar">
-        <Link to="/app/claims" className="text-link">Back to claims</Link>
+        <div className="review-bar-nav">
+          <button type="button" className="text-link" onClick={goBack}>Back</button>
+          {queue && queue.length > 0 && (
+            <>
+              <span className="review-queue-pos">
+                {position >= 0 ? `${position + 1} of ${queue.length} in the queue` : `${queue.length} in the queue`}
+              </span>
+              <button type="button" className="button-secondary" disabled={!previousId} onClick={() => previousId && openClaim(previousId)}>
+                Previous
+              </button>
+              <button type="button" className="button-secondary" disabled={!nextId} onClick={() => nextId && openClaim(nextId)}>
+                Next claim
+              </button>
+            </>
+          )}
+        </div>
         <div className="review-bar-actions">
           {rerunError && <span className="inspector-error" role="alert">{rerunError}</span>}
           <button type="button" className="button-secondary" onClick={rerun} disabled={rerunning}>
@@ -329,11 +461,21 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
               </tbody>
             </table>
 
-            <button type="button" className="text-link" aria-expanded={fhirOpen} onClick={() => setFhirOpen((open) => !open)}>
+            <button
+              type="button"
+              className="text-link"
+              aria-expanded={fhirOpen}
+              onClick={() => {
+                setFhirStatus(fhirOpen ? '' : 'Building the FHIR payload…');
+                setFhirOpen((open) => !open);
+              }}
+            >
               {fhirOpen ? 'Hide FHIR payload' : 'View FHIR payload'}
             </button>
+            {/* Announce the state only; reading the whole payload aloud helps nobody. */}
+            <span className="visually-hidden" role="status">{fhirStatus}</span>
             {fhirOpen && (
-              <pre className="sheet-code" aria-live="polite">
+              <pre className="sheet-code">
                 {fhir.state === 'loading' ? 'Building the FHIR payload…'
                   : fhir.state === 'error' ? 'The FHIR payload could not be built.'
                     : JSON.stringify(fhir.payload, null, 2)}
@@ -376,17 +518,18 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
                               type="button"
                               className={`finding-row${finding.ruleId === selected.ruleId ? ' is-selected' : ''}`}
                               aria-current={finding.ruleId === selected.ruleId || undefined}
-                              onClick={() => {
-                                setSelectedId(finding.ruleId);
-                                setActionError(null);
-                              }}
+                              onClick={() => selectFinding(finding.ruleId)}
                             >
                               <span className="mono finding-id">{finding.ruleId}</span>
                               <span className="finding-main">
                                 <span className="finding-name">{finding.title}</span>
                                 <span className="finding-summary">{finding.summary}</span>
                               </span>
-                              <span className="finding-decision">{decisionText}</span>
+                              {decisionText && (
+                                <span className="finding-decision" data-state={choice?.state === 'saving' ? 'saving' : (choice?.action ?? ACTIONS.find((item) => item.recorded === loaded.recorded.get(finding.ruleId))?.key ?? 'open')}>
+                                  {decisionText}
+                                </span>
+                              )}
                             </button>
                           </li>
                         );
@@ -404,61 +547,79 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
 
             <section className="claim-decision" aria-labelledby="claim-decision-heading">
               <h2 id="claim-decision-heading">Decision on this claim</h2>
-              <div className="claim-decision-buttons" key={decisionRound}>
-                <HoldButton
-                  doneLabel="Claim rejected"
-                  backgroundColor="var(--surface)"
-                  textColor="var(--ink)"
-                  fillColor="var(--reject-fill)"
-                  fillTextColor="#ffffff"
-                  size="lg"
-                  radius={7}
-                  fillDirection="right"
-                  holdTime={1200}
-                  releaseTime={200}
-                  pressScale={0.985}
-                  resetAfter={0}
-                  disabled={decision === 'approved'}
-                  aria-describedby="claim-decision-hint"
-                  onHold={() => setDecision('rejected')}
-                >
-                  Hold to reject claim
-                </HoldButton>
-                <HoldButton
-                  doneLabel="Claim approved"
-                  backgroundColor="var(--surface)"
-                  textColor="var(--ink)"
-                  fillColor="var(--approve-fill)"
-                  fillTextColor="#ffffff"
-                  size="lg"
-                  radius={7}
-                  fillDirection="right"
-                  holdTime={1200}
-                  releaseTime={200}
-                  pressScale={0.985}
-                  resetAfter={0}
-                  disabled={approveBlocked || decision === 'rejected'}
-                  aria-describedby="claim-decision-hint"
-                  onHold={() => setDecision('approved')}
-                >
-                  Hold to approve claim
-                </HoldButton>
-              </div>
+              {decision && decisionState === 'saved' ? (
+                <div className="claim-decided">
+                  <span>
+                    <strong className={`is-${decision}`}>Claim {decision}.</strong> Recorded in the audit trail.
+                  </span>
+                  <span className="claim-decided-actions">
+                    <button type="button" className="text-link" onClick={reopen}>Reopen</button>
+                    {nextId && (
+                      <button type="button" className="button-primary" onClick={() => openClaim(nextId)}>Next claim</button>
+                    )}
+                  </span>
+                </div>
+              ) : (
+                <div className="claim-decision-buttons" key={decisionRound}>
+                  <HoldButton
+                    doneLabel="Claim rejected"
+                    backgroundColor="var(--surface)"
+                    textColor="var(--ink)"
+                    fillColor="var(--reject-fill)"
+                    fillTextColor="#ffffff"
+                    size="lg"
+                    radius={8}
+                    fillDirection="right"
+                    holdTime={1200}
+                    releaseTime={200}
+                    pressScale={0.985}
+                    resetAfter={0}
+                    disabled={decision === 'approved' || decisionState === 'saving'}
+                    aria-describedby="claim-decision-hint"
+                    onHold={() => decide('rejected')}
+                  >
+                    Hold to reject claim
+                  </HoldButton>
+                  <HoldButton
+                    doneLabel="Claim approved"
+                    backgroundColor="var(--surface)"
+                    textColor="var(--ink)"
+                    fillColor="var(--approve-fill)"
+                    fillTextColor="#ffffff"
+                    size="lg"
+                    radius={8}
+                    fillDirection="right"
+                    holdTime={1200}
+                    releaseTime={200}
+                    pressScale={0.985}
+                    resetAfter={0}
+                    disabled={approveBlocked || decision === 'rejected' || decisionState === 'saving'}
+                    aria-describedby="claim-decision-hint"
+                    onHold={() => decide('approved')}
+                  >
+                    Hold to approve claim
+                  </HoldButton>
+                </div>
+              )}
               <p id="claim-decision-hint" className="claim-decision-hint" aria-live="polite">
-                {decision ? (
-                  <>
-                    Claim {decision}. Not saved yet: claim decisions are not connected to the server.{' '}
-                    <button type="button" className="text-link" onClick={undoDecision}>Undo</button>
-                  </>
-                ) : approveBlocked
-                  ? 'Approval is unavailable while a rule has failed. Reject, or request information above.'
-                  : 'Press and hold to confirm.'}
+                {decisionError ? (
+                  <span className="inspector-error" role="alert">{decisionError}</span>
+                ) : decisionState === 'saving' ? (
+                  'Recording the decision…'
+                ) : decision ? (
+                  ''
+                ) : approveBlocked ? (
+                  `Approval is unavailable while ${openFailures} failed rule${openFailures === 1 ? ' is' : 's are'} open. Dismiss or mark them corrected above, or reject the claim.`
+                ) : (
+                  'Press and hold to confirm.'
+                )}
               </p>
             </section>
           </div>
         </article>
 
         <FindingInspector
+          ref={inspectorRef}
           key={selected.ruleId}
           claim={claim}
           finding={selected}
@@ -471,6 +632,7 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
             delete next[selected.ruleId];
             return next;
           })}
+          onBack={backToFindings}
         />
       </div>
     </div>

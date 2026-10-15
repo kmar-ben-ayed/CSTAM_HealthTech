@@ -1,6 +1,8 @@
 /* Claim review page (claimguard-implementation-prompt.md, sections 4.6 and 4.7). */
 
 .review-page {
+  /* Headings share the dashboard's Manrope so the two pages read as one app. */
+  --font-heading: 'Manrope', var(--font-sans), sans-serif;
   padding: 22px 40px 56px 0;
   color: var(--ink);
 }
@@ -163,11 +165,11 @@
 
 .sheet-provider {
   margin: 4px 0 4px;
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
   font-size: 42px;
-  font-weight: 500;
+  font-weight: 800;
   line-height: 1.1;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
   text-transform: none;
   color: var(--ink);
 }
@@ -222,7 +224,7 @@
 .sheet-lines th {
   padding: 6px 0;
   text-align: left;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -267,10 +269,11 @@
 }
 .findings-heading h2 {
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
   font-size: 24px;
-  font-style: italic;
-  font-weight: 400;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   text-transform: none;
   color: var(--ink);
 }
@@ -378,7 +381,7 @@
   margin-top: 18px;
   padding-top: 12px;
   border-top: 1.5px solid var(--ink);
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
   font-size: 22px;
   font-weight: 500;
 }
@@ -399,10 +402,10 @@
 }
 .claim-decision h2 {
   margin: 0 0 12px;
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
   font-size: 19px;
-  font-style: italic;
-  font-weight: 400;
+  font-style: normal;
+  font-weight: 700;
   text-transform: none;
   color: var(--ink);
 }
@@ -459,10 +462,10 @@
 }
 .inspector-section h3 {
   margin: 0 0 8px;
-  font-family: var(--font-serif);
+  font-family: var(--font-heading);
   font-size: 18px;
-  font-style: italic;
-  font-weight: 400;
+  font-style: normal;
+  font-weight: 700;
   text-transform: none;
   color: var(--ink);
 }
@@ -490,7 +493,7 @@
   padding: 0 6px;
   border: 1px solid var(--border2);
   border-radius: 4px;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   line-height: 1.6;
   color: var(--ink);
 }
@@ -566,7 +569,7 @@
   border-color: var(--ink);
   color: var(--surface);
   font-family: var(--font-sans);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
 }
 .review-action-name {
   display: block;
@@ -630,6 +633,342 @@
   .finding-row,
   .findings-caret,
   .review-action {
+    transition: none;
+  }
+}
+
+/* Top bar: back, position in the queue, previous / next */
+.review-bar-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.review-queue-pos {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+/* Claim decision, once recorded */
+.claim-decided {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.claim-decided strong.is-approved { color: var(--pass-text); }
+.claim-decided strong.is-rejected { color: var(--fail-text); }
+.claim-decided-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Narrow screens: the inspector sits below the sheet; this jumps back up. */
+.inspector-back {
+  display: none;
+  margin-bottom: 12px;
+}
+@media (max-width: 1180px) {
+  .inspector-back { display: inline-block; }
+  .inspector { scroll-margin-top: 84px; }
+  .finding-row { scroll-margin-top: 120px; }
+}
+.inspector:focus { outline: none; }
+.inspector-shortcuts {
+  margin: 0 0 10px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.inspector-shortcuts kbd {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+/* ── Polish ─────────────────────────────────────────────────────────────
+   Same case-file structure, softer surfaces: rounded cards with a quiet
+   shadow, tinted status chips, the claim facts in an inset panel, and the
+   review actions as cards. Colours come from tokens.css, so dark mode follows. */
+
+.review-page {
+  --r-card: 12px;
+  --r-inner: 8px;
+  --soft-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 30px -14px rgba(15, 23, 42, 0.18);
+  --inset: color-mix(in srgb, var(--ink) 3%, var(--surface));
+}
+[data-theme='dark'] .review-page {
+  --soft-shadow: 0 10px 30px -14px rgba(0, 0, 0, 0.6);
+}
+
+/* Pills for every button on the page */
+.review-page .button-secondary,
+.review-page .button-primary {
+  border-radius: 8px;
+  padding: 0 16px;
+}
+.review-page .button-secondary {
+  border-color: var(--border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.review-page .button-secondary:disabled {
+  cursor: not-allowed;
+  box-shadow: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .review-page .button-secondary:not(:disabled):hover {
+    border-color: var(--border2);
+    background: var(--inset);
+  }
+}
+
+/* Top bar */
+.review-bar-nav > .text-link {
+  font-weight: 600;
+}
+.review-queue-pos {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cards */
+.review-sheet,
+.inspector {
+  border-color: var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--soft-shadow);
+}
+.review-sheet-body {
+  padding: 32px 36px;
+}
+.inspector {
+  padding: 26px;
+}
+
+/* Header: the status under the shield becomes a tinted chip */
+.sheet-provider {
+  font-size: 40px;
+}
+.sheet-service {
+  margin-top: 2px;
+  font-size: 0.9375rem;
+}
+.sheet-state .result-word {
+  margin-top: 6px;
+}
+.sheet-state-detail {
+  margin-top: 4px;
+}
+
+/* Claim facts in an inset panel */
+.sheet-details {
+  margin-top: 24px;
+  padding: 14px 20px;
+  border-radius: var(--r-inner);
+  background: var(--inset);
+}
+.sheet-leader {
+  padding: 5px 0;
+}
+
+/* Service lines in a rounded frame */
+.sheet-lines {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-inner);
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+}
+.sheet-lines th {
+  padding: 10px 16px;
+  background: var(--inset);
+}
+.sheet-lines td {
+  padding: 11px 16px;
+}
+.sheet-lines th:last-child,
+.sheet-lines td:last-child {
+  padding-right: 16px;
+}
+.sheet-lines tbody tr:last-child td {
+  border-bottom: none;
+}
+.sheet-lines td:last-child {
+  font-variant-numeric: tabular-nums;
+}
+.sheet-code,
+.inspector-evidence {
+  border-radius: 8px;
+}
+
+/* Findings */
+.findings-heading {
+  margin-top: 34px;
+}
+.findings-heading span {
+  font-variant-numeric: tabular-nums;
+}
+.findings-group {
+  border-top: none;
+  margin-top: 6px;
+}
+.findings-group-header {
+  padding: 0 4px;
+}
+.findings-group-header .mono {
+  font-weight: 600;
+}
+.findings-rows {
+  display: grid;
+  gap: 4px;
+}
+.finding-row {
+  align-items: center;
+  padding: 12px 14px;
+  border-top: none;
+  border-radius: 6px;
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+.finding-row.is-selected {
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.finding-id {
+  font-weight: 600;
+}
+
+/* Decision chips on each finding */
+.finding-decision {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--inset);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.finding-decision[data-state='confirm'] {
+  color: var(--fail-text);
+  background: color-mix(in srgb, var(--fail-text) 11%, transparent);
+  box-shadow: none;
+}
+.finding-decision[data-state='dismiss'],
+.finding-decision[data-state='corrected'] {
+  color: var(--pass-text);
+  background: color-mix(in srgb, var(--pass-text) 11%, transparent);
+  box-shadow: none;
+}
+.finding-decision[data-state='request'] {
+  color: var(--unable-text);
+  background: color-mix(in srgb, var(--unable-text) 12%, transparent);
+  box-shadow: none;
+}
+.finding-decision[data-state='saving'] {
+  color: var(--review-text);
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+
+/* Total in a soft strip instead of a heavy rule */
+.sheet-total {
+  align-items: center;
+  margin-top: 22px;
+  padding: 14px 20px;
+  border-top: none;
+  border-radius: var(--r-inner);
+  background: var(--inset);
+  font-size: 18px;
+  font-weight: 700;
+}
+.sheet-total-count {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.sheet-total-count.has-failures {
+  color: var(--fail-text);
+}
+
+/* Decision */
+.claim-decision {
+  margin-top: 26px;
+  padding-top: 22px;
+}
+.claim-decided {
+  padding: 16px 18px;
+  border: none;
+  border-radius: var(--r-inner);
+  background: var(--inset);
+}
+.claim-decided:has(.is-approved) {
+  background: color-mix(in srgb, var(--pass-text) 10%, var(--surface));
+}
+.claim-decided:has(.is-rejected) {
+  background: color-mix(in srgb, var(--fail-text) 9%, var(--surface));
+}
+
+/* Inspector */
+.inspector-title {
+  font-family: var(--font-heading);
+  letter-spacing: -0.01em;
+}
+.inspector-explanation {
+  padding: 12px 14px;
+  border-left: none;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+.inspector-actions {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+/* Review actions as cards */
+.review-actions {
+  display: grid;
+  gap: 8px;
+}
+.review-action {
+  padding: 10px 14px 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-inner);
+  background: var(--surface);
+  transition: opacity 150ms ease, transform 120ms var(--ease-out), border-color 150ms ease, background-color 150ms ease;
+}
+.review-action.is-chosen {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-soft);
+}
+@media (hover: hover) and (pointer: fine) {
+  .review-action:not(:disabled):hover {
+    border-color: var(--border2);
+    background: var(--inset);
+  }
+}
+.dismiss-form {
+  padding: 10px 0 4px 62px;
+}
+
+@media (max-width: 760px) {
+  .review-sheet-body {
+    padding: 22px 18px;
+  }
+  .sheet-provider {
+    font-size: 30px;
+  }
+  .sheet-details {
+    padding: 12px 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .review-action,
+  .finding-row {
     transition: none;
   }
 }

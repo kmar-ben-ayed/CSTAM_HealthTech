@@ -281,6 +281,68 @@ class ApiRouteTests(unittest.TestCase):
             "first_broken_index": None,
         })
 
+    def test_claim_decision_is_audited_and_reason_hashed(self):
+        decision = {
+            "decision": "approve",
+            "actor": "reviewer-1",
+            "reason": "all findings resolved",
+            "created_at": "2026-09-29T12:00:00Z",
+        }
+        response = self.client.post("/api/v1/claims/CG-TEST/decision", json=decision)
+        self.assertEqual(response.status_code, 201)
+        reopened = self.client.post(
+            "/api/v1/claims/CG-TEST/decision",
+            json={**decision, "decision": "reopen", "reason": "approved by mistake"},
+            headers={"X-Actor": "reviewer-2"},
+        )
+        self.assertEqual(reopened.status_code, 201)
+
+        events = self.client.get("/api/v1/audit/events").json()["events"]
+        self.assertEqual([e["payload"]["decision"] for e in events], ["reopen", "approve"])
+        self.assertEqual(events[0]["actor"], "reviewer-2")
+        self.assertEqual(events[0]["claim_id"], "CG-TEST")
+        self.assertTrue(events[0]["payload"]["reason_recorded"])
+        self.assertNotIn("approved by mistake", json.dumps(events))
+        self.assertTrue(self.client.get("/api/v1/audit/verify").json()["valid"])
+
+    def test_claim_decision_rejects_unknown_decision_and_blank_actor(self):
+        decision = {
+            "decision": "approve",
+            "actor": "reviewer-1",
+            "reason": "checked",
+            "created_at": "2026-09-29T12:00:00Z",
+        }
+        bad = self.client.post("/api/v1/claims/CG-TEST/decision", json={**decision, "decision": "pay"})
+        self.assertEqual(bad.status_code, 422)
+        blank = self.client.post("/api/v1/claims/CG-TEST/decision", json=decision, headers={"X-Actor": "  "})
+        self.assertEqual(blank.status_code, 422)
+        self.assertEqual(self.client.get("/api/v1/audit/events").json()["total_count"], 0)
+
+    def test_quality_scores_the_engine_against_ground_truth(self):
+        response = self.client.get("/api/v1/quality/development")
+        self.assertEqual(response.status_code, 200)
+        quality = response.json()
+        overall = quality["overall"]
+        self.assertGreater(overall["count"], 0)
+        self.assertEqual(overall["tp"] + overall["fp"] + overall["fn"] + overall["tn"], overall["count"])
+        self.assertTrue(set(quality["by_rule"]) <= {f"R{i:03}" for i in range(1, 16)})
+        # Scoring is read-only: nothing is written to the audit trail.
+        self.assertEqual(self.client.get("/api/v1/audit/events").json()["total_count"], 0)
+        self.assertEqual(self.client.get("/api/v1/quality/nope").status_code, 404)
+
+    def test_runs_report_order_rejections_and_invalid_statuses(self):
+        good = self.client.post("/api/v1/ingest/jsonl", json={"text": json.dumps(self.claim)})
+        self.assertEqual(good.status_code, 200)
+        bad = self.client.post("/api/v1/ingest/jsonl", json={"text": "{not json"})
+        self.assertIn(bad.status_code, (200, 422))
+        runs = self.client.get("/api/v1/runs").json()["runs"]
+        self.assertGreaterEqual(len(runs), 1)
+        # Newest first, numbered in the order they happened.
+        self.assertEqual([run["sequence"] for run in runs], list(range(len(runs), 0, -1)))
+        for run in runs:
+            self.assertEqual(sum(run["rejected_reasons"].values()), run["rejected_records"])
+            self.assertEqual(run["invalid_results"], {})
+
     def test_audit_history_survives_app_restart(self):
         response = self.client.post("/api/v1/claims/evaluate", json={"claim": self.claim})
         self.assertEqual(response.status_code, 200)
