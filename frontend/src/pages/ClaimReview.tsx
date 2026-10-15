@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import HoldButton from '../components/HoldButton';
 import ShieldLoader from '../components/ShieldLoader';
 import StatusShield, { SHIELD_FOR_STATUS } from '../components/StatusShield';
+import DocumentsPanel from '../components/DocumentsPanel';
 import FindingInspector, { ACTIONS, RESULT_LABEL, type ActionKey, type Finding, type ReviewChoice } from '../components/FindingInspector';
 import { ApiError } from '../api/client';
 import { getAuditEvents } from '../api/audit';
@@ -175,6 +176,8 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
   const [decision, setDecision] = useState<ClaimDecision | null>(null);
   const [decisionRound, setDecisionRound] = useState(0);
   const [scanning, setScanning] = useState(true);
+  // Bumped when the claim's documents change, so open evidence is searched again.
+  const [documentsVersion, setDocumentsVersion] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -482,6 +485,8 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
               </pre>
             )}
 
+            <DocumentsPanel claim={claim} onChanged={() => setDocumentsVersion((version) => version + 1)} />
+
             <div className="findings-heading">
               <h2>Findings</h2>
               <span>{reviewedCount} of {actionable.length} reviewed</span>
@@ -633,6 +638,7 @@ export default function ClaimReview({ claimId }: ClaimReviewProps) {
             return next;
           })}
           onBack={backToFindings}
+          documentsVersion={documentsVersion}
         />
       </div>
     </div>

@@ -28,6 +28,8 @@ from api_app.services import (
 )
 from audit.logger import AuditLogger
 from audit.store import AuditStore
+from evidence_rag.service import EvidenceService
+from evidence_rag.store import EvidenceStore
 from rule_engine.engine_core import config as load_rules_config
 from rule_engine.spec_store import default_database
 
@@ -135,6 +137,12 @@ def create_app(
             claim_service, backend_root, IngestionStore(ingestion_path)
         )
         app.state.explanation_service = ExplanationService(rules_config, claim_service, audit_logger)
+        evidence_path = (
+            backend_root / "outputs" / "evidence.sqlite3"
+            if audit_log_path is None
+            else Path(audit_log_path).with_name("evidence.sqlite3")
+        )
+        app.state.evidence_service = EvidenceService(EvidenceStore(evidence_path), claim_service, audit_logger)
 
         def reload_rules() -> None:
             """Make rule and reference-data changes visible without a restart."""

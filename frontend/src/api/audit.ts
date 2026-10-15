@@ -34,6 +34,9 @@ export function describeAuditEvent(event: BackendAuditEvent): string {
   const rule = typeof event.payload.rule_id === 'string' ? event.payload.rule_id : '';
   if (event.event_type === 'human_decision') return `Review action: ${action || 'decision recorded'}${rule ? ` on ${rule}` : ''}`;
   if (event.event_type === 'ai_decision') return `AI explanation drafted${rule ? ` for ${rule}` : ''}`;
+  if (event.event_type === 'evidence_retrieval') return `Evidence searched${rule ? ` for ${rule}` : ''}`;
+  if (event.event_type === 'evidence_document_added') return 'Supporting document added';
+  if (event.event_type === 'evidence_document_removed') return 'Supporting document removed';
   const kind = event.event_type.replaceAll('_', ' ');
   return kind.charAt(0).toUpperCase() + kind.slice(1);
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAuditEvents, verifyAudit, type BackendAuditEvent } from '../api/audit';
+import { describeAuditEvent, getAuditEvents, verifyAudit, type BackendAuditEvent } from '../api/audit';
 import ShieldLoader from '../components/ShieldLoader';
 
 const AUDIT_EVENTS = [
@@ -131,6 +131,8 @@ const EVENT_CONFIG: Record<string, { color: string; bg: string }> = {
   RULE_EVALUATED: { color: 'var(--status-uta-ink)', bg: 'var(--status-uta-bg)' },
   REVIEW_OPENED: { color: 'var(--status-na-ink)', bg: 'var(--status-na-bg)' },
   REVIEW_ACTION: { color: 'var(--status-fail-ink)', bg: 'var(--status-fail-bg)' },
+  EVIDENCE_SEARCH: { color: 'var(--accent)', bg: 'var(--accent-subtle)' },
+  EVIDENCE_DOCUMENT: { color: 'var(--status-na-ink)', bg: 'var(--status-na-bg)' },
 };
 
 const RESULT_COLOR: Record<string, string> = {
@@ -170,12 +172,18 @@ function toAuditEvent(event: BackendAuditEvent): AuditEvent {
       ? 'REVIEW_ACTION'
       : event.event_type === 'ai_decision'
         ? 'AI_EXPLANATION'
-        : event.event_type.toUpperCase();
+        : event.event_type === 'evidence_retrieval'
+          ? 'EVIDENCE_SEARCH'
+          : event.event_type.startsWith('evidence_document_')
+            ? 'EVIDENCE_DOCUMENT'
+            : event.event_type.toUpperCase();
   const detail = event.event_type === 'rule_execution'
     ? `Rule ${ruleId || 'unknown'} evaluated → ${status.replaceAll('_', ' ')}`
     : event.event_type === 'human_decision'
       ? `Review action: ${String(payload.action || 'decision recorded').replaceAll('_', ' ')}`
-      : `${String(payload.provider || 'AI')} explanation recorded`;
+      : event.event_type === 'ai_decision'
+        ? `${String(payload.provider || 'AI')} explanation recorded`
+        : describeAuditEvent(event);
 
   return {
     id: `AUD-${event.index}`,

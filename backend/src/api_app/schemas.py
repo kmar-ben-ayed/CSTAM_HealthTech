@@ -48,6 +48,18 @@ class ExplanationRequest(StrictModel):
     provider: Literal["mock", "openai"] = "openai"
 
 
+class EvidenceRequest(StrictModel):
+    claim: dict[str, Any]
+    rule_id: str = Field(pattern=RULE_ID_PATTERN, max_length=32)
+
+
+class DocumentUploadRequest(StrictModel):
+    attachment_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+    filename: str = Field(min_length=1, max_length=255)
+    # 3 MB of raw PDF is about 4.2 million base64 characters.
+    content_base64: str = Field(min_length=1, max_length=4_300_000)
+
+
 class ReviewDecisionRequest(StrictModel):
     claim_id: str = Field(min_length=1, max_length=128)
     rule_id: str = Field(pattern=RULE_ID_PATTERN, max_length=32)

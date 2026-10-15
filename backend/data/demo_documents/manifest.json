@@ -1,0 +1,102 @@
+{
+  "notice": "All demo documents are synthetic and fictional. No real patient information.",
+  "source_split": "development",
+  "scenarios": [
+    {
+      "scenario": 1,
+      "key": "authorization_letter",
+      "title": "Authorization letter resolves a gap",
+      "claim_id": "CG-B39790AC3604",
+      "rule_id": "R008",
+      "attachment_id": "DOC-CG-B39790AC3604-AUTH",
+      "file": "01_authorization_letter.pdf",
+      "display_filename": "prior_authorization_letter.pdf",
+      "expect_advisory": [
+        "possible_resolution"
+      ],
+      "expect_status_hint": "approved",
+      "expect_warning": null,
+      "story": "The line carries no authorization reference, but the attached payer letter shows an approved authorization for this patient, service and date. The reviewer can request the reference be added."
+    },
+    {
+      "scenario": 2,
+      "key": "draft_vs_final",
+      "title": "Draft in metadata, final in the document",
+      "claim_id": "CG-F5F2411AC3AD",
+      "rule_id": "R010",
+      "attachment_id": "DOC-CG-F5F2411AC3AD-1",
+      "file": "02_draft_vs_final.pdf",
+      "display_filename": "final_report_signed.pdf",
+      "expect_advisory": [
+        "possible_resolution"
+      ],
+      "expect_status_hint": "final",
+      "expect_warning": null,
+      "story": "The claim lists the supporting document as a draft, so the rule cannot confirm it. The uploaded PDF is the signed final version. The reviewer can check it and update the document status."
+    },
+    {
+      "scenario": 3,
+      "key": "wrong_patient",
+      "title": "Letter for a different patient",
+      "claim_id": "CG-D11E0A7ED473",
+      "rule_id": "R009",
+      "attachment_id": "DOC-CG-D11E0A7ED473-LETTER",
+      "file": "03_wrong_patient.pdf",
+      "display_filename": "authorization_letter.pdf",
+      "expect_advisory": [
+        "contradicting_evidence"
+      ],
+      "expect_status_hint": null,
+      "expect_warning": null,
+      "story": "The authorization letter quotes the claim's authorization number but names another patient. The reviewer should not treat it as support."
+    },
+    {
+      "scenario": 4,
+      "key": "prompt_injection",
+      "title": "Document containing a prompt injection",
+      "claim_id": "CG-70B4E80B9519",
+      "rule_id": "R009",
+      "attachment_id": "DOC-CG-70B4E80B9519-NOTE",
+      "file": "04_prompt_injection.pdf",
+      "display_filename": "cover_note.pdf",
+      "expect_advisory": [
+        "injection_suspected"
+      ],
+      "expect_status_hint": null,
+      "expect_warning": null,
+      "story": "The PDF contains text that tries to instruct the system. It is flagged, shown collapsed as plain text, and changes nothing: rule statuses and the audit trail are identical to a run without it."
+    },
+    {
+      "scenario": 5,
+      "key": "scanned_image",
+      "title": "Scanned, image-only PDF",
+      "claim_id": "CG-909B339818EB",
+      "rule_id": "R008",
+      "attachment_id": "DOC-CG-909B339818EB-SCAN",
+      "file": "05_scanned_image.pdf",
+      "display_filename": "scanned_letter.pdf",
+      "expect_advisory": [
+        "ocr_low_confidence"
+      ],
+      "expect_status_hint": null,
+      "expect_warning": "ocr_unavailable",
+      "story": "A scanned letter with no text layer. With Tesseract installed, OCR reads it. Without it, the upload still succeeds with an ocr_unavailable warning and the reviewer is told OCR was not possible."
+    },
+    {
+      "scenario": 6,
+      "key": "unrelated_note",
+      "title": "Unrelated clinical note",
+      "claim_id": "CG-128A977172C2",
+      "rule_id": "R009",
+      "attachment_id": "DOC-CG-128A977172C2-NOTE",
+      "file": "06_unrelated_note.pdf",
+      "display_filename": "wellness_note.pdf",
+      "expect_advisory": [
+        "no_supporting_evidence"
+      ],
+      "expect_status_hint": null,
+      "expect_warning": null,
+      "story": "The only attached document is a general wellness note that says nothing about this finding. An empty result is a useful answer: the reviewer knows to request information."
+    }
+  ]
+}

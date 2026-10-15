@@ -72,6 +72,8 @@ Without `OPENAI_API_KEY` the explanation layer uses the deterministic mock provi
 | `RULE_DRAFTER_MODEL`, `RULE_ORACLE_MODEL` | Models for rule drafting and the independent reading (default `OPENAI_MODEL`; use two different models) |
 | `RULE_REQUIRE_AUTHOR_CONFIRMATION` | `true` (default): a checked rule waits for the author to confirm its readback |
 | `RULE_DRAFTS_PER_HOUR` | Rate limit on rule drafts (default 20) |
+| `EVIDENCE_EMBEDDINGS` | `true` re-ranks evidence passages with embeddings (needs `OPENAI_API_KEY`); default off, lexical retrieval only |
+| `EVIDENCE_EMBEDDING_MODEL` | Embedding model when `EVIDENCE_EMBEDDINGS=true` (default `text-embedding-3-small`) |
 
 ### Frontend
 
@@ -93,6 +95,8 @@ python src/evaluate.py --help
 python src/AI_agent/explain_rule_results.py --input outputs/predictions.jsonl --output outputs/explanations.jsonl
 python src/audit/audit.py --log outputs/audit_log.jsonl      # verify audit chain
 python src/run_rule_benchmark.py --set all                    # rule-authoring reliability (uses model calls)
+python src/load_demo_documents.py                             # load the six evidence-retrieval demo PDFs
+python src/load_demo_documents.py --verify                    # check the six demo scenarios end to end (isolated)
 ```
 
 ### Tests
@@ -112,6 +116,24 @@ curl http://127.0.0.1:8000/api/v1/audit/verify
 ```
 Then use the **Ingest** page of the UI (all endpoints are in [docs/API_REFERENCE.md](docs/API_REFERENCE.md)).
 
+## Evidence retrieval (RAG)
+
+**Rules decide, AI explains, retrieval helps humans find evidence.** When a reviewer opens a FAIL or
+UNABLE_TO_ASSESS finding, the inspector searches that claim's own attached PDFs (and the claim's inline
+attachment text) and shows the most relevant passages with deterministic consistency signals: patient match,
+service-date relation, identifiers found, a status hint (approved / denied / final...) and an injection flag.
+It never changes a rule status, severity, `requires_human_review` or any score, and it works offline:
+lexical BM25 with identifier and date boosts is the baseline, embeddings are an optional re-ranker.
+
+- Attach PDFs on the claim page (**Documents** panel) or via `POST /api/v1/claims/{claim_id}/documents`.
+- Search runs on demand: `POST /api/v1/claims/evidence` with `{claim, rule_id}`; the finding is recomputed server-side.
+- Install: `pypdf` (in `requirements.txt`). Optional OCR for scanned PDFs: `pip install pytesseract pdf2image`
+  (or `pymupdf`) plus the Tesseract binary; without it, scanned pages get an `ocr_unavailable` warning.
+  Dev-only, to regenerate the demo PDFs: `pip install reportlab`, then `python src/load_demo_documents.py --generate`.
+- Demo: `python src/load_demo_documents.py`, then open the claims listed in `backend/data/demo_documents/manifest.json`.
+
+Details, privacy model and the demo script: [docs/EVIDENCE_RAG.md](docs/EVIDENCE_RAG.md).
+
 ## Project structure
 
 ```
@@ -125,9 +147,10 @@ backend/
     rule_benchmark/        # authoring reliability benchmark (+ run_rule_benchmark.py)
     AI_agent/              # llm_adapter, confidence, explain_rule_results
     audit/                 # hash-chained audit log
+    evidence_rag/          # supporting-evidence retrieval: PDF extract, chunk, store, query, rank, signals
     run_baseline.py, evaluate.py, make_review.py
-  rules/  schemas/  data/  # rule catalogue + reference_specs.json, claim schema, datasets
-  outputs/                 # runtime state: rules.sqlite3 (rule specs, drafts), audit log, ingestion
+  rules/  schemas/  data/  # rule catalogue + reference_specs.json, claim schema, datasets, demo_documents/
+  outputs/                 # runtime state: rules.sqlite3 (rule specs, drafts), audit log, ingestion, evidence.sqlite3
   tests/
 frontend/
   src/{api,components,hooks,pages}
@@ -140,6 +163,9 @@ docs/
 - Confidence scores are heuristic, not calibrated.
 - No user authentication yet (reviewer id taken from `X-Actor` / request body) - planned for Phase 2 with RBAC. Rule and reference-data changes are protected by a single shared admin token.
 - Audit chain is tamper-evident, not tamper-proof.
+- Evidence retrieval is lexical by default: it finds exact identifiers and dates well and paraphrases poorly. Status hints
+  are keyword hints near an identifier, not verdicts. OCR is optional and only as good as the scan. Retrieved text is
+  unverified and never feeds rule results or confidence.
 
 ## Team
 

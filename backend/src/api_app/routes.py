@@ -9,6 +9,8 @@ from api_app.schemas import (
     ClaimRequest,
     ClaimsBatchRequest,
     CsvIngestRequest,
+    DocumentUploadRequest,
+    EvidenceRequest,
     ExplanationRequest,
     FhirIngestRequest,
     FhirValidateRequest,
@@ -349,6 +351,48 @@ def record_claim_decision(
     decision = payload.model_dump(mode="json")
     _apply_header_actor(decision, request)
     return _service(request, "audit_service").record_claim_decision(claim_id, decision)
+
+
+DEFAULT_EVIDENCE_ACTOR = "reviewer"
+
+
+def _evidence_actor(request: Request) -> str:
+    holder = {"actor": DEFAULT_EVIDENCE_ACTOR}
+    _apply_header_actor(holder, request)
+    return holder["actor"]
+
+
+@v1_router.post("/claims/evidence", tags=["evidence"])
+def search_evidence(payload: EvidenceRequest, request: Request):
+    actor = _evidence_actor(request)
+    return _service(request, "evidence_service").search(payload.claim, payload.rule_id, actor)
+
+
+@v1_router.post("/claims/{claim_id}/documents", status_code=201, tags=["evidence"])
+def upload_document(
+    payload: DocumentUploadRequest,
+    request: Request,
+    claim_id: str = PathParam(min_length=1, max_length=128),
+):
+    actor = _evidence_actor(request)
+    return _service(request, "evidence_service").upload(
+        claim_id, payload.attachment_id, payload.filename, payload.content_base64, actor
+    )
+
+
+@v1_router.get("/claims/{claim_id}/documents", tags=["evidence"])
+def list_documents(request: Request, claim_id: str = PathParam(min_length=1, max_length=128)):
+    return _service(request, "evidence_service").list_documents(claim_id)
+
+
+@v1_router.delete("/claims/{claim_id}/documents/{document_id}", tags=["evidence"])
+def delete_document(
+    request: Request,
+    claim_id: str = PathParam(min_length=1, max_length=128),
+    document_id: str = PathParam(min_length=1, max_length=64),
+):
+    actor = _evidence_actor(request)
+    return _service(request, "evidence_service").delete(claim_id, document_id, actor)
 
 
 @v1_router.get("/audit/events", tags=["audit"])

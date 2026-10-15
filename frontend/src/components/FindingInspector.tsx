@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import { getExplanation, type BackendClaim, type ExplanationResponse, type ReviewAction } from '../api/claims';
 import type { CardRuleResult } from '../api/claimCards';
+import SupportingPassages from './SupportingPassages';
 
 // ── Finding inspector ──────────────────────────────────────────────────────
 // The right-hand column of the claim review: the selected rule's evidence,
@@ -71,16 +72,21 @@ interface InspectorProps {
   onUndo: () => void;
   /** Narrow screens: return to the findings list. */
   onBack: () => void;
+  /** Changes when the claim's documents change, so evidence is searched again. */
+  documentsVersion?: number;
 }
 
 const FindingInspector = forwardRef<HTMLElement, InspectorProps>(function FindingInspector(
-  { claim, finding, choice, recorded, error, onChoose, onUndo, onBack },
+  { claim, finding, choice, recorded, error, onChoose, onUndo, onBack, documentsVersion = 0 },
   ref,
 ) {
   const [explanation, setExplanation] = useState<ExplanationResponse | null>(null);
   const [explanationError, setExplanationError] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [dismissReason, setDismissReason] = useState(DISMISS_REASONS[0]);
+  // A passage reference offered as a dismiss reason. The reviewer still decides.
+  const [evidenceReason, setEvidenceReason] = useState<string | null>(null);
+  const reasons = evidenceReason ? [evidenceReason, ...DISMISS_REASONS] : DISMISS_REASONS;
   const actionable = finding.result !== 'PASS' && finding.result !== 'NA';
 
   useEffect(() => {
@@ -88,6 +94,8 @@ const FindingInspector = forwardRef<HTMLElement, InspectorProps>(function Findin
     const key = `${claim.claim_id}:${finding.ruleId}`;
     setExplanationError(false);
     setDismissing(false);
+    setEvidenceReason(null);
+    setDismissReason(DISMISS_REASONS[0]);
     const cachedExplanation = explanationCache.get(key);
     setExplanation(cachedExplanation ?? null);
     if (cachedExplanation) return;
@@ -175,6 +183,19 @@ const FindingInspector = forwardRef<HTMLElement, InspectorProps>(function Findin
         )}
       </section>
 
+      {actionable && (
+        <SupportingPassages
+          claim={claim}
+          ruleId={finding.ruleId}
+          documentsVersion={documentsVersion}
+          onUseAsReason={choice ? undefined : (reference) => {
+            setEvidenceReason(reference);
+            setDismissReason(reference);
+            setDismissing(true);
+          }}
+        />
+      )}
+
       <section className="inspector-section inspector-actions">
         <div className="inspector-actions-heading">
           <h3>Review action</h3>
@@ -218,7 +239,7 @@ const FindingInspector = forwardRef<HTMLElement, InspectorProps>(function Findin
                         <label>
                           <span className="visually-hidden">Reason for dismissing</span>
                           <select value={dismissReason} onChange={(event) => setDismissReason(event.target.value)}>
-                            {DISMISS_REASONS.map((reason) => <option key={reason}>{reason}</option>)}
+                            {reasons.map((reason) => <option key={reason}>{reason}</option>)}
                           </select>
                         </label>
                         <button type="button" className="button-secondary" onClick={() => setDismissing(false)}>Cancel</button>

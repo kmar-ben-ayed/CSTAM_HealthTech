@@ -607,6 +607,10 @@ class AuditService:
             "rule_draft_cancelled": ("draft_id",),
             "rule_activated": ("draft_id", "spec_sha256", "logic_sha256", "version", "drafter_model", "oracle_model"),
             "rule_deactivated": (),
+            # Supporting-evidence retrieval: ids and hashes only, never document text
+            "evidence_document_added": ("document_id", "attachment_id", "document_sha256", "page_count", "method"),
+            "evidence_document_removed": ("document_id", "attachment_id", "document_sha256", "page_count", "method"),
+            "evidence_retrieval": ("rule_id", "query_sha256", "retriever", "result_count", "passage_ids", "document_ids", "advisory"),
         }
         recent = []
         for entry in reversed(entries[-limit:]):
