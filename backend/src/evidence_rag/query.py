@@ -13,6 +13,9 @@ WORD = re.compile(r"[a-z][a-z0-9]{2,}")
 
 CLAIM_ANCHORS = ("patient_id", "member_id", "invoice_number", "provider_id")
 LINE_FIELDS = ("service_code", "service_date", "authorization_id")
+# A value is an identifier because of the field that holds it, not because of its shape:
+# "PT/99-ALPHA", "88812345" and "XY-AB-1" are all taken verbatim.
+IDENTIFIER_FIELD = re.compile(r"(^|_)(id|code|number)$")
 MIN_STRING_LENGTH = 3
 
 STOPWORDS = {
@@ -31,6 +34,14 @@ class _Collector:
     def _add(bucket: list[str], value: str) -> None:
         if value and value not in bucket and not RULE_ID.match(value):
             bucket.append(value)
+
+    def identifier(self, value: Any) -> None:
+        """Add a value verbatim as an identifier, whatever its format."""
+        if value is None or isinstance(value, bool) or not isinstance(value, (str, int)):
+            return
+        text = str(value).strip()
+        if len(text) >= MIN_STRING_LENGTH:
+            self._add(self.terms.identifiers, text)
 
     def scalar(self, value: Any, *, weak: bool = False) -> None:
         if value is None or isinstance(value, bool):
@@ -60,12 +71,22 @@ class _Collector:
             if word not in STOPWORDS:
                 self._add(bucket, word)
 
+    def field_value(self, field: str, value: Any) -> None:
+        if IDENTIFIER_FIELD.search(field) and not isinstance(value, (dict, list)):
+            self.identifier(value)
+        else:
+            self.walk(value)
+
     def walk(self, value: Any) -> None:
         if isinstance(value, dict):
+            # Evidence items name their field in a JSON pointer: {"path": "/lines/0/authorization_id", "value": ...}
+            if isinstance(value.get("path"), str) and "value" in value:
+                self.field_value(value["path"].rstrip("/").rsplit("/", 1)[-1], value["value"])
+                return
             for key, item in value.items():
                 if key == "path":  # JSON pointers describe where, not what
                     continue
-                self.walk(item)
+                self.field_value(str(key), item)
         elif isinstance(value, list):
             for item in value:
                 self.walk(item)
@@ -82,10 +103,10 @@ def derive_query(finding: dict[str, Any], claim: dict[str, Any], rule: dict[str,
         line = lines.get(line_id)
         if line:
             for field in LINE_FIELDS:
-                collector.scalar(line.get(field))
+                collector.field_value(field, line.get(field))
 
     for field in CLAIM_ANCHORS:
-        collector.scalar(claim.get(field))
+        collector.identifier(claim.get(field))
 
     for text in ((rule or {}).get("title"), (rule or {}).get("corrective_action") or finding.get("corrective_action")):
         collector.scalar(text, weak=True)

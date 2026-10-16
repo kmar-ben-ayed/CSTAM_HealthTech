@@ -27,7 +27,7 @@ def tokenize(text: str) -> list[str]:
 
 
 def exact_pattern(term: str) -> re.Pattern:
-    """Verbatim match with boundaries, so AUTH-1 does not match inside AUTH-12."""
+    """Verbatim match with boundaries, so "X-1" does not match inside "X-12" or "X-1-2"."""
     return re.compile(r"(?<![A-Za-z0-9])" + re.escape(term) + r"(?![A-Za-z0-9]|-[A-Za-z0-9])")
 
 

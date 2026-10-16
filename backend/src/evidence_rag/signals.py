@@ -9,8 +9,16 @@ from evidence_rag.query import DATE
 from evidence_rag.retrieve import exact_pattern
 from evidence_rag.sanitize import injection_suspected
 
-PATIENT_ID = re.compile(r"(?<![A-Za-z0-9])PAT-[A-Z0-9]{4,}(?![A-Za-z0-9])")
 STATUS_WINDOW = 120
+
+# Patient ids are found without assuming their format: a token after a "patient" label
+# (it must contain a digit, so ordinary words are skipped), or a token sharing the claim's
+# own id prefix ("PT/" for "PT/99-ALPHA"). Nothing here knows the dataset's id style.
+_TOKEN = r"([A-Za-z0-9][A-Za-z0-9/_.-]*[A-Za-z0-9]|[A-Za-z0-9])"
+_PATIENT_LABEL = re.compile(
+    r"\bpatient(?:\s+(?:id|identifier|no\.?|number|#))?\s*[:#]?\s*" + _TOKEN, re.IGNORECASE
+)
+_ID_PREFIX = re.compile(r"^[A-Za-z]+[^A-Za-z0-9\s]")
 
 STATUS_WORDS = {
     "approved": "approved", "authorized": "approved", "authorised": "approved", "granted": "approved",
@@ -22,11 +30,28 @@ STATUS_WORDS = {
 _STATUS = re.compile(r"\b(not\s+)?(" + "|".join(STATUS_WORDS) + r")\b", re.IGNORECASE)
 
 
+def patient_mentions(text: str, claim_patient: str) -> set[str]:
+    """Patient ids a passage mentions, judged against the claim's own patient id."""
+    mentioned = set()
+    if exact_pattern(claim_patient).search(text):
+        mentioned.add(claim_patient)
+    for match in _PATIENT_LABEL.finditer(text):
+        token = match.group(1)
+        if len(token) >= 3 and any(ch.isdigit() for ch in token):
+            mentioned.add(token)
+    prefix = _ID_PREFIX.match(claim_patient)
+    if prefix:
+        same_shape = re.compile(r"(?<![A-Za-z0-9])" + re.escape(prefix.group(0)) + _TOKEN + r"(?![A-Za-z0-9])")
+        mentioned.update(prefix.group(0) + rest for rest in same_shape.findall(text))
+    return mentioned
+
+
 def patient_match(passage: Passage, claim: dict[str, Any]) -> str:
     claim_patient = claim.get("patient_id")
-    if not isinstance(claim_patient, str) or not claim_patient:
+    if not isinstance(claim_patient, str) or not claim_patient.strip():
         return "unknown"
-    mentioned = set(PATIENT_ID.findall(passage.text))
+    claim_patient = claim_patient.strip()
+    mentioned = patient_mentions(passage.text, claim_patient)
     if mentioned:
         return "match" if mentioned == {claim_patient} else "mismatch"
     for attachment in claim.get("attachments") or []:

@@ -82,8 +82,11 @@ From the **server-recomputed** finding and the claim:
 - claim anchors: `patient_id`, `member_id`, `invoice_number`, `provider_id`;
 - the rule's title and corrective action as low-weight hints.
 
-Terms are classified as identifiers (`[A-Z]{2,}-[A-Z0-9-]+`), ISO dates, numbers and words. Anything that
-looks like a rule ID (`R` + digits) is dropped.
+A value is an **identifier because of the field that holds it**, not because of its shape: any field whose
+name ends in `_id`, `_code` or `_number` (read from the evidence item's JSON pointer, or the object key), and
+the claim anchors above, are taken verbatim. So `PT/99-ALPHA`, `88812345` and `QX 12 ZZ` all work. Other
+values are split into identifiers that look like one (`[A-Z]{2,}-[A-Z0-9-]+`), ISO dates, numbers and words.
+Anything that looks like a rule ID (`R` + digits) is dropped.
 
 ### Ranking
 
@@ -102,7 +105,7 @@ score. Any embedding error falls back to the lexical ranking, reported as `retri
 
 | Signal | Meaning |
 |---|---|
-| `patient_match` | `match` / `mismatch` / `unknown`: patient ids in the passage (or the linked attachment's metadata) against the claim's `patient_id` |
+| `patient_match` | `match` / `mismatch` / `unknown`: patient ids in the passage against the claim's `patient_id`. A mention is the claim's own id verbatim, a token after a "patient" label that contains a digit, or a token with the same prefix as the claim's id (`PT/` for `PT/99-ALPHA`). No id format is assumed. With no mention, the linked attachment's `patient_id` metadata is used |
 | `date_relation` | `equal` if the passage mentions an affected line's service date, `different` if it mentions only other dates, `none` |
 | `identifier_found` | The finding's identifiers that appear verbatim |
 | `status_hint` | approved / denied / pending / draft / final, the nearest such word to a found identifier (a hint) |
@@ -182,7 +185,11 @@ the inline passages and a `document_store_unavailable` warning.
 - OCR is optional and only as good as the scan. Without Tesseract, scanned pages are not searchable (and say so).
 - Lexical retrieval finds exact identifiers and dates reliably, but misses paraphrases. Embeddings help, if enabled.
 - Status hints are a keyword near an identifier. "Approved" in a letter is not proof of approval.
-- Patient ids are recognised in the dataset's `PAT-...` style only.
+- Another patient's id is only noticed when it is labelled ("Patient: …") or shares the claim's id prefix.
+  An unlabelled id in a completely different format gives `unknown`, not `mismatch`.
+- `backend/tests/test_evidence_genericity.py` guards all of this: a source scan for rule ids and dataset id
+  prefixes, an invented rule with unseen id formats, every actionable finding on claims without
+  attachments, and a real claim with all its ids rewritten.
 - Injection detection is a phrase list. It flags common patterns; it does not need to be perfect, because
   document text cannot change any result anyway.
 
